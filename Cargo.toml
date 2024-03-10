@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = [
+    #"code-gen/*",
+    "lib-gen/*",
+]
+
+
+[patch."https://github.com/ComlineProject/core"]
+comline-core = { path="../core/core" }
+
+
+[profile.release]
+opt-level = 2

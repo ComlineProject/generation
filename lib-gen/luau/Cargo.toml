@@ -1,0 +1,16 @@
+[package]
+name = "comline-codelib-gen-luau"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+comline-core = { version="0.1.0", git="https://github.com/ComlineProject/core" }
+comline-codelib-gen = { path="../_core" }
+
+once_cell = "1.18.0"
+# mlua =  { version = "0.9.1", features = ["luau", "module"] }
+
+
+#[patch."https://github.com/ComlineProject/core"]
+#comline-core = { path="../../core/core" }
