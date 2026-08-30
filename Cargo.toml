@@ -1,14 +1,20 @@
 [workspace]
 resolver = "2"
 members = [
-    #"code-gen/*",
-    "lib-gen/*",
+    "lib-gen/_core",
+    "lib-gen/lua",
+    "lib-gen/luau",
+    # Not started — no compiling crate yet:
+    #   "lib-gen/c"
+    #   "lib-gen/python"
+    #   "lib-gen/typescript"
 ]
 
-
-[patch."https://github.com/ComlineProject/core"]
-comline-core = { path="../core/core" }
-
+# `generation` tracks `comline-core` by version, like `cli` does. Until it pins a
+# published release (post de-rot G1) this patch keeps the build on the sibling
+# `core` working tree so the generators see the current IR.
+[patch.crates-io]
+comline-core = { path = "../core/core" }
 
 [profile.release]
 opt-level = 2
