@@ -1,7 +1,10 @@
 // Compiled Languages
 pub mod rust;
-pub mod rust_c_ffi;
-pub mod rust_abi_stable;
+// TODO(de-rot G2): revive against the current core API — both target a
+// pre-audit `FrozenUnit` and call `basic_storage` / `package_from_path_without_context`
+// which core has since removed. See design/generation.md.
+// pub mod rust_c_ffi;
+// pub mod rust_abi_stable;
 
 // Standard Uses
 use std::collections::HashMap;

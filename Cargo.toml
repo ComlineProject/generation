@@ -2,19 +2,21 @@
 resolver = "2"
 members = [
     "lib-gen/_core",
-    "lib-gen/lua",
-    "lib-gen/luau",
-    # Not started — no compiling crate yet:
+    # Body port pending — de-rot G2, match current IR (still on `EnumVariant(_)`,
+    # `Constant` without `span`):
+    #   "lib-gen/lua"
+    #   "lib-gen/luau"
+    # Not started — `use comline::…` (pre-rename path), no wiring:
     #   "lib-gen/c"
     #   "lib-gen/python"
     #   "lib-gen/typescript"
 ]
 
-# `generation` tracks `comline-core` by version, like `cli` does. Until it pins a
-# published release (post de-rot G1) this patch keeps the build on the sibling
-# `core` working tree so the generators see the current IR.
-[patch.crates-io]
-comline-core = { path = "../core/core" }
+# Local iteration against a sibling `core` checkout — uncomment to build
+# `comline-core` from the working tree instead of the pinned git rev. Re-comment
+# before pushing; CI has no sibling checkout.
+# [patch."https://github.com/ComlineProject/core"]
+# comline-core = { path = "../core/core" }
 
 [profile.release]
 opt-level = 2
