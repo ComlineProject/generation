@@ -2,9 +2,11 @@
 resolver = "2"
 members = [
     "lib-gen/_core",
-    "lib-gen/lua",
-    "lib-gen/luau",
-    # Not started — no compiling crate yet:
+    # Body port pending — de-rot G2, match current IR (still on `EnumVariant(_)`,
+    # `Constant` without `span`):
+    #   "lib-gen/lua"
+    #   "lib-gen/luau"
+    # Not started — `use comline::…` (pre-rename path), no wiring:
     #   "lib-gen/c"
     #   "lib-gen/python"
     #   "lib-gen/typescript"
