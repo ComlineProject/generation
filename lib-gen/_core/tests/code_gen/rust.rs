@@ -1,54 +1,106 @@
-// Standard Uses
+// Ported from comline-core's codelib_gen::rust tests during de-rot G1 — the
+// generator is a verbatim port, so the assertions match core's.
 
-// Crate Uses
-use crate::{TEST_PACKAGE_BUILD_PATH, TEST_PACKAGE_PATH};
-use crate::utils;
-
-// External Uses
-//use comline_core::package::config::ir::frozen::basic_storage as basic_storage_package;
-use comline_codelib_gen::{code_gen, lib_gen};
-
+use comline_codelib_gen::code_gen::rust::generate_rust;
+use comline_core::schema::ir::frozen::unit::{FrozenUnit, FrozenArgument};
+use comline_core::schema::ir::compiler::interpreted::kind_search::{KindValue, Primitive};
 
 #[test]
-fn generate_code_from_test_package() {
-    std::fs::remove_dir_all(&*TEST_PACKAGE_BUILD_PATH).ok();
+fn test_generate_simple_struct() {
+    let units = vec![
+        FrozenUnit::Struct {
+            docstring: None,
+            parameters: vec![],
+            name: "User".to_string(),
+            fields: vec![
+                FrozenUnit::Field {
+                    docstring: None,
+                    parameters: vec![],
+                    optional: false,
+                    name: "id".to_string(),
+                    kind_value: KindValue::Namespaced("s32".to_string(), None),
+                    span: (0, 0),
+                },
+                FrozenUnit::Field {
+                    docstring: None,
+                    parameters: vec![],
+                    optional: false,
+                    name: "username".to_string(),
+                    kind_value: KindValue::Namespaced("string".to_string(), None),
+                    span: (0, 0),
+                },
+                FrozenUnit::Field {
+                    docstring: None,
+                    parameters: vec![],
+                    optional: false,
+                    name: "tags".to_string(),
+                    kind_value: KindValue::Namespaced("string[]".to_string(), None),
+                    span: (0, 0),
+                }
+            ],
+            span: (0, 0),
+        }
+    ];
 
-    lib_gen::rust::generate_frozen_package_into(
-        &TEST_PACKAGE_PATH, &TEST_PACKAGE_BUILD_PATH
-    ).unwrap();
+    let output = generate_rust(&units);
 
-    let gen_src_path = TEST_PACKAGE_BUILD_PATH.join("src/");
-    assert_eq!(
-        utils::load_str(&gen_src_path.join("health.rs")),
-        "// Generated with Comline compiler and code generator\n\
-        //\n\
-        // Advisory: This file is hashed and should not be manually edited, the runtime will complain\n\
-        // and might not even run if so (this is to be decided yet)\n\
-        pub trait HealthCheck {\n\
-	        \tfn alive(&self);\n\
-	        \tfn capabilities(&self);\n\
-        \n\
-        }\n\
-        \n"
-    );
+    assert!(output.contains("pub struct User"));
+    assert!(output.contains("pub id: i32"));
+    assert!(output.contains("pub username: String"));
+    assert!(output.contains("pub tags: Vec<String>"));
 }
 
-
-// TODO: The function above goes trough lib_gen, but we want to test only code_gen, the function
-//       below should be uncommented and fixed, then move the above to lib_gen tests folder in super::lib_gen
-/*
 #[test]
-fn generate_code_from_test_package() {
-    let frozen_path = TEST_PACKAGE_PATH.join(".frozen/");
+fn test_generate_enum() {
+    let units = vec![
+        FrozenUnit::Enum {
+            docstring: None,
+            name: "Status".to_string(),
+            variants: vec![
+                FrozenUnit::EnumVariant(KindValue::EnumVariant("Active".to_string(), None), (0, 0)),
+                FrozenUnit::EnumVariant(KindValue::EnumVariant("Inactive".to_string(), None), (0, 0)),
+            ],
+            span: (0, 0),
+        }
+    ];
 
-    let latest_version = basic_storage_package::get_latest_version(&frozen_path)
-        .unwrap();
+    let output = generate_rust(&units);
 
-    let latest_version_path = frozen_path.join(
-        format!("package/versions/{latest_version}/")
-    );
-
-    code_gen::rust::_1_7_0::frozen_schema_to_code();
+    assert!(output.contains("pub enum Status"));
+    assert!(output.contains("Active,"));
+    assert!(output.contains("Inactive,"));
 }
-*/
 
+#[test]
+fn test_generate_protocol() {
+    let units = vec![
+        FrozenUnit::Protocol {
+            docstring: "A user service".to_string(),
+            name: "UserService".to_string(),
+            parameters: vec![],
+            functions: vec![
+                FrozenUnit::Function {
+                    docstring: "".to_string(),
+                    name: "get_user".to_string(),
+                    synchronous: true,
+                    arguments: vec![
+                        FrozenArgument {
+                            name: "id".to_string(),
+                            kind: KindValue::Primitive(Primitive::S32(None)),
+                            span: (0, 0),
+                        }
+                    ],
+                    _return: Some(KindValue::Namespaced("User".to_string(), None)),
+                    throws: vec![],
+                    span: (0, 0),
+                }
+            ],
+            span: (0, 0),
+        }
+    ];
+
+    let output = generate_rust(&units);
+
+    assert!(output.contains("pub trait UserService"));
+    assert!(output.contains("fn get_user(id: i32) -> User;"));
+}

@@ -5,7 +5,11 @@ edition = "2021"
 
 
 [dependencies]
-comline-core = "0.1"
+# Interim: track `core` by git rev until it cuts a fresh `comline-core`
+# release. The generators pattern-match the current `FrozenUnit`; the
+# published 0.1.0 is pre-audit. Local iteration: uncomment the
+# workspace-root [patch] onto a sibling checkout.
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "d8bc708bf23e4accd06a13da1d317b10596888c7" }
 comline-codelib-gen = { path = "../_core" }
 
 mlua =  { version = "0.9.2", features = ["lua51", "module"] }
