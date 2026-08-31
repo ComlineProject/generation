@@ -2,9 +2,19 @@ use comline_codelib_gen::code_gen::typescript::generate_typescript;
 use comline_core::schema::ir::frozen::unit::{FrozenUnit, FrozenArgument};
 use comline_core::schema::ir::compiler::interpreted::kind_search::{KindValue, Primitive};
 
+use crate::code_gen::{code_req, lib_req};
+
+fn one(units: Vec<FrozenUnit>) -> String {
+    let schemas = vec![("account".to_string(), units)];
+    let mut files = generate_typescript(&code_req(&schemas)).unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].path.to_str().unwrap(), "account.ts");
+    files.remove(0).contents
+}
+
 #[test]
 fn interface_from_struct() {
-    let units = vec![FrozenUnit::Struct {
+    let out = one(vec![FrozenUnit::Struct {
         docstring: None,
         parameters: vec![],
         name: "User".to_string(),
@@ -35,9 +45,7 @@ fn interface_from_struct() {
             },
         ],
         span: (0, 0),
-    }];
-
-    let out = generate_typescript(&units);
+    }]);
 
     assert!(out.contains("export interface User {"));
     assert!(out.contains("id: number;"));
@@ -47,7 +55,7 @@ fn interface_from_struct() {
 
 #[test]
 fn string_enum_from_enum() {
-    let units = vec![FrozenUnit::Enum {
+    let out = one(vec![FrozenUnit::Enum {
         docstring: None,
         name: "Status".to_string(),
         variants: vec![
@@ -55,9 +63,7 @@ fn string_enum_from_enum() {
             FrozenUnit::EnumVariant(KindValue::EnumVariant("Inactive".to_string(), None), (0, 0)),
         ],
         span: (0, 0),
-    }];
-
-    let out = generate_typescript(&units);
+    }]);
 
     assert!(out.contains("export enum Status {"));
     assert!(out.contains("Active = \"Active\","));
@@ -66,7 +72,7 @@ fn string_enum_from_enum() {
 
 #[test]
 fn interface_from_protocol() {
-    let units = vec![FrozenUnit::Protocol {
+    let out = one(vec![FrozenUnit::Protocol {
         docstring: "A user service".to_string(),
         name: "UserService".to_string(),
         parameters: vec![],
@@ -95,11 +101,16 @@ fn interface_from_protocol() {
             },
         ],
         span: (0, 0),
-    }];
-
-    let out = generate_typescript(&units);
+    }]);
 
     assert!(out.contains("export interface UserService {"));
     assert!(out.contains("get_user(id: number): User;"));
     assert!(out.contains("ping(): void;"));
+}
+
+#[test]
+fn lib_mode_is_not_implemented() {
+    let schemas = vec![("account".to_string(), vec![])];
+    let err = generate_typescript(&lib_req(&schemas)).unwrap_err().to_string();
+    assert!(err.contains("lib mode"));
 }
