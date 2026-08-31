@@ -71,6 +71,9 @@ fn cargo_toml(pkg: &PackageMeta) -> String {
          name = \"{}\"\n\
          version = \"{}\"\n\
          edition = \"2021\"\n\
+         # A schema namespace named `main` would otherwise be picked up as a\n\
+         # binary target (`src/main.rs`) with no `fn main`.\n\
+         autobins = false\n\
          \n\
          [dependencies]\n\
          serde = {{ version = \"1\", features = [\"derive\"] }}\n",
