@@ -108,6 +108,7 @@ fn lib_mode_emits_a_crate() {
     assert!(cargo.contains("name = \"chat\""));
     assert!(cargo.contains("version = \"0.3.0\""));
     assert!(cargo.contains("edition = \"2021\""));
+    assert!(cargo.contains("autobins = false"));
     assert!(cargo.contains("serde = { version = \"1\", features = [\"derive\"] }"));
 
     let lib = &by_path("src/lib.rs").expect("src/lib.rs").contents;
