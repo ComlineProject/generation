@@ -6,6 +6,9 @@ pub mod rust;
 // pub mod rust_c_ffi;
 // pub mod rust_abi_stable;
 
+// Dynamic Languages
+pub mod typescript;
+
 // Standard Uses
 use std::collections::HashMap;
 
@@ -28,6 +31,8 @@ pub type Generator = (GeneratorFn, &'static str);
 static LANG_GENERATORS: Lazy<HashMap<&str, (&VersionGenerators, &str)>> = Lazy::new(|| {
     HashMap::from([
         ("rust", (&rust::GENERATORS, "rs")),
+        ("typescript", (&typescript::GENERATORS, "ts")),
+        ("ts", (&typescript::GENERATORS, "ts")),
 
         //("luau", (&luau::GENERATORS, "luau")),
         //("python", (&python::GENERATORS, "py"))
