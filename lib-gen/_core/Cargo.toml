@@ -18,7 +18,7 @@ edition = "2021"
 # release. The generators pattern-match the current `FrozenUnit`; the
 # published 0.1.0 is pre-audit. Local iteration: uncomment the
 # workspace-root [patch] onto a sibling checkout.
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "d8bc708bf23e4accd06a13da1d317b10596888c7" }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "aa84d970d3295df59cc3e620bdb71bf96382f97b" }
 
 eyre = "0.6.8"
 once_cell = "1.18.0"
