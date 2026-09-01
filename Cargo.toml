@@ -1,16 +1,13 @@
 [workspace]
 resolver = "2"
 members = [
-    "lib-gen/_core",
-    # Body port pending — de-rot G2, match current IR (still on `EnumVariant(_)`,
-    # `Constant` without `span`):
-    #   "lib-gen/lua"
-    #   "lib-gen/luau"
-    # Not started — `use comline::…` (pre-rename path), no wiring:
-    #   "lib-gen/c"
-    #   "lib-gen/python"
-    #   "lib-gen/typescript"
+    "codegen",             # comline-codegen — the language-neutral contract + Registry
+    "codegen-rust",        # comline-codegen-rust
+    "codegen-typescript",  # comline-codegen-typescript
 ]
+# Not started — the pre-rename `lib-gen/{lua,luau,c,python}` stubs still use the
+# old `comline::…` crate path and are unwired. Each becomes a `codegen-<lang>`
+# crate (then its own `comline-<lang>` repo) when it lands. See design/generation.md.
 
 # Local iteration against a sibling `core` checkout — uncomment to build
 # `comline-core` from the working tree instead of the pinned git rev. Re-comment

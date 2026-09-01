@@ -13,7 +13,7 @@ use comline_core::schema::ir::compiler::interpreted::kind_search::KindValue;
 
 use eyre::{bail, Result};
 
-use crate::code_gen::{GenRequest, GeneratedFile, Mode};
+use comline_codegen::{GenRequest, GeneratedFile, Mode};
 
 
 pub fn generate_typescript(req: &GenRequest) -> Result<Vec<GeneratedFile>> {
