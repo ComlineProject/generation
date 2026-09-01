@@ -1,0 +1,18 @@
+[package]
+name = "comline-conformance"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# The codegen conformance corpus: canonical `FrozenUnit` fixtures + golden
+# generated output per target language. Catches generator drift and
+# cross-language inconsistency, especially as the per-language generators move
+# to their own repos. See design/runtime-repo-structure.md (rollout step 3).
+
+[dependencies]
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "aa84d970d3295df59cc3e620bdb71bf96382f97b" }
+
+[dev-dependencies]
+comline-codegen = { path = "../codegen" }
+comline-codegen-rust = { path = "../codegen-rust" }
+comline-codegen-typescript = { path = "../codegen-typescript" }

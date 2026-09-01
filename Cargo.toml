@@ -4,6 +4,7 @@ members = [
     "codegen",             # comline-codegen — the language-neutral contract + Registry
     "codegen-rust",        # comline-codegen-rust
     "codegen-typescript",  # comline-codegen-typescript
+    "conformance",          # comline-conformance — the codegen conformance corpus
 ]
 # Not started — the pre-rename `lib-gen/{lua,luau,c,python}` stubs still use the
 # old `comline::…` crate path and are unwired. Each becomes a `codegen-<lang>`
