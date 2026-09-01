@@ -30,10 +30,6 @@ pub enum ServiceCountError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ServiceNotifyError {
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum ServiceError {
     NotFound(NotFound),
 }
@@ -49,7 +45,7 @@ impl From<ServiceLookupError> for ServiceError {
 pub trait Service {
     fn lookup(&self, id: i32) -> Result<Record, ServiceLookupError>;
     fn count(&self) -> Result<u64, ServiceCountError>;
-    fn notify(&self, code: u16) -> Result<(), ServiceNotifyError>;
+    fn notify(&self, code: u16);
 }
 
 pub const SERVICE_CALLS: &[&str] = &["lookup", "count", "notify"];
@@ -95,14 +91,7 @@ impl<S: Service> Dispatch for ServiceDispatcher<S> {
             }
             2 => {
                 let p: ServiceNotifyParams = fmt.decode(params)?;
-                match self.0.notify(p.code) {
-                    Ok(reply) => {
-                        let mut body = Vec::new();
-                        fmt.encode(&reply, &mut body)?;
-                        Envelope::encode_ok(&body, out);
-                    }
-                    Err(never) => match never {},
-                }
+                self.0.notify(p.code);
                 Ok(())
             }
             _ => Err(RuntimeError::UnknownCall),
@@ -137,12 +126,8 @@ impl<T: Transport, W: WireFormat> ServiceClient<T, W> {
         }
     }
 
-    pub fn notify(&mut self, code: u16) -> Result<(), CallError<ServiceNotifyError>> {
-        let (reply, fmt) = self.0.call(2u16, &ServiceNotifyParams { code })?;
-        match reply {
-            Envelope::Ok(payload) => fmt.decode(payload).map_err(CallError::Runtime),
-            Envelope::Err { id, .. } => Err(CallError::Runtime(RuntimeError::Remote { id })),
-        }
+    pub fn notify(&mut self, code: u16) -> Result<(), RuntimeError> {
+        self.0.notify(2u16, &ServiceNotifyParams { code })
     }
 }
 
