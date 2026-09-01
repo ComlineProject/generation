@@ -67,16 +67,31 @@ fn function(
     name: &str,
     args: Vec<FrozenArgument>,
     ret: Option<&str>,
-    throws: Vec<&str>,
+    throws: Vec<u16>,
 ) -> FrozenUnit {
     FrozenUnit::Function {
         docstring: String::new(),
+        parameters: vec![],
         name: name.to_string(),
-        synchronous: true,
         arguments: args,
         _return: ret.map(|t| KindValue::Namespaced(t.to_string(), None)),
-        throws: throws.into_iter().map(String::from).collect(),
+        throws,
         span: (0, 0),
+    }
+}
+
+/// A local `error`, ordinal assigned by the fixture itself (mirroring what
+/// `plan_error_space` would freeze from a real schema — see
+/// `core::schema::ir::compiler::interpreter::incremental`).
+fn error(ordinal: u16, name: &str) -> FrozenUnit {
+    FrozenUnit::Error {
+        docstring: None,
+        parameters: vec![],
+        ordinal,
+        imported_from: None,
+        name: name.to_string(),
+        message: format!("{name} occurred"),
+        fields: vec![],
     }
 }
 
@@ -153,22 +168,25 @@ fn protocol() -> Fixture {
     Fixture {
         name: "protocol",
         namespace: "conformance",
-        units: vec![FrozenUnit::Protocol {
-            docstring: "Conformance protocol".to_string(),
-            parameters: vec![],
-            name: "Service".to_string(),
-            functions: vec![
-                function(
-                    "lookup",
-                    vec![arg("id", Primitive::S32(None))],
-                    Some("Record"),
-                    vec!["NotFound"],
-                ),
-                function("count", vec![], Some("u64"), vec![]),
-                function("notify", vec![arg("code", Primitive::U16(None))], None, vec![]),
-            ],
-            span: (0, 0),
-        }],
+        units: vec![
+            error(0, "NotFound"),
+            FrozenUnit::Protocol {
+                docstring: "Conformance protocol".to_string(),
+                parameters: vec![],
+                name: "Service".to_string(),
+                functions: vec![
+                    function(
+                        "lookup",
+                        vec![arg("id", Primitive::S32(None))],
+                        Some("Record"),
+                        vec![0], // ordinal of `NotFound`, above
+                    ),
+                    function("count", vec![], Some("u64"), vec![]),
+                    function("notify", vec![arg("code", Primitive::U16(None))], None, vec![]),
+                ],
+                span: (0, 0),
+            },
+        ],
     }
 }
 
