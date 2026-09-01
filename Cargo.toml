@@ -1,14 +1,21 @@
 [workspace]
 resolver = "2"
 members = [
-    "codegen",             # comline-codegen — the language-neutral contract + Registry
-    "codegen-rust",        # comline-codegen-rust
-    "codegen-typescript",  # comline-codegen-typescript
-    "conformance",          # comline-conformance — the codegen conformance corpus
+    "codegen",       # comline-codegen — the language-neutral contract + Registry
+    "codegen-rust",  # comline-codegen-rust
+    "conformance",   # comline-conformance — the codegen conformance corpus
 ]
-# Not started — the pre-rename `lib-gen/{lua,luau,c,python}` stubs still use the
-# old `comline::…` crate path and are unwired. Each becomes a `codegen-<lang>`
-# crate (then its own `comline-<lang>` repo) when it lands. See design/generation.md.
+# `codegen-typescript` graduated to ComlineProject/comline-typescript (rollout
+# step 4). `codegen-rust` follows at step 5. The `lib-gen/{lua,luau,c,python}`
+# stubs still use the old `comline::…` crate path and are unwired — each becomes
+# its own `comline-<lang>` repo when it lands. See design/generation.md.
+
+# `comline-conformance` dev-deps `comline-codegen-typescript` from
+# ComlineProject/comline-typescript, which in turn git-deps `comline-codegen`
+# from *this* repo. Point that back at the in-repo crate so the build has one
+# `comline-codegen`, not two. (Same-repo path — CI-safe.)
+[patch."https://github.com/ComlineProject/generation"]
+comline-codegen = { path = "codegen" }
 
 # Local iteration against a sibling `core` checkout — uncomment to build
 # `comline-core` from the working tree instead of the pinned git rev. Re-comment
