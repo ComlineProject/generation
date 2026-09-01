@@ -1,19 +1,20 @@
 [workspace]
 resolver = "2"
 members = [
-    "codegen",       # comline-codegen — the language-neutral contract + Registry
-    "codegen-rust",  # comline-codegen-rust
-    "conformance",   # comline-conformance — the codegen conformance corpus
+    "codegen",      # comline-codegen — the language-neutral contract + Registry
+    "conformance",  # comline-conformance — the codegen conformance corpus
 ]
-# `codegen-typescript` graduated to ComlineProject/comline-typescript (rollout
-# step 4). `codegen-rust` follows at step 5. The `lib-gen/{lua,luau,c,python}`
-# stubs still use the old `comline::…` crate path and are unwired — each becomes
-# its own `comline-<lang>` repo when it lands. See design/generation.md.
+# The per-language generators graduated to their own repos (rollout steps 4–5):
+# `codegen-typescript` → ComlineProject/comline-typescript,
+# `codegen-rust`       → ComlineProject/comline-rust.
+# The `lib-gen/{lua,luau,c,python}` stubs still use the old `comline::…` crate
+# path and are unwired — each becomes its own `comline-<lang>` repo when it
+# lands. See design/generation.md.
 
-# `comline-conformance` dev-deps `comline-codegen-typescript` from
-# ComlineProject/comline-typescript, which in turn git-deps `comline-codegen`
-# from *this* repo. Point that back at the in-repo crate so the build has one
-# `comline-codegen`, not two. (Same-repo path — CI-safe.)
+# `comline-conformance` dev-deps the generator crates from their own repos,
+# which in turn git-dep `comline-codegen` from *this* repo. Point that back at
+# the in-repo crate so the build has one `comline-codegen`, not several.
+# (Same-repo path — CI-safe.)
 [patch."https://github.com/ComlineProject/generation"]
 comline-codegen = { path = "codegen" }
 
