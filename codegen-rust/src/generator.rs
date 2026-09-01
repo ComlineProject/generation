@@ -12,7 +12,7 @@ use comline_core::schema::ir::compiler::interpreted::kind_search::KindValue;
 
 use eyre::{bail, Result};
 
-use crate::code_gen::{GenRequest, GeneratedFile, Mode, PackageMeta};
+use comline_codegen::{GenRequest, GeneratedFile, Mode, PackageMeta};
 
 
 pub fn generate_rust(req: &GenRequest) -> Result<Vec<GeneratedFile>> {

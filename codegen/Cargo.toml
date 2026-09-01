@@ -1,0 +1,12 @@
+[package]
+name = "comline-codegen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Interim: track `core` by git rev (see design/runtime-repo-structure.md — no
+# crates.io publishing at this stage). Local iteration: uncomment the
+# workspace-root [patch] onto a sibling checkout.
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "aa84d970d3295df59cc3e620bdb71bf96382f97b" }
+
+eyre = "0.6.8"

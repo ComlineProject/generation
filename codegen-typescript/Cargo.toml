@@ -1,0 +1,10 @@
+[package]
+name = "comline-codegen-typescript"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+comline-codegen = { path = "../codegen" }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "aa84d970d3295df59cc3e620bdb71bf96382f97b" }
+
+eyre = "0.6.8"

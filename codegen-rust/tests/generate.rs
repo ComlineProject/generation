@@ -1,8 +1,23 @@
-use comline_codelib_gen::code_gen::rust::generate_rust;
+use comline_codegen::{GenRequest, Mode, PackageMeta};
+use comline_codegen_rust::generate_rust;
 use comline_core::schema::ir::frozen::unit::{FrozenUnit, FrozenArgument};
 use comline_core::schema::ir::compiler::interpreted::kind_search::{KindValue, Primitive};
 
-use crate::code_gen::{code_req, lib_req};
+fn code_req(schemas: &[(String, Vec<FrozenUnit>)]) -> GenRequest<'_> {
+    GenRequest {
+        mode: Mode::Code,
+        schemas,
+        package: PackageMeta { name: "test".into(), version: "0.1.0".into() },
+    }
+}
+
+fn lib_req(schemas: &[(String, Vec<FrozenUnit>)]) -> GenRequest<'_> {
+    GenRequest {
+        mode: Mode::Lib,
+        schemas,
+        package: PackageMeta { name: "chat".into(), version: "0.3.0".into() },
+    }
+}
 
 fn user_struct() -> FrozenUnit {
     FrozenUnit::Struct {
