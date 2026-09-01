@@ -2,9 +2,15 @@
 use serde::{Deserialize, Serialize};
 use comline_runtime::client::Client;
 use comline_runtime::contract::{
-    BufMut, CallError, Dispatch, Envelope, Kind, RuntimeError, WireFormat,
+    Call, CallError, Dispatch, Envelope, Handshake, Kind, Reply, RuntimeError,
+    WireFormat, FRAMING_DATAGRAM,
 };
+use comline_runtime::serve::Server;
 use comline_runtime::transport::Transport;
+
+/// Fingerprint of the frozen IR this file was generated from — the two
+/// ends of a connection [`Handshake`] must agree on it.
+pub const IR_HASH: u64 = 0x30ddab86c2b70657;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NotFound {
@@ -53,26 +59,30 @@ pub const SERVICE_CALLS: &[&str] = &["lookup", "count", "notify"];
 pub struct ServiceDispatcher<S>(pub S);
 
 impl<S: Service> Dispatch for ServiceDispatcher<S> {
+    fn calls(&self) -> &'static [&'static str] {
+        SERVICE_CALLS
+    }
+
     fn dispatch<W: WireFormat>(
         &self,
         call: Kind,
         params: &[u8],
         fmt: &W,
-        out: &mut dyn BufMut,
+        reply: &mut Reply,
     ) -> Result<(), RuntimeError> {
         match call.resolve(SERVICE_CALLS).ok_or(RuntimeError::UnknownCall)? {
             0 => {
                 let p: ServiceLookupParams = fmt.decode(params)?;
                 match self.0.lookup(p.id) {
-                    Ok(reply) => {
+                    Ok(value) => {
                         let mut body = Vec::new();
-                        fmt.encode(&reply, &mut body)?;
-                        Envelope::encode_ok(&body, out);
+                        fmt.encode(&value, &mut body)?;
+                        reply.ok(&body);
                     }
                     Err(ServiceLookupError::NotFound(e)) => {
                         let mut body = Vec::new();
                         fmt.encode(&e, &mut body)?;
-                        Envelope::encode_err(0u16, &body, out);
+                        reply.err(0u16, &body);
                     }
                 }
                 Ok(())
@@ -80,10 +90,10 @@ impl<S: Service> Dispatch for ServiceDispatcher<S> {
             1 => {
                 let _: () = fmt.decode(params)?;
                 match self.0.count() {
-                    Ok(reply) => {
+                    Ok(value) => {
                         let mut body = Vec::new();
-                        fmt.encode(&reply, &mut body)?;
-                        Envelope::encode_ok(&body, out);
+                        fmt.encode(&value, &mut body)?;
+                        reply.ok(&body);
                     }
                     Err(never) => match never {},
                 }
@@ -99,6 +109,16 @@ impl<S: Service> Dispatch for ServiceDispatcher<S> {
     }
 }
 
+impl<S: Service> ServiceDispatcher<S> {
+    /// Serve this protocol over `transport`, running the connection
+    /// handshake (`IR_HASH` + `format`'s name) against the peer first.
+    pub fn serve<T: Transport, W: WireFormat>(self, transport: &mut T, format: W)
+    -> Result<(), RuntimeError> {
+        let hs = Handshake::new(IR_HASH, format.name(), FRAMING_DATAGRAM, 0);
+        Server::new(self, format).serve_handshaked(transport, hs)
+    }
+}
+
 pub struct ServiceClient<T, W>(pub Client<T, W>);
 
 impl<T: Transport, W: WireFormat> ServiceClient<T, W> {
@@ -106,8 +126,14 @@ impl<T: Transport, W: WireFormat> ServiceClient<T, W> {
         Self(client)
     }
 
+    /// Bind + run the connection handshake against the provider.
+    pub fn connect(transport: T, format: W) -> Result<Self, RuntimeError> {
+        let hs = Handshake::new(IR_HASH, format.name(), FRAMING_DATAGRAM, 0);
+        Ok(Self(Client::connect(transport, format, hs)?))
+    }
+
     pub fn lookup(&mut self, id: i32) -> Result<Record, CallError<ServiceLookupError>> {
-        let (reply, fmt) = self.0.call(0u16, &ServiceLookupParams { id })?;
+        let (reply, fmt) = self.0.call(Call::new(0, "lookup"), &ServiceLookupParams { id })?;
         match reply {
             Envelope::Ok(payload) => fmt.decode(payload).map_err(CallError::Runtime),
             Envelope::Err { id: 0u16, body } => {
@@ -119,7 +145,7 @@ impl<T: Transport, W: WireFormat> ServiceClient<T, W> {
     }
 
     pub fn count(&mut self) -> Result<u64, CallError<ServiceCountError>> {
-        let (reply, fmt) = self.0.call(1u16, &())?;
+        let (reply, fmt) = self.0.call(Call::new(1, "count"), &())?;
         match reply {
             Envelope::Ok(payload) => fmt.decode(payload).map_err(CallError::Runtime),
             Envelope::Err { id, .. } => Err(CallError::Runtime(RuntimeError::Remote { id })),
@@ -127,7 +153,7 @@ impl<T: Transport, W: WireFormat> ServiceClient<T, W> {
     }
 
     pub fn notify(&mut self, code: u16) -> Result<(), RuntimeError> {
-        self.0.notify(2u16, &ServiceNotifyParams { code })
+        self.0.notify(Call::new(2, "notify"), &ServiceNotifyParams { code })
     }
 }
 
