@@ -8,9 +8,9 @@ use comline_runtime::contract::{
 use comline_runtime::serve::Server;
 use comline_runtime::transport::Transport;
 
-/// Fingerprint of the frozen IR this file was generated from — the two
-/// ends of a connection [`Handshake`] must agree on it.
-pub const IR_HASH: u64 = 0x30ddab86c2b70657;
+/// Canonical digest of the frozen IR this file was generated from — the
+/// two ends of a connection [`Handshake`] must agree on it.
+pub const IR_HASH: u64 = 0xbdbe5c6fd7420bd0;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NotFound {
