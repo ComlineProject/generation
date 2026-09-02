@@ -5,7 +5,7 @@ export interface Scalars {
     small: number;
     medium: number;
     large: number;
-    huge: u128;
+    huge: bigint;
     signed_small: number;
     signed_large: number;
     name: string;
