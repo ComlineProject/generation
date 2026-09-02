@@ -43,6 +43,12 @@ pub struct GenRequest<'a> {
     pub mode: Mode,
     pub schemas: &'a [(String, Vec<FrozenUnit>)],
     pub package: PackageMeta,
+    /// Consumer-set fallback wire framing (`comline.toml`'s
+    /// `[generate] default_framing`), applied by a generator to any protocol
+    /// that does not pick one itself with `@framing`. `None` ⇒ the generator's
+    /// built-in default. The value is a framing name the generator recognises
+    /// (`"jsonrpc"`, `"datagram"`, …); an unknown one falls back to the default.
+    pub default_framing: Option<String>,
 }
 
 /// A code generator: frozen IR in, generated files out.

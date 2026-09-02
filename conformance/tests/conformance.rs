@@ -39,6 +39,7 @@ fn request(schemas: &[(String, Vec<FrozenUnit>)]) -> GenRequest<'_> {
             name: "conformance".to_string(),
             version: "0.0.0".to_string(),
         },
+        default_framing: None,
     }
 }
 
