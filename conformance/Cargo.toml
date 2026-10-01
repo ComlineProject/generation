@@ -11,9 +11,9 @@ publish = false
 # to their own repos. See design/runtime-repo-structure.md (rollout step 3).
 
 [dependencies]
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "ed584aef249e8a9282393d39d24f2615c9b8088a" }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "91b3c1a64fce50789a3dfb8299c2fd1f739f1a58" }
 
 [dev-dependencies]
 comline-codegen = { path = "../codegen" }
-comline-codegen-rust = { git = "https://github.com/ComlineProject/comline-rust", rev = "7d56cefbdfde787a3ffdfe0b66bfaeba7ba6d500" }
-comline-codegen-typescript = { git = "https://github.com/ComlineProject/comline-typescript", rev = "9af8674291ea7f2b344be9c838d5dc9237319044" }
+comline-codegen-rust = { git = "https://github.com/ComlineProject/comline-rust", rev = "a564d232a7692fb857d9c021e7d85d95217b9a54" }
+comline-codegen-typescript = { git = "https://github.com/ComlineProject/comline-typescript", rev = "859a77ba24dcc4af0084f7264910ce8cdbc08774" }
