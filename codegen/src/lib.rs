@@ -97,4 +97,65 @@ impl Registry {
         let generator = *lang.versions.get(version)?;
         Some((generator, lang.ext))
     }
+
+    /// Every `(language, version)` this registry can generate, sorted by
+    /// `(name, version)` — `HashMap` iteration order isn't stable, and this
+    /// is meant to be diffed/scripted against (`comline targets`).
+    pub fn targets(&self) -> Vec<Target> {
+        let mut out: Vec<Target> = self
+            .langs
+            .iter()
+            .flat_map(|(name, lang)| {
+                lang.versions.keys().map(move |version| Target {
+                    name,
+                    ext: lang.ext,
+                    version,
+                })
+            })
+            .collect();
+        out.sort_unstable_by_key(|t| (t.name, t.version));
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn noop(_req: &GenRequest) -> Result<Vec<GeneratedFile>> {
+        Ok(vec![])
+    }
+
+    #[test]
+    fn targets_is_flattened_and_sorted() {
+        let mut registry = Registry::new();
+        registry.register("typescript", "ts", "5.0", noop);
+        registry.register("rust", "rs", "1.70.0", noop);
+        registry.register("rust", "rs", "1.60.0", noop);
+
+        let targets = registry.targets();
+        assert_eq!(
+            targets,
+            vec![
+                Target { name: "rust", ext: "rs", version: "1.60.0" },
+                Target { name: "rust", ext: "rs", version: "1.70.0" },
+                Target { name: "typescript", ext: "ts", version: "5.0" },
+            ]
+        );
+    }
+
+    #[test]
+    fn targets_is_empty_for_an_empty_registry() {
+        assert_eq!(Registry::new().targets(), vec![]);
+    }
+}
+
+/// One compiled-in `(language, version)` a [`Registry`] can generate —
+/// `name#version` is exactly the token `.idp`'s `ItemVersionMeta` grammar
+/// rule expects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Target {
+    pub name: &'static str,
+    pub ext: &'static str,
+    pub version: &'static str,
 }
