@@ -40,6 +40,7 @@ fn request(schemas: &[(String, Vec<FrozenUnit>)]) -> GenRequest<'_> {
             version: "0.0.0".to_string(),
         },
         default_framing: None,
+        external_std: false,
     }
 }
 
