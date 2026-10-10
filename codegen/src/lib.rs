@@ -49,6 +49,13 @@ pub struct GenRequest<'a> {
     /// built-in default. The value is a framing name the generator recognises
     /// (`"jsonrpc"`, `"datagram"`, …); an unknown one falls back to the default.
     pub default_framing: Option<String>,
+    /// `comline.toml`'s `[generate] external_std` - `true` means `std`
+    /// should be referenced as its own crate instead of inlined into this
+    /// package's own generated output. Only a generator that knows how to
+    /// do that (today, Rust's) acts on it; others ignore it, same as any
+    /// other field they have no use for. Default `false` (inlined,
+    /// unchanged) everywhere this isn't explicitly set.
+    pub external_std: bool,
 }
 
 /// A code generator: frozen IR in, generated files out.
