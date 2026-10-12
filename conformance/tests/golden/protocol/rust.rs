@@ -10,7 +10,7 @@ use comline_runtime::transport::Transport;
 
 /// Canonical digest of the frozen IR this file was generated from — the
 /// two ends of a connection [`Handshake`] must agree on it.
-pub const IR_HASH: u64 = 0xbdbe5c6fd7420bd0;
+pub const IR_HASH: u64 = 0x35b94ad7cfc1ea16;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NotFound {
