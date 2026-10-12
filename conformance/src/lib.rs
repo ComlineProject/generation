@@ -92,6 +92,7 @@ fn error(ordinal: u16, name: &str) -> FrozenUnit {
         name: name.to_string(),
         message: format!("{name} occurred"),
         fields: vec![],
+        span: Some((0, 0)),
     }
 }
 
