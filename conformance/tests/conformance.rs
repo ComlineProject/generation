@@ -31,7 +31,7 @@ fn golden_path(fixture: &str, lang: &str, ext: &str) -> PathBuf {
         .join(format!("{lang}.{ext}"))
 }
 
-fn request(schemas: &[(String, Vec<FrozenUnit>)]) -> GenRequest<'_> {
+fn request<'a>(schemas: &'a [(String, Vec<FrozenUnit>)], lang: &str) -> GenRequest<'a> {
     GenRequest {
         mode: Mode::Code,
         schemas,
@@ -39,6 +39,16 @@ fn request(schemas: &[(String, Vec<FrozenUnit>)]) -> GenRequest<'_> {
             name: "conformance".to_string(),
             version: "0.0.0".to_string(),
         },
+        // Each generator's own registered version. `Mode::Code` has no
+        // manifest to record it in, so no golden depends on it - but a
+        // request that named the wrong one would still be a lie about what
+        // is being asked for.
+        lang_version: match lang {
+            "rust" => comline_codegen_rust::LANG_VERSION,
+            "typescript" => comline_codegen_typescript::LANG_VERSION,
+            other => panic!("unknown language `{other}`"),
+        }
+        .to_string(),
         default_framing: None,
         external_std: false,
     }
@@ -52,7 +62,7 @@ fn corpus_matches_golden() {
     for fx in corpus() {
         let schemas = vec![(fx.namespace.to_string(), fx.units.clone())];
         for &(lang, ext) in LANGS {
-            let req = request(&schemas);
+            let req = request(&schemas, lang);
             let files = generate(lang, &req);
             assert_eq!(
                 files.len(),

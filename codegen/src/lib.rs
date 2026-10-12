@@ -49,6 +49,13 @@ pub struct GenRequest<'a> {
     /// built-in default. The value is a framing name the generator recognises
     /// (`"jsonrpc"`, `"datagram"`, …); an unknown one falls back to the default.
     pub default_framing: Option<String>,
+    /// The target's language/toolchain version - the `#`-suffix of the
+    /// language the congregation declared (`rust#1.70.0` -> `"1.70.0"`,
+    /// `typescript#5.0` -> `"5.0"`), which is also what selected this
+    /// generator. A generator records it in whatever its own ecosystem's
+    /// manifest calls that (`rust-version` in a `Cargo.toml`), and ignores
+    /// it otherwise - `Mode::Code` has no manifest to put it in.
+    pub lang_version: String,
     /// `comline.toml`'s `[generate] external_std` - `true` means `std`
     /// should be referenced as its own crate instead of inlined into this
     /// package's own generated output. Only a generator that knows how to
