@@ -11,7 +11,7 @@ publish = false
 # to their own repos. See design/runtime-repo-structure.md (rollout step 3).
 
 [dependencies]
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "f03537962746a93e888888905b4224b17d18a6b4" }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "6101ef8abaf02f1e3155c8b41d40b17ed41d653c" }
 
 [dev-dependencies]
 comline-codegen = { path = "../codegen" }
