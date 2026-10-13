@@ -8,12 +8,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use comline_codegen::{GeneratedFile, GenRequest, Mode, PackageMeta};
-use comline_conformance::corpus;
-use comline_core::schema::ir::frozen::unit::FrozenUnit;
+use comline_codegen::{GenRequest, GeneratedFile, PackageMeta};
+use comline_conformance::{corpus, Fixture};
 
-/// `(generator name, file extension)`.
-const LANGS: &[(&str, &str)] = &[("rust", "rs"), ("typescript", "ts")];
+const LANGS: &[&str] = &["rust", "typescript"];
 
 fn generate(lang: &str, req: &GenRequest) -> Vec<GeneratedFile> {
     let result = match lang {
@@ -24,17 +22,21 @@ fn generate(lang: &str, req: &GenRequest) -> Vec<GeneratedFile> {
     result.unwrap_or_else(|e| panic!("`{lang}` generator failed: {e}"))
 }
 
-fn golden_path(fixture: &str, lang: &str, ext: &str) -> PathBuf {
+/// `tests/golden/<fixture>/<lang>/` — one directory per (fixture, language),
+/// holding the generated files at the paths the generator itself chose. A
+/// fixture is a package now, so a single golden *file* per language can no
+/// longer hold the answer.
+fn golden_dir(fixture: &str, lang: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/golden")
         .join(fixture)
-        .join(format!("{lang}.{ext}"))
+        .join(lang)
 }
 
-fn request<'a>(schemas: &'a [(String, Vec<FrozenUnit>)], lang: &str) -> GenRequest<'a> {
+fn request<'a>(fx: &'a Fixture, lang: &str) -> GenRequest<'a> {
     GenRequest {
-        mode: Mode::Code,
-        schemas,
+        mode: fx.mode,
+        schemas: &fx.schemas,
         package: PackageMeta {
             name: "conformance".to_string(),
             version: "0.0.0".to_string(),
@@ -50,8 +52,31 @@ fn request<'a>(schemas: &'a [(String, Vec<FrozenUnit>)], lang: &str) -> GenReque
         }
         .to_string(),
         default_framing: None,
-        external_std: false,
+        external_std: fx.external_std,
     }
+}
+
+/// Every file under `dir`, as paths relative to it — so a golden that no
+/// longer corresponds to anything the generator emits is reported instead of
+/// lingering. Blessing would otherwise leave orphans behind forever.
+fn existing_goldens(dir: &Path) -> Vec<PathBuf> {
+    fn walk(dir: &Path, base: &Path, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, base, out);
+            } else if let Ok(rel) = path.strip_prefix(base) {
+                out.push(rel.to_path_buf());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, dir, &mut out);
+    out.sort();
+    out
 }
 
 #[test]
@@ -60,38 +85,79 @@ fn corpus_matches_golden() {
     let mut drift = Vec::new();
 
     for fx in corpus() {
-        let schemas = vec![(fx.namespace.to_string(), fx.units.clone())];
-        for &(lang, ext) in LANGS {
-            let req = request(&schemas, lang);
+        for &lang in LANGS {
+            let req = request(&fx, lang);
             let files = generate(lang, &req);
-            assert_eq!(
-                files.len(),
-                1,
-                "fixture `{}` / `{lang}`: expected exactly one generated file, got {}",
-                fx.name,
-                files.len()
-            );
-            let got = &files[0].contents;
-            let path = golden_path(fx.name, lang, ext);
+            let dir = golden_dir(fx.name, lang);
 
             if bless {
-                fs::create_dir_all(path.parent().unwrap()).unwrap();
-                fs::write(&path, got).unwrap();
+                // Clear first: a file the generator no longer emits must not
+                // survive as a golden.
+                let _ = fs::remove_dir_all(&dir);
+                for file in &files {
+                    let path = dir.join(&file.path);
+                    fs::create_dir_all(path.parent().unwrap()).unwrap();
+                    fs::write(&path, &file.contents).unwrap();
+                }
                 continue;
             }
 
-            match fs::read_to_string(&path) {
-                Ok(want) if *got == want => {}
-                Ok(want) => drift.push(format!(
-                    "--- {} / {lang} ---\n{}",
+            for file in &files {
+                let path = dir.join(&file.path);
+                match fs::read_to_string(&path) {
+                    Ok(want) if file.contents == want => {}
+                    Ok(want) => drift.push(format!(
+                        "--- {} / {lang} / {} ---\n{}",
+                        fx.name,
+                        file.path.display(),
+                        line_diff(&want, &file.contents)
+                    )),
+                    Err(_) => drift.push(format!(
+                        "{} / {lang}: no golden at {} — run with CONFORMANCE_BLESS=1",
+                        fx.name,
+                        path.display()
+                    )),
+                }
+            }
+
+            let emitted: Vec<PathBuf> = files.iter().map(|f| f.path.clone()).collect();
+            for stale in existing_goldens(&dir) {
+                if !emitted.contains(&stale) {
+                    drift.push(format!(
+                        "{} / {lang}: golden `{}` is no longer emitted — run with \
+                         CONFORMANCE_BLESS=1",
+                        fx.name,
+                        stale.display()
+                    ));
+                }
+            }
+        }
+    }
+
+    // A golden *outside* any language directory. The per-language sweep above
+    // can't see these: when fixtures were one schema the layout was
+    // `golden/<fixture>/<lang>.<ext>`, and moving to `<lang>/<path>` left the
+    // old files tracked and invisible. Anything at the wrong level is
+    // reported rather than ignored.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+    for fx in corpus() {
+        let dir = root.join(fx.name);
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let known_lang = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| LANGS.contains(&n));
+            if !path.is_dir() || !known_lang {
+                drift.push(format!(
+                    "{}: `{}` is not a language directory — a stale golden from an \
+                     older layout?",
                     fx.name,
-                    line_diff(&want, got)
-                )),
-                Err(_) => drift.push(format!(
-                    "{} / {lang}: no golden at {} — run with CONFORMANCE_BLESS=1",
-                    fx.name,
-                    path.display()
-                )),
+                    path.file_name().unwrap_or_default().to_string_lossy()
+                ));
             }
         }
     }
