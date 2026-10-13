@@ -260,18 +260,22 @@ fn protocol() -> Fixture {
 
 /// A `const` declaration.
 ///
-/// **Both goldens are empty**, and that is a finding rather than a pass:
-/// neither generator handles `FrozenUnit::Constant`, so a schema declaring a
-/// constant produces a file with nothing in it. The fixture has been here
-/// since before the corpus could express much else, and an empty golden is
-/// indistinguishable from a correct one at a glance — worth saying out loud,
-/// because a golden pins missing behaviour exactly as silently as it pins
-/// present behaviour.
+/// Both goldens were **empty**, and saying so in this comment is what
+/// eventually got it fixed: neither generator handled
+/// `FrozenUnit::Constant`, so a schema declaring a constant produced a file
+/// with nothing in it. An empty golden is indistinguishable from a correct
+/// one at a glance, and a golden pins missing behaviour exactly as silently
+/// as it pins present behaviour.
 ///
-/// The Rust golden is not quite empty: it carries
-/// `use serde::{Deserialize, Serialize};` with nothing to derive on, which is
-/// an unused import. The same shape in `comline-rust`'s generated
-/// `comline_std` is what makes clippy fail there.
+/// Closed by comline-rust#42 and comline-typescript#35, which needed
+/// core#92 first: the declared type was being inferred from the literal, so
+/// this fixture's `U8(Some(5))` could not be told from a `u64` in a real
+/// build, and emitting it would have written `u64`.
+///
+/// The Rust golden also lost `use serde::{Deserialize, Serialize};` - it had
+/// nothing to derive on, which was an unused import in generated code. The
+/// same shape in `comline-rust`'s generated `comline_std` is what made
+/// clippy fail there, and no longer does.
 fn constant() -> Fixture {
     Fixture::one(
         "constant",
