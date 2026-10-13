@@ -6,6 +6,10 @@
 //! `register(&mut Registry)`. See `design/generation.md`.
 
 pub mod builder;
+pub mod modules;
+pub mod naming;
+pub mod stdlib;
+pub mod symbols;
 pub mod utils;
 
 use std::collections::HashMap;
@@ -151,9 +155,21 @@ mod tests {
         assert_eq!(
             targets,
             vec![
-                Target { name: "rust", ext: "rs", version: "1.60.0" },
-                Target { name: "rust", ext: "rs", version: "1.70.0" },
-                Target { name: "typescript", ext: "ts", version: "5.0" },
+                Target {
+                    name: "rust",
+                    ext: "rs",
+                    version: "1.60.0"
+                },
+                Target {
+                    name: "rust",
+                    ext: "rs",
+                    version: "1.70.0"
+                },
+                Target {
+                    name: "typescript",
+                    ext: "ts",
+                    version: "5.0"
+                },
             ]
         );
     }
