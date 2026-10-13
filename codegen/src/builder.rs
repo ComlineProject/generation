@@ -6,8 +6,7 @@ use std::process::Command;
 // Crate Uses
 
 // External Uses
-use eyre::{Result, bail};
-
+use eyre::{bail, Result};
 
 #[allow(unused)]
 pub fn build_lib(path: &Path, name: &str) -> Result<PathBuf> {
@@ -24,4 +23,3 @@ pub fn build_lib(path: &Path, name: &str) -> Result<PathBuf> {
 
     Ok(path.join(format!("target/release/{}", name)))
 }
-
