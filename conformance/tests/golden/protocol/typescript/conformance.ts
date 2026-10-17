@@ -57,22 +57,30 @@ export class ServiceDispatcher implements Dispatch {
     async dispatch(call: Kind, params: Uint8Array, codec: Codec, reply: Reply): Promise<void> {
         switch (resolveKind(call, SERVICE_CALLS)) {
             case 0: {
-                const p = codec.decode<ServiceLookupParams>(params);
                 try {
+                    const p = codec.decode<ServiceLookupParams>(params);
                     reply.ok(codec.encode((await this.impl.lookup(p)) ?? null));
                 } catch (e) {
                     if (e instanceof NotFoundError) { reply.err(NotFoundError.ordinal, codec.encode(e.data)); return; }
-                    throw e;
+                    reply.fault();
                 }
                 return;
             }
             case 1: {
-                reply.ok(codec.encode((await this.impl.count()) ?? null));
+                try {
+                    reply.ok(codec.encode((await this.impl.count()) ?? null));
+                } catch {
+                    reply.fault();
+                }
                 return;
             }
             case 2: {
-                const p = codec.decode<ServiceNotifyParams>(params);
-                await this.impl.notify(p);
+                try {
+                    const p = codec.decode<ServiceNotifyParams>(params);
+                    await this.impl.notify(p);
+                } catch {
+                    /* one-way: nowhere to report this */
+                }
                 return;
             }
             default:
@@ -92,6 +100,7 @@ export class ServiceClient {
     async lookup(params: ServiceLookupParams): Promise<Record> {
         const env = await this.client.call({ id: 0, name: "lookup" }, params);
         if ("ok" in env) return this.client.codec.decode<Record>(env.ok);
+        if ("fault" in env) throw RuntimeError.provider();
         switch (env.err.id) {
             case NotFoundError.ordinal:
                 throw new NotFoundError(this.client.codec.decode<NotFound>(env.err.body));
@@ -103,6 +112,7 @@ export class ServiceClient {
     async count(): Promise<number> {
         const env = await this.client.call({ id: 1, name: "count" }, null);
         if ("ok" in env) return this.client.codec.decode<number>(env.ok);
+        if ("fault" in env) throw RuntimeError.provider();
         throw RuntimeError.remote(env.err.id);
     }
 
