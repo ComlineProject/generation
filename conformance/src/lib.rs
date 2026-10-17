@@ -73,6 +73,7 @@ pub fn corpus() -> Vec<Fixture> {
         enum_basic(),
         type_refs(),
         protocol(),
+        error_shapes(),
         constant(),
         // Shapes a single-schema fixture could not express at all.
         cross_schema(),
@@ -251,6 +252,72 @@ fn protocol() -> Fixture {
                         None,
                         vec![],
                     ),
+                ],
+                span: (0, 0),
+            },
+        ],
+    )
+}
+
+/// The error-handling shapes `protocol()` cannot express: a function that
+/// throws **several** errors, a protocol where **nothing** throws, and an
+/// error whose `message` **interpolates a field**.
+///
+/// Each one pins a decision from the fault-channel work:
+///
+/// - `! Denied, TooLong` must produce one enum variant per declared error, in
+///   *declaration* order rather than ordinal order — hence `Denied` is ordinal
+///   2 and listed first.
+/// - A protocol with no `!` anywhere makes even the `<Proto>Error` union
+///   uninhabited, so it too becomes an `Infallible` alias rather than
+///   `pub enum … {}`.
+/// - `message = "{self.limit} is the limit"` is what the generated `Display`
+///   renders. `protocol()`'s errors have no fields, so without this the
+///   interpolating branch of the message renderer is never exercised by the
+///   corpus.
+fn error_shapes() -> Fixture {
+    let with_message =
+        |ordinal: u16, name: &str, message: &str, fields: Vec<FrozenUnit>| FrozenUnit::Error {
+            docstring: None,
+            parameters: vec![],
+            ordinal,
+            imported_from: None,
+            name: name.to_string(),
+            message: message.to_string(),
+            fields,
+            span: Some((0, 0)),
+        };
+
+    Fixture::one(
+        "error_shapes",
+        "conformance",
+        vec![
+            with_message(
+                1,
+                "TooLong",
+                "{self.limit} is the limit",
+                vec![field("limit", "u32", false)],
+            ),
+            with_message(2, "Denied", "denied", vec![]),
+            FrozenUnit::Protocol {
+                docstring: "Throws more than one error".to_string(),
+                parameters: vec![],
+                name: "Multi".to_string(),
+                functions: vec![function(
+                    "send",
+                    vec![arg("body", Primitive::String(None))],
+                    Some("u64"),
+                    vec![2, 1], // `! Denied, TooLong` — declaration order
+                )],
+                span: (0, 0),
+            },
+            FrozenUnit::Protocol {
+                docstring: "Nothing here can fail".to_string(),
+                parameters: vec![],
+                name: "Quiet".to_string(),
+                functions: vec![
+                    function("ping", vec![], Some("u64"), vec![]),
+                    function("hush", vec![], None, vec![]),
                 ],
                 span: (0, 0),
             },

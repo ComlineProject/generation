@@ -2,8 +2,8 @@
 use serde::{Deserialize, Serialize};
 use comline_runtime::client::Client;
 use comline_runtime::contract::{
-    Call, CallError, Dispatch, Envelope, Handshake, Kind, Reply, RuntimeError,
-    WireFormat, FRAMING_DATAGRAM,
+    Call, CallError, Dispatch, Envelope, Fault, Handshake, Kind, Reply,
+    RuntimeError, WireFormat, FRAMING_DATAGRAM,
 };
 use comline_runtime::serve::Server;
 use comline_runtime::transport::Transport;
@@ -14,6 +14,12 @@ pub const IR_HASH: u64 = 0x36ccb31bd3ce2666;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NotFound {
+}
+
+impl core::fmt::Display for NotFound {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("NotFound occurred")
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,13 +37,27 @@ pub enum ServiceLookupError {
     NotFound(NotFound),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ServiceCountError {
+impl core::fmt::Display for ServiceLookupError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ServiceLookupError::NotFound(e) => e.fmt(f),
+        }
+    }
 }
+
+pub type ServiceCountError = ::core::convert::Infallible;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ServiceError {
     NotFound(NotFound),
+}
+
+impl core::fmt::Display for ServiceError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            ServiceError::NotFound(e) => e.fmt(f),
+        }
+    }
 }
 
 impl From<ServiceLookupError> for ServiceError {
@@ -49,8 +69,8 @@ impl From<ServiceLookupError> for ServiceError {
 }
 
 pub trait Service {
-    fn lookup(&self, id: i32) -> Result<Record, ServiceLookupError>;
-    fn count(&self) -> Result<u64, ServiceCountError>;
+    fn lookup(&self, id: i32) -> Result<Record, Fault<ServiceLookupError>>;
+    fn count(&self) -> Result<u64, Fault<ServiceCountError>>;
     fn notify(&self, code: u16);
 }
 
@@ -72,35 +92,52 @@ impl<S: Service> Dispatch for ServiceDispatcher<S> {
     ) -> Result<(), RuntimeError> {
         match call.resolve(SERVICE_CALLS).ok_or(RuntimeError::UnknownCall)? {
             0 => {
-                let p: ServiceLookupParams = fmt.decode(params)?;
+                let p: ServiceLookupParams = match fmt.decode(params) {
+                    Ok(p) => p,
+                    Err(_) => {
+                        reply.fault();
+                        return Ok(());
+                    }
+                };
                 match self.0.lookup(p.id) {
                     Ok(value) => {
                         let mut body = Vec::new();
                         fmt.encode(&value, &mut body)?;
                         reply.ok(&body);
                     }
-                    Err(ServiceLookupError::NotFound(e)) => {
+                    Err(Fault::App(ServiceLookupError::NotFound(e))) => {
                         let mut body = Vec::new();
                         fmt.encode(&e, &mut body)?;
                         reply.err(0u16, &body);
                     }
+                    Err(Fault::Internal) => reply.fault(),
                 }
                 Ok(())
             }
             1 => {
-                let _: () = fmt.decode(params)?;
+                let _: () = match fmt.decode(params) {
+                    Ok(unit) => unit,
+                    Err(_) => {
+                        reply.fault();
+                        return Ok(());
+                    }
+                };
                 match self.0.count() {
                     Ok(value) => {
                         let mut body = Vec::new();
                         fmt.encode(&value, &mut body)?;
                         reply.ok(&body);
                     }
-                    Err(never) => match never {},
+                    Err(Fault::App(never)) => match never {},
+                    Err(Fault::Internal) => reply.fault(),
                 }
                 Ok(())
             }
             2 => {
-                let p: ServiceNotifyParams = fmt.decode(params)?;
+                let p: ServiceNotifyParams = match fmt.decode(params) {
+                    Ok(p) => p,
+                    Err(_) => return Ok(()),
+                };
                 self.0.notify(p.code);
                 Ok(())
             }
@@ -141,6 +178,7 @@ impl<T: Transport, W: WireFormat> ServiceClient<T, W> {
                 Err(CallError::App(ServiceLookupError::NotFound(e)))
             }
             Envelope::Err { id, .. } => Err(CallError::Runtime(RuntimeError::Remote { id })),
+            Envelope::Fault => Err(CallError::Runtime(RuntimeError::Provider)),
         }
     }
 
@@ -149,6 +187,7 @@ impl<T: Transport, W: WireFormat> ServiceClient<T, W> {
         match reply {
             Envelope::Ok(payload) => fmt.decode(payload).map_err(CallError::Runtime),
             Envelope::Err { id, .. } => Err(CallError::Runtime(RuntimeError::Remote { id })),
+            Envelope::Fault => Err(CallError::Runtime(RuntimeError::Provider)),
         }
     }
 
