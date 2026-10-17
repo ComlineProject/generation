@@ -6,6 +6,7 @@
 //! `register(&mut Registry)`. See `design/generation.md`.
 
 pub mod builder;
+pub mod collisions;
 pub mod modules;
 pub mod naming;
 pub mod stdlib;
