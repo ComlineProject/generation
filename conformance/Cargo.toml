@@ -17,5 +17,5 @@ comline-core = { git = "https://github.com/ComlineProject/core", rev = "30dc8ed4
 comline-codegen = { path = "../codegen" }
 
 [dev-dependencies]
-comline-codegen-rust = { git = "https://github.com/ComlineProject/comline-rust", rev = "e22f287557b4abf82b436d7c44236ae74ea82ba5" }
-comline-codegen-typescript = { git = "https://github.com/ComlineProject/comline-typescript", rev = "bfd0d30d9c1c1292ef3012d08de38f68fd84256c" }
+comline-codegen-rust = { git = "https://github.com/ComlineProject/comline-rust", rev = "6606068978359f0e1d1717ab1fb2625ce5cc9c14" }
+comline-codegen-typescript = { git = "https://github.com/ComlineProject/comline-typescript", rev = "c1264e11046d530d498f0711222a3c59c276276c" }
