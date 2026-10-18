@@ -86,8 +86,11 @@ impl Check<'_> {
 }
 
 /// Everything to check on one value.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Plan<'a> {
+    /// The type the checks see: the value's type with its alias chain
+    /// followed (`type Name = string` makes a `Name` value a `string`).
+    pub base: TypeRef,
     /// Checks on the value itself: the alias chain's, innermost alias
     /// first, then the use site's own `@validators`.
     pub checks: Vec<Check<'a>>,
@@ -195,7 +198,7 @@ impl<'a> Validation<'a> {
         }
         checks.extend(self.checks(ns, parameters, at)?);
 
-        let mut plan = Plan { checks, ..Plan::default() };
+        let mut plan = Plan { base: cur.clone(), checks, elements: None, nested: false };
         match cur {
             TypeRef::Array { element, .. } if depth < MAX_DEPTH => {
                 let elements = self.plan_at(cur_ns, element, &[], at, depth + 1)?;
@@ -401,7 +404,9 @@ mod tests {
         let model = Validation::new(&schemas);
         let plan = plan_of(&model, &schemas[1].1, "S", "names");
         assert!(plan.checks.is_empty());
-        assert_eq!(plan.elements.expect("element checks").checks.len(), 1);
+        let elements = plan.elements.expect("element checks");
+        assert_eq!(elements.checks.len(), 1);
+        assert_eq!(elements.base, TypeRef::Primitive(PrimitiveType::String), "through the alias");
     }
 
     #[test]
