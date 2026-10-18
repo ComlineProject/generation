@@ -53,6 +53,7 @@ fn request<'a>(fx: &'a Fixture, lang: &str) -> GenRequest<'a> {
         .to_string(),
         default_framing: None,
         external_std: fx.external_std,
+        validate_on_decode: fx.validate_on_decode,
     }
 }
 
