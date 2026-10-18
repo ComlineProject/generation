@@ -48,7 +48,7 @@ export interface MultiSendParams {
 
 export interface Multi {
     /** @throws {DeniedError | TooLongError} */
-    send(params: MultiSendParams): Promise<number>;
+    send(params: MultiSendParams): Promise<bigint>;
 }
 
 export const MULTI_CALLS = ["send"] as const;
@@ -87,9 +87,9 @@ export class MultiClient {
         return new MultiClient(await Client.connect(transport, codec, hs, framing));
     }
 
-    async send(params: MultiSendParams): Promise<number> {
+    async send(params: MultiSendParams): Promise<bigint> {
         const env = await this.client.call({ id: 0, name: "send" }, params);
-        if ("ok" in env) return this.client.codec.decode<number>(env.ok);
+        if ("ok" in env) return this.client.codec.decode<bigint>(env.ok, "bigint");
         if ("fault" in env) throw RuntimeError.provider();
         switch (env.err.id) {
             case DeniedError.ordinal:
@@ -108,7 +108,7 @@ export function serveMulti(impl: Multi, transport: Transport, codec: Codec, fram
 }
 
 export interface Quiet {
-    ping(): Promise<number>;
+    ping(): Promise<bigint>;
     hush(): Promise<void>;
 }
 
@@ -153,9 +153,9 @@ export class QuietClient {
         return new QuietClient(await Client.connect(transport, codec, hs, framing));
     }
 
-    async ping(): Promise<number> {
+    async ping(): Promise<bigint> {
         const env = await this.client.call({ id: 0, name: "ping" }, null);
-        if ("ok" in env) return this.client.codec.decode<number>(env.ok);
+        if ("ok" in env) return this.client.codec.decode<bigint>(env.ok, "bigint");
         if ("fault" in env) throw RuntimeError.provider();
         throw RuntimeError.remote(env.err.id);
     }
