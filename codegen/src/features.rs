@@ -271,7 +271,7 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
             uses.push(FeatureUse { feature, namespace: namespace.clone(), owner, span: known(span) });
         };
 
-        if namespace.contains("::") {
+        if namespace.contains('/') || namespace.contains("::") {
             push(Feature::NestedNamespaces, format!("schema '{namespace}'"), None);
         }
 
@@ -569,8 +569,13 @@ pub fn markdown(columns: &[Column], evidence: &BTreeMap<(String, Feature), Vec<S
             if let Some(tracking) = s.tracking {
                 let _ = write!(cell, " ({tracking})");
             }
-            if let Some(fixtures) = evidence.get(&(c.generator.to_string(), feature)) {
-                let _ = write!(cell, " <br><sub>proven by {}</sub>", fixtures.iter().map(|f| format!("`{f}`")).collect::<Vec<_>>().join(", "));
+            // The first few; the JSON has them all.
+            if let Some(fixtures) = evidence.get(&(c.generator.to_string(), feature)).filter(|f| !f.is_empty()) {
+                let mut shown = fixtures.iter().take(3).map(|f| format!("`{f}`")).collect::<Vec<_>>().join(", ");
+                if fixtures.len() > 3 {
+                    let _ = write!(shown, " +{} more", fixtures.len() - 3);
+                }
+                let _ = write!(cell, " <br><sub>proven by {shown}</sub>");
             }
             let _ = write!(out, " {} |", cell.replace('|', "\\|"));
         }
