@@ -17,7 +17,7 @@ import {
 
 /** Canonical digest of the frozen IR this file was generated from — the
 *  two ends of a connection must agree on it. */
-export const IR_HASH = 0xc31578c28f3dd248n;
+export const IR_HASH = 0x5be5e013f733e848n;
 
 export const MIN_HANDLE = 2;
 
