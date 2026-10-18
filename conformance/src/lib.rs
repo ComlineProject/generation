@@ -14,6 +14,7 @@
 //! under a green suite. A corpus that cannot state the bug cannot guard
 //! against it. See Proposals → How generators are built.
 
+use comline_codegen::validation::ValidateOnDecode;
 use comline_codegen::Mode;
 use comline_core::schema::ir::frozen::types::{Literal, PrimitiveType, TypeRef};
 use comline_core::schema::ir::frozen::unit::{FrozenArgument, FrozenUnit};
@@ -30,6 +31,8 @@ pub struct Fixture {
     pub mode: Mode,
     /// Whether `std` is referenced from its own package rather than inlined.
     pub external_std: bool,
+    /// Whether decoding runs the `@validators` checks.
+    pub validate_on_decode: ValidateOnDecode,
 }
 
 impl Fixture {
@@ -40,6 +43,7 @@ impl Fixture {
             schemas: vec![(namespace.to_string(), units)],
             mode: Mode::Code,
             external_std: false,
+            validate_on_decode: ValidateOnDecode::Off,
         }
     }
 
@@ -51,6 +55,7 @@ impl Fixture {
             schemas,
             mode: Mode::Code,
             external_std: false,
+            validate_on_decode: ValidateOnDecode::Off,
         }
     }
 
@@ -61,6 +66,11 @@ impl Fixture {
 
     fn with_external_std(mut self) -> Self {
         self.external_std = true;
+        self
+    }
+
+    fn with_validate_on_decode(mut self, on_decode: ValidateOnDecode) -> Self {
+        self.validate_on_decode = on_decode;
         self
     }
 }
@@ -82,6 +92,8 @@ pub fn corpus() -> Vec<Fixture> {
         import_glob(),
         nested_namespace(),
         external_std(),
+        validators(),
+        validators_on_decode(),
     ]
 }
 
@@ -548,4 +560,78 @@ fn external_std() -> Fixture {
     )
     .in_lib_mode()
     .with_external_std()
+}
+
+// ── validators ──────────────────────────────────────────────────────────────
+
+/// Every way a check reaches a value: a field's own `@validators` (std's
+/// `StringBounds`, bound through a constant, and a local validator over a
+/// number), a `type` alias carrying checks into a field, an optional field,
+/// an array of the alias, a struct nested in another, and a function
+/// argument checked through the alias. Written as IDL rather than built by
+/// hand: the condition tree and the alias annotations are core's to freeze.
+const VALIDATED: &str = r#"
+use std::validators::StringBounds
+
+const MIN_HANDLE: u32 = 2
+
+validator Range for u32 {
+    min: u32 = 0
+    max: u32 = 100
+
+    validate {
+        assert(value >= params.min and value <= params.max,
+               "{value.name} must be between {params.min} and {params.max}")
+    }
+}
+
+@validators = [StringBounds(min_chars = MIN_HANDLE, max_chars = 8)]
+type Handle = string
+
+struct Profile {
+    handle: Handle
+    @validators = [Range(max = 120)]
+    age: u32
+    optional nickname: Handle
+    friends: Handle[]
+}
+
+struct Post {
+    author: Profile
+    @validators = [StringBounds(min_chars = 1)]
+    body: string
+}
+
+protocol Social {
+    function rename(to: Handle) -> Handle;
+}
+"#;
+
+fn validated_schemas() -> Vec<(String, Vec<FrozenUnit>)> {
+    use comline_core::package::stdlib;
+    use comline_core::schema::ir::compiler::interpreter::incremental::IncrementalInterpreter;
+    use comline_core::schema::ir::compiler::Compile;
+    let (_, std_validators) = stdlib::schemas()
+        .find(|(namespace, _)| namespace.join("/") == "std/validators")
+        .expect("std ships validators");
+    vec![
+        (
+            "std/validators".to_string(),
+            IncrementalInterpreter::from_source(std_validators),
+        ),
+        (
+            "conformance".to_string(),
+            IncrementalInterpreter::from_source(VALIDATED),
+        ),
+    ]
+}
+
+fn validators() -> Fixture {
+    Fixture::package("validators", validated_schemas())
+}
+
+/// The same package, with decoding running the checks.
+fn validators_on_decode() -> Fixture {
+    Fixture::package("validators_on_decode", validated_schemas())
+        .with_validate_on_decode(ValidateOnDecode::Collect)
 }
