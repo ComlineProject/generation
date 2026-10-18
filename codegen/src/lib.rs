@@ -12,6 +12,7 @@ pub mod naming;
 pub mod stdlib;
 pub mod symbols;
 pub mod utils;
+pub mod validation;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -68,6 +69,10 @@ pub struct GenRequest<'a> {
     /// other field they have no use for. Default `false` (inlined,
     /// unchanged) everywhere this isn't explicitly set.
     pub external_std: bool,
+    /// `comline.toml`'s `[generate] validate_on_decode` - whether decoding a
+    /// value runs its `@validators` checks. A generator that emits no checks
+    /// ignores it.
+    pub validate_on_decode: validation::ValidateOnDecode,
 }
 
 /// A code generator: frozen IR in, generated files out.
