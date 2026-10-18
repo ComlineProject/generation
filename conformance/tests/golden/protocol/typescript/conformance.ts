@@ -41,7 +41,7 @@ export interface ServiceNotifyParams {
 export interface Service {
     /** @throws {NotFoundError} */
     lookup(params: ServiceLookupParams): Promise<Record>;
-    count(): Promise<number>;
+    count(): Promise<bigint>;
     notify(params: ServiceNotifyParams): Promise<void>;
 }
 
@@ -109,9 +109,9 @@ export class ServiceClient {
         }
     }
 
-    async count(): Promise<number> {
+    async count(): Promise<bigint> {
         const env = await this.client.call({ id: 1, name: "count" }, null);
-        if ("ok" in env) return this.client.codec.decode<number>(env.ok);
+        if ("ok" in env) return this.client.codec.decode<bigint>(env.ok, "bigint");
         if ("fault" in env) throw RuntimeError.provider();
         throw RuntimeError.remote(env.err.id);
     }
