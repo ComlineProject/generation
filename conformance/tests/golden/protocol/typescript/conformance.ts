@@ -17,7 +17,12 @@ import {
 
 /** Canonical digest of the frozen IR this file was generated from — the
 *  two ends of a connection must agree on it. */
-export const IR_HASH = 0xd5bf3bacad5cfc46n;
+export const IR_HASH = 0x8ee00745c73a32b2n;
+
+export interface Record {
+    id: number;
+    name: string;
+}
 
 export interface NotFound {
 }
