@@ -125,6 +125,8 @@ mod tests {
             message: String::new(),
             fields: vec![],
             span: None,
+            message_span: None,
+            uninterpolated: vec![],
         }
     }
 

@@ -323,6 +323,8 @@ mod tests {
             message: String::new(),
             fields: vec![],
             span: Some((0, 0)),
+            message_span: None,
+            uninterpolated: vec![],
         }];
         assert_eq!(
             error_names(&units).get(&7).map(String::as_str),
@@ -344,6 +346,8 @@ mod tests {
             message: String::new(),
             fields: vec![],
             span: None,
+            message_span: None,
+            uninterpolated: vec![],
         }];
         assert_eq!(
             error_names(&units).get(&3).map(String::as_str),
