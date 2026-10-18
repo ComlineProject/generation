@@ -184,6 +184,8 @@ fn error(ordinal: u16, name: &str) -> FrozenUnit {
         message: format!("{name} occurred"),
         fields: vec![],
         span: Some((0, 0)),
+        message_span: None,
+        uninterpolated: vec![],
     }
 }
 
@@ -312,7 +314,7 @@ fn protocol() -> Fixture {
 /// - A protocol with no `!` anywhere makes even the `<Proto>Error` union
 ///   uninhabited, so it too becomes an `Infallible` alias rather than
 ///   `pub enum … {}`.
-/// - `message = "{self.limit} is the limit"` is what the generated `Display`
+/// - `message = f"{self.limit} is the limit"` is what the generated `Display`
 ///   renders. `protocol()`'s errors have no fields, so without this the
 ///   interpolating branch of the message renderer is never exercised by the
 ///   corpus.
@@ -327,6 +329,8 @@ fn error_shapes() -> Fixture {
             message: message.to_string(),
             fields,
             span: Some((0, 0)),
+            message_span: None,
+            uninterpolated: vec![],
         };
 
     Fixture::one(
@@ -592,7 +596,7 @@ validator Range for u32 {
 
     validate {
         assert(value >= params.min and value <= params.max,
-               "{value.name} must be between {params.min} and {params.max}")
+               f"{value.name} must be between {params.min} and {params.max}")
     }
 }
 

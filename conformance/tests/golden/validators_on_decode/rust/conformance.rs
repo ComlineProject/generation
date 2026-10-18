@@ -10,7 +10,7 @@ use comline_runtime::transport::Transport;
 
 /// Canonical digest of the frozen IR this file was generated from — the
 /// two ends of a connection [`Handshake`] must agree on it.
-pub const IR_HASH: u64 = 0x5be5e013f733e848;
+pub const IR_HASH: u64 = 0xeab4408b940579fb;
 
 pub const MIN_HANDLE: u32 = 2;
 
