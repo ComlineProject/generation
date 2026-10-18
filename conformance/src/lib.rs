@@ -15,7 +15,7 @@
 //! against it. See Proposals → How generators are built.
 
 use comline_codegen::Mode;
-use comline_core::schema::ir::compiler::interpreted::kind_search::{KindValue, Primitive};
+use comline_core::schema::ir::frozen::types::{Literal, PrimitiveType, TypeRef};
 use comline_core::schema::ir::frozen::unit::{FrozenArgument, FrozenUnit};
 
 /// One package: every schema in it, and the request knobs it exists to
@@ -75,6 +75,7 @@ pub fn corpus() -> Vec<Fixture> {
         protocol(),
         error_shapes(),
         constant(),
+        shapes(),
         // Shapes a single-schema fixture could not express at all.
         cross_schema(),
         import_alias(),
@@ -86,13 +87,30 @@ pub fn corpus() -> Vec<Fixture> {
 
 // ── builders ────────────────────────────────────────────────────────────────
 
+/// The type a schema spells `written`: a primitive name, a named type, or
+/// either followed by `[]` / `[N]`.
+fn type_of(written: &str) -> TypeRef {
+    if let Some(rest) = written.strip_suffix(']') {
+        let (element, length) = rest.rsplit_once('[').expect("an array type");
+        return TypeRef::Array {
+            element: Box::new(type_of(element)),
+            length: (!length.is_empty()).then(|| length.parse().expect("an array length")),
+        };
+    }
+    match PrimitiveType::from_name(written) {
+        Some(p) => TypeRef::Primitive(p),
+        None => TypeRef::Named(written.to_string()),
+    }
+}
+
 fn field(name: &str, ty: &str, optional: bool) -> FrozenUnit {
     FrozenUnit::Field {
         docstring: None,
         parameters: vec![],
         optional,
         name: name.to_string(),
-        kind_value: KindValue::Namespaced(ty.to_string(), None),
+        ty: type_of(ty),
+        default: None,
         span: (0, 0),
     }
 }
@@ -108,13 +126,13 @@ fn structure(name: &str, fields: Vec<FrozenUnit>) -> FrozenUnit {
 }
 
 fn variant(name: &str) -> FrozenUnit {
-    FrozenUnit::EnumVariant(KindValue::EnumVariant(name.to_string(), None), (0, 0))
+    FrozenUnit::EnumVariant(name.to_string(), (0, 0))
 }
 
-fn arg(name: &str, prim: Primitive) -> FrozenArgument {
+fn arg(name: &str, prim: PrimitiveType) -> FrozenArgument {
     FrozenArgument {
         name: name.to_string(),
-        kind: KindValue::Primitive(prim),
+        ty: TypeRef::Primitive(prim),
         span: (0, 0),
     }
 }
@@ -130,7 +148,7 @@ fn function(
         parameters: vec![],
         name: name.to_string(),
         arguments: args,
-        _return: ret.map(|t| KindValue::Namespaced(t.to_string(), None)),
+        _return: ret.map(type_of),
         throws,
         span: (0, 0),
     }
@@ -241,14 +259,14 @@ fn protocol() -> Fixture {
                 functions: vec![
                     function(
                         "lookup",
-                        vec![arg("id", Primitive::S32(None))],
+                        vec![arg("id", PrimitiveType::S32)],
                         Some("Record"),
                         vec![0], // ordinal of `NotFound`, above
                     ),
                     function("count", vec![], Some("u64"), vec![]),
                     function(
                         "notify",
-                        vec![arg("code", Primitive::U16(None))],
+                        vec![arg("code", PrimitiveType::U16)],
                         None,
                         vec![],
                     ),
@@ -305,7 +323,7 @@ fn error_shapes() -> Fixture {
                 name: "Multi".to_string(),
                 functions: vec![function(
                     "send",
-                    vec![arg("body", Primitive::String(None))],
+                    vec![arg("body", PrimitiveType::String)],
                     Some("u64"),
                     vec![2, 1], // `! Denied, TooLong` — declaration order
                 )],
@@ -350,9 +368,42 @@ fn constant() -> Fixture {
         vec![FrozenUnit::Constant {
             docstring: None,
             name: "MAX_RETRIES".to_string(),
-            kind_value: KindValue::Primitive(Primitive::U8(Some(5))),
+            ty: TypeRef::Primitive(PrimitiveType::U8),
+            value: Some(Literal::Integer(5)),
             span: (0, 0),
         }],
+    )
+}
+
+/// Exact float widths and fixed arrays - both reached generators as text
+/// that had lost them (`"float"`, `"T[]"`) until core froze types
+/// structurally. `u8[64]` is past serde's derive limit, so Rust routes it
+/// through `serde_big_array`; `u16[3][]` nests a small fixed array in a
+/// dynamic one.
+fn shapes() -> Fixture {
+    Fixture::one(
+        "shapes",
+        "conformance",
+        vec![
+            structure(
+                "Sample",
+                vec![
+                    field("ratio", "f32", false),
+                    field("precise", "f64", false),
+                    field("rgba", "u8[4]", false),
+                    field("digest", "u8[64]", false),
+                    field("rows", "u16[3][]", false),
+                    field("maybe_rgba", "u8[4]", true),
+                ],
+            ),
+            FrozenUnit::Constant {
+                docstring: None,
+                name: "SCALE".to_string(),
+                ty: TypeRef::Primitive(PrimitiveType::F32),
+                value: Some(Literal::Integer(2)),
+                span: (0, 0),
+            },
+        ],
     )
 }
 
