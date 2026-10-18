@@ -11,3 +11,4 @@ license = "GPL-3.0-only"
 comline-core = { git = "https://github.com/ComlineProject/core", rev = "098301516576d200aa11f3fc12aaeac695b4a43d" }
 
 eyre = "0.6.8"
+serde_json = "1.0"

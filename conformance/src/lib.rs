@@ -17,7 +17,7 @@
 use comline_codegen::validation::ValidateOnDecode;
 use comline_codegen::Mode;
 use comline_core::schema::ir::frozen::types::{Literal, PrimitiveType, TypeRef};
-use comline_core::schema::ir::frozen::unit::{FrozenArgument, FrozenUnit};
+use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenArgument, FrozenUnit};
 
 /// One package: every schema in it, and the request knobs it exists to
 /// exercise.
@@ -94,6 +94,11 @@ pub fn corpus() -> Vec<Fixture> {
         external_std(),
         validators(),
         validators_on_decode(),
+        // One per feature the rest don't reach - each generator's claim about
+        // it is proven here (see `comline_codegen::features`).
+        unions(),
+        large_fixed_arrays_nested(),
+        framing_jsonrpc(),
     ]
 }
 
@@ -634,4 +639,66 @@ fn validators() -> Fixture {
 fn validators_on_decode() -> Fixture {
     Fixture::package("validators_on_decode", validated_schemas())
         .with_validate_on_decode(ValidateOnDecode::Collect)
+}
+
+/// A union, as a field and through an alias. A generator either renders it
+/// or refuses the schema - never something else.
+fn unions() -> Fixture {
+    let either = TypeRef::Union(vec![type_of("string"), type_of("u32")]);
+    Fixture::one(
+        "unions",
+        "conformance",
+        vec![
+            FrozenUnit::TypeAlias {
+                docstring: None,
+                parameters: vec![],
+                name: "Id".to_string(),
+                target: either.clone(),
+                span: (0, 0),
+            },
+            structure(
+                "Lookup",
+                vec![FrozenUnit::Field {
+                    docstring: None,
+                    parameters: vec![],
+                    optional: false,
+                    name: "key".to_string(),
+                    ty: either,
+                    default: None,
+                    span: (0, 0),
+                }],
+            ),
+        ],
+    )
+}
+
+/// A fixed array over 32 elements where it isn't a field's own,
+/// non-optional type: optional, and inside another array.
+fn large_fixed_arrays_nested() -> Fixture {
+    Fixture::one(
+        "large_fixed_arrays_nested",
+        "conformance",
+        vec![structure(
+            "Blocks",
+            vec![field("maybe", "u8[64]", true), field("many", "u8[64][]", false)],
+        )],
+    )
+}
+
+/// A protocol that picks JSON-RPC framing with `@framing`.
+fn framing_jsonrpc() -> Fixture {
+    Fixture::one(
+        "framing_jsonrpc",
+        "conformance",
+        vec![FrozenUnit::Protocol {
+            docstring: "Speaks JSON-RPC".to_string(),
+            parameters: vec![FrozenUnit::Property {
+                name: "framing".to_string(),
+                value: ConfigValue::Str("jsonrpc".to_string()),
+            }],
+            name: "Rpc".to_string(),
+            functions: vec![function("ping", vec![arg("n", PrimitiveType::U32)], Some("u32"), vec![])],
+            span: (0, 0),
+        }],
+    )
 }

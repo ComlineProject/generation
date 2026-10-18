@@ -1,0 +1,505 @@
+{
+  "features": [
+    {
+      "description": "`struct` declarations",
+      "id": "structs",
+      "title": "structs"
+    },
+    {
+      "description": "`enum` declarations",
+      "id": "enums",
+      "title": "enums"
+    },
+    {
+      "description": "fields marked `optional`",
+      "id": "optional-fields",
+      "title": "optional fields"
+    },
+    {
+      "description": "variable-length arrays, `T[]`",
+      "id": "arrays",
+      "title": "arrays"
+    },
+    {
+      "description": "fixed-length arrays, `T[N]`",
+      "id": "fixed-arrays",
+      "title": "fixed-length arrays"
+    },
+    {
+      "description": "a `T[N]` with N over 32 anywhere but a field's own, non-optional type: inside another array, optional, an alias, an argument or a return",
+      "id": "large-fixed-arrays-nested",
+      "title": "fixed arrays over 32 elements, nested"
+    },
+    {
+      "description": "`union(A B ...)` types",
+      "id": "unions",
+      "title": "unions"
+    },
+    {
+      "description": "`type Name = ...` declarations",
+      "id": "type-aliases",
+      "title": "type aliases"
+    },
+    {
+      "description": "`const` declarations",
+      "id": "constants",
+      "title": "constants"
+    },
+    {
+      "description": "`protocol` declarations and their functions",
+      "id": "protocols",
+      "title": "protocols"
+    },
+    {
+      "description": "`error` declarations",
+      "id": "errors",
+      "title": "errors"
+    },
+    {
+      "description": "functions declared with `! Error`",
+      "id": "throws",
+      "title": "functions that throw"
+    },
+    {
+      "description": "`@validators` on fields and type aliases, checked in generated code",
+      "id": "validators",
+      "title": "validators"
+    },
+    {
+      "description": "`use` of another schema's declarations",
+      "id": "imports",
+      "title": "imports between schemas"
+    },
+    {
+      "description": "schemas in subdirectories (`chat::admin`)",
+      "id": "nested-namespaces",
+      "title": "nested namespaces"
+    },
+    {
+      "description": "`--mode lib`: a buildable package, not bare source files",
+      "id": "lib-mode",
+      "title": "`lib` mode"
+    },
+    {
+      "description": "`[generate] external_std`: `std` referenced as its own package",
+      "id": "external-std",
+      "title": "`external_std`"
+    },
+    {
+      "description": "`[generate] validate_on_decode`: decoding runs the checks",
+      "id": "validate-on-decode",
+      "title": "`validate_on_decode`"
+    },
+    {
+      "description": "`@framing = \"jsonrpc\"` (or as the package default)",
+      "id": "framing-jsonrpc",
+      "title": "JSON-RPC framing"
+    }
+  ],
+  "generators": [
+    {
+      "name": "rust",
+      "support": {
+        "arrays": {
+          "note": null,
+          "proven_by": [
+            "optional_and_arrays",
+            "type_refs",
+            "shapes",
+            "cross_schema",
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "constants": {
+          "note": null,
+          "proven_by": [
+            "constant",
+            "shapes",
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "enums": {
+          "note": null,
+          "proven_by": [
+            "enum_basic"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "errors": {
+          "note": null,
+          "proven_by": [
+            "protocol",
+            "error_shapes"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "external-std": {
+          "note": null,
+          "proven_by": [
+            "external_std"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "fixed-arrays": {
+          "note": null,
+          "proven_by": [
+            "shapes"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "framing-jsonrpc": {
+          "note": null,
+          "proven_by": [
+            "framing_jsonrpc"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "imports": {
+          "note": null,
+          "proven_by": [
+            "cross_schema",
+            "import_alias",
+            "import_glob",
+            "nested_namespace",
+            "external_std",
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "large-fixed-arrays-nested": {
+          "note": "a fixed array over 32 elements renders only as a struct or error field's own, non-optional type (serde's derive stops at 32)",
+          "proven_by": [
+            "large_fixed_arrays_nested"
+          ],
+          "state": "unsupported",
+          "tracking": null
+        },
+        "lib-mode": {
+          "note": null,
+          "proven_by": [
+            "nested_namespace",
+            "external_std"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "nested-namespaces": {
+          "note": null,
+          "proven_by": [
+            "nested_namespace",
+            "external_std",
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "optional-fields": {
+          "note": null,
+          "proven_by": [
+            "optional_and_arrays",
+            "type_refs",
+            "shapes",
+            "cross_schema",
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "protocols": {
+          "note": null,
+          "proven_by": [
+            "protocol",
+            "error_shapes",
+            "validators",
+            "validators_on_decode",
+            "framing_jsonrpc"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "structs": {
+          "note": null,
+          "proven_by": [
+            "primitives",
+            "optional_and_arrays",
+            "type_refs",
+            "shapes",
+            "cross_schema",
+            "import_alias",
+            "import_glob",
+            "nested_namespace",
+            "external_std",
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "throws": {
+          "note": null,
+          "proven_by": [
+            "protocol",
+            "error_shapes"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "type-aliases": {
+          "note": null,
+          "proven_by": [
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "unions": {
+          "note": "Rust has no anonymous sum type to render one as",
+          "proven_by": [
+            "unions"
+          ],
+          "state": "unsupported",
+          "tracking": null
+        },
+        "validate-on-decode": {
+          "note": null,
+          "proven_by": [
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "validators": {
+          "note": null,
+          "proven_by": [
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        }
+      },
+      "version": "1.70.0"
+    },
+    {
+      "name": "typescript",
+      "support": {
+        "arrays": {
+          "note": null,
+          "proven_by": [
+            "optional_and_arrays",
+            "type_refs",
+            "shapes",
+            "cross_schema",
+            "validators",
+            "validators_on_decode",
+            "large_fixed_arrays_nested"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "constants": {
+          "note": null,
+          "proven_by": [
+            "constant",
+            "shapes",
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "enums": {
+          "note": null,
+          "proven_by": [
+            "enum_basic"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "errors": {
+          "note": null,
+          "proven_by": [
+            "protocol",
+            "error_shapes"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "external-std": {
+          "note": null,
+          "proven_by": [
+            "external_std"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "fixed-arrays": {
+          "note": "rendered as `T[]`: the length isn't part of the type",
+          "proven_by": [
+            "shapes",
+            "large_fixed_arrays_nested"
+          ],
+          "state": "partial",
+          "tracking": null
+        },
+        "framing-jsonrpc": {
+          "note": null,
+          "proven_by": [
+            "framing_jsonrpc"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "imports": {
+          "note": null,
+          "proven_by": [
+            "cross_schema",
+            "import_alias",
+            "import_glob",
+            "nested_namespace",
+            "external_std",
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "large-fixed-arrays-nested": {
+          "note": "rendered as `T[]`: the length isn't part of the type",
+          "proven_by": [
+            "large_fixed_arrays_nested"
+          ],
+          "state": "partial",
+          "tracking": null
+        },
+        "lib-mode": {
+          "note": null,
+          "proven_by": [
+            "nested_namespace",
+            "external_std"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "nested-namespaces": {
+          "note": null,
+          "proven_by": [
+            "nested_namespace",
+            "external_std",
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "optional-fields": {
+          "note": null,
+          "proven_by": [
+            "optional_and_arrays",
+            "type_refs",
+            "shapes",
+            "cross_schema",
+            "validators",
+            "validators_on_decode",
+            "large_fixed_arrays_nested"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "protocols": {
+          "note": null,
+          "proven_by": [
+            "protocol",
+            "error_shapes",
+            "validators",
+            "validators_on_decode",
+            "framing_jsonrpc"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "structs": {
+          "note": null,
+          "proven_by": [
+            "primitives",
+            "optional_and_arrays",
+            "type_refs",
+            "shapes",
+            "cross_schema",
+            "import_alias",
+            "import_glob",
+            "nested_namespace",
+            "external_std",
+            "validators",
+            "validators_on_decode",
+            "unions",
+            "large_fixed_arrays_nested"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "throws": {
+          "note": null,
+          "proven_by": [
+            "protocol",
+            "error_shapes"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "type-aliases": {
+          "note": null,
+          "proven_by": [
+            "validators",
+            "validators_on_decode",
+            "unions"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "unions": {
+          "note": null,
+          "proven_by": [
+            "unions"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
+        "validate-on-decode": {
+          "note": "no checks are generated to run on decode yet",
+          "proven_by": [
+            "validators_on_decode"
+          ],
+          "state": "ignored",
+          "tracking": "core#96"
+        },
+        "validators": {
+          "note": "the types are generated; the checks aren't run yet",
+          "proven_by": [
+            "validators",
+            "validators_on_decode"
+          ],
+          "state": "ignored",
+          "tracking": "core#96"
+        }
+      },
+      "version": "5.0"
+    }
+  ]
+}
