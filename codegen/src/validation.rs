@@ -216,7 +216,7 @@ impl<'a> Validation<'a> {
     fn checks(&self, ns: &str, parameters: &'a [FrozenUnit], at: &str) -> Result<Vec<Check<'a>>> {
         let mut checks = Vec::new();
         for parameter in parameters {
-            let FrozenUnit::ValidatorRef { name, args } = parameter else {
+            let FrozenUnit::ValidatorRef { name, args, .. } = parameter else {
                 continue;
             };
             let Some((
