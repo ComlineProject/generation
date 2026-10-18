@@ -7,6 +7,7 @@
 
 pub mod builder;
 pub mod collisions;
+pub mod features;
 pub mod modules;
 pub mod naming;
 pub mod stdlib;
@@ -87,7 +88,7 @@ pub struct Registry {
 
 struct Lang {
     ext: &'static str,
-    versions: HashMap<&'static str, GeneratorFn>,
+    versions: HashMap<&'static str, (GeneratorFn, features::SupportTable)>,
 }
 
 impl Registry {
@@ -96,13 +97,15 @@ impl Registry {
     }
 
     /// Register `generator` for `name` at `version`. `ext` is the source file
-    /// extension (`"rs"`, `"ts"`, …).
+    /// extension (`"rs"`, `"ts"`, …); `support` is what the generator
+    /// implements, feature by feature (see [`features`]).
     pub fn register(
         &mut self,
         name: &'static str,
         ext: &'static str,
         version: &'static str,
         generator: GeneratorFn,
+        support: features::SupportTable,
     ) {
         self.langs
             .entry(name)
@@ -111,15 +114,22 @@ impl Registry {
                 versions: HashMap::new(),
             })
             .versions
-            .insert(version, generator);
+            .insert(version, (generator, support));
     }
 
     /// The generator for `(name, version)` and its file extension, if one is
     /// registered.
     pub fn find(&self, name: &str, version: &str) -> Option<(GeneratorFn, &'static str)> {
         let lang = self.langs.get(name)?;
-        let generator = *lang.versions.get(version)?;
+        let (generator, _) = *lang.versions.get(version)?;
         Some((generator, lang.ext))
+    }
+
+    /// What the generator for `(name, version)` supports, if one is
+    /// registered.
+    pub fn support(&self, name: &str, version: &str) -> Option<features::SupportTable> {
+        let lang = self.langs.get(name)?;
+        lang.versions.get(version).map(|(_, support)| *support)
     }
 
     /// Every `(language, version)` this registry can generate, sorted by
@@ -153,9 +163,9 @@ mod tests {
     #[test]
     fn targets_is_flattened_and_sorted() {
         let mut registry = Registry::new();
-        registry.register("typescript", "ts", "5.0", noop);
-        registry.register("rust", "rs", "1.70.0", noop);
-        registry.register("rust", "rs", "1.60.0", noop);
+        registry.register("typescript", "ts", "5.0", noop, &[]);
+        registry.register("rust", "rs", "1.70.0", noop, &[]);
+        registry.register("rust", "rs", "1.60.0", noop, &[]);
 
         let targets = registry.targets();
         assert_eq!(
