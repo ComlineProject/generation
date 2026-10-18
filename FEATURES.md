@@ -6,7 +6,7 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 
 | Feature | rust 1.70.0 | typescript 5.0 |
 |---|---|---|
-| structs <br><sub>`structs`</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +8 more</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +10 more</sub> |
+| structs <br><sub>`structs`</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +9 more</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +11 more</sub> |
 | enums <br><sub>`enums`</sub> | ✅ supported <br><sub>proven by `enum_basic`</sub> | ✅ supported <br><sub>proven by `enum_basic`</sub> |
 | optional fields <br><sub>`optional-fields`</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +3 more</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +4 more</sub> |
 | arrays <br><sub>`arrays`</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +3 more</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +4 more</sub> |

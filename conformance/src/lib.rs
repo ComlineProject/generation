@@ -268,6 +268,12 @@ fn protocol() -> Fixture {
         "protocol",
         "conformance",
         vec![
+            // Declared, not just named: a generator must render a reference
+            // to it, and a TypeScript `Record` must shadow the global one.
+            structure(
+                "Record",
+                vec![field("id", "s32", false), field("name", "string", false)],
+            ),
             error(0, "NotFound"),
             FrozenUnit::Protocol {
                 docstring: "Conformance protocol".to_string(),
