@@ -24,6 +24,7 @@ use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenUnit};
 use eyre::{eyre, Result};
 
 use crate::validation::ValidateOnDecode;
+use crate::versions::{LangVersion, Versions};
 use crate::{GenRequest, Mode};
 
 /// A language feature a generator may or may not implement.
@@ -209,38 +210,78 @@ pub struct Support {
     pub note: Option<&'static str>,
     /// Where the rest is tracked: `core#96`.
     pub tracking: Option<&'static str>,
+    /// The version this support starts at; below it the feature is
+    /// unsupported. `None`: from the generator's floor.
+    pub since: Option<Since>,
+}
+
+/// Where a feature's support starts: a version, which has to be one of the
+/// generator's boundaries, and why it can't be earlier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Since {
+    pub version: &'static str,
+    /// "`async fn` in traits".
+    pub why: &'static str,
 }
 
 impl Support {
     pub const fn supported() -> Self {
-        Support { state: State::Supported, note: None, tracking: None }
+        Support { state: State::Supported, note: None, tracking: None, since: None }
     }
     pub const fn partial(note: &'static str) -> Self {
-        Support { state: State::Partial, note: Some(note), tracking: None }
+        Support { state: State::Partial, note: Some(note), tracking: None, since: None }
     }
     pub const fn ignored(note: &'static str) -> Self {
-        Support { state: State::Ignored, note: Some(note), tracking: None }
+        Support { state: State::Ignored, note: Some(note), tracking: None, since: None }
     }
     pub const fn unsupported(note: &'static str) -> Self {
-        Support { state: State::Unsupported, note: Some(note), tracking: None }
+        Support { state: State::Unsupported, note: Some(note), tracking: None, since: None }
     }
     pub const fn tracked(mut self, tracking: &'static str) -> Self {
         self.tracking = Some(tracking);
         self
+    }
+    /// Only from `version` on, because of `why`: below it the feature is
+    /// unsupported, and the refusal names the version to declare.
+    pub const fn from(mut self, version: &'static str, why: &'static str) -> Self {
+        self.since = Some(Since { version, why });
+        self
+    }
+
+    /// Whether this is a gate that `version` is below.
+    pub fn is_gated_at(&self, version: &LangVersion) -> bool {
+        self.since
+            .and_then(|since| LangVersion::parse(since.version))
+            .is_some_and(|gate| *version < gate)
     }
 }
 
 /// A generator's whole table: one entry per [`Feature`].
 pub type SupportTable = &'static [(Feature, Support)];
 
-/// `feature`'s entry in `table`. A feature missing from it counts as
-/// unsupported - conformance fails a table with a gap.
+/// `feature`'s entry in `table`, as claimed: at the newest version, gates
+/// aside. A feature missing from it counts as unsupported - conformance fails
+/// a table with a gap.
 pub fn support_for(table: SupportTable, feature: Feature) -> Support {
     table
         .iter()
         .find(|(f, _)| *f == feature)
         .map(|(_, s)| *s)
         .unwrap_or(Support::unsupported("not stated by the generator"))
+}
+
+/// `feature`'s support when generating for `version`: below its gate,
+/// unsupported, saying why.
+pub fn support_at(table: SupportTable, feature: Feature, version: &LangVersion) -> Support {
+    let claim = support_for(table, feature);
+    match claim.since {
+        Some(since) if claim.is_gated_at(version) => Support {
+            state: State::Unsupported,
+            note: Some(since.why),
+            ..claim
+        },
+        _ => claim,
+    }
 }
 
 /// The request knobs that are features themselves.
@@ -463,31 +504,54 @@ fn canonical_framing(name: &str) -> Option<&'static str> {
 /// every such use - not only the first. A generator calls this before
 /// generating anything.
 pub fn refuse_unsupported(generator: &str, req: &GenRequest, support: SupportTable) -> Result<()> {
+    let version = req.version()?;
     let uses = used(req.schemas, &Options::of(req));
-    let unsupported = unsupported_uses(&uses, support);
+    let unsupported = unsupported_uses(&uses, support, &version);
     if unsupported.is_empty() {
         return Ok(());
     }
-    Err(eyre!(refusal(generator, &unsupported, support)))
+    Err(eyre!(refusal(generator, &unsupported, support, &version)))
 }
 
-/// The uses in `uses` whose feature `support` marks unsupported.
-pub fn unsupported_uses<'u>(uses: &'u [FeatureUse], support: SupportTable) -> Vec<&'u FeatureUse> {
-    uses.iter().filter(|u| support_for(support, u.feature).state == State::Unsupported).collect()
+/// The uses in `uses` whose feature `support` marks unsupported at `version`.
+pub fn unsupported_uses<'u>(
+    uses: &'u [FeatureUse],
+    support: SupportTable,
+    version: &LangVersion,
+) -> Vec<&'u FeatureUse> {
+    uses.iter().filter(|u| support_at(support, u.feature, version).state == State::Unsupported).collect()
 }
 
 /// The message for a refused request: one line per feature, then its uses.
-pub fn refusal(generator: &str, unsupported: &[&FeatureUse], support: SupportTable) -> String {
+/// `generator` is the language's name, which a gated feature's line uses to
+/// name the version to declare (`rust#1.75.0`).
+pub fn refusal(generator: &str, unsupported: &[&FeatureUse], support: SupportTable, version: &LangVersion) -> String {
     let mut by_feature: BTreeMap<Feature, Vec<&FeatureUse>> = BTreeMap::new();
     for u in unsupported {
         by_feature.entry(u.feature).or_default().push(u);
     }
     let mut message = String::new();
     for (feature, uses) in by_feature {
-        let s = support_for(support, feature);
-        let _ = write!(message, "the {generator} generator doesn't support {} ({})", feature.title(), feature.id());
-        if let Some(note) = s.note {
-            let _ = write!(message, ": {note}");
+        let s = support_at(support, feature, version);
+        match s.since.filter(|_| s.is_gated_at(version)) {
+            Some(since) => {
+                let _ = write!(
+                    message,
+                    "the {generator} generator supports {} ({}) only from `{generator}#{}`, and this target declares \
+                     `{generator}#{version}`: {} - declare `{generator}#{}` or later",
+                    feature.title(),
+                    feature.id(),
+                    since.version,
+                    since.why,
+                    since.version
+                );
+            }
+            None => {
+                let _ = write!(message, "the {generator} generator doesn't support {} ({})", feature.title(), feature.id());
+                if let Some(note) = s.note {
+                    let _ = write!(message, ": {note}");
+                }
+            }
         }
         if let Some(tracking) = s.tracking {
             let _ = write!(message, " - {tracking} tracks it");
@@ -557,7 +621,7 @@ pub fn strip(
 pub struct Column<'a> {
     /// `rust`, `typescript`.
     pub generator: &'a str,
-    pub version: &'a str,
+    pub versions: Versions,
     pub support: SupportTable,
 }
 
@@ -567,7 +631,7 @@ pub struct Column<'a> {
 pub fn markdown(columns: &[Column], evidence: &BTreeMap<(String, Feature), Vec<String>>) -> String {
     let mut out = String::from("| Feature |");
     for c in columns {
-        let _ = write!(out, " {} {} |", c.generator, c.version);
+        let _ = write!(out, " {} ≥ {} |", c.generator, c.versions.floor);
     }
     out.push_str("\n|---|");
     for _ in columns {
@@ -584,8 +648,14 @@ pub fn markdown(columns: &[Column], evidence: &BTreeMap<(String, Feature), Vec<S
                 State::Ignored => "⚪ ignored".to_string(),
                 State::Unsupported => "❌ unsupported".to_string(),
             };
+            if let Some(since) = s.since {
+                let _ = write!(cell, " from {}", since.version);
+            }
             if let Some(note) = s.note {
                 let _ = write!(cell, ": {note}");
+            }
+            if let Some(since) = s.since {
+                let _ = write!(cell, " (❌ below: {})", since.why);
             }
             if let Some(tracking) = s.tracking {
                 let _ = write!(cell, " ({tracking})");
@@ -626,12 +696,25 @@ pub fn json(columns: &[Column], evidence: &BTreeMap<(String, Feature), Vec<Strin
                             "state": s.state.id(),
                             "note": s.note,
                             "tracking": s.tracking,
+                            "since": s.since.map(|since| serde_json::json!({ "version": since.version, "why": since.why })),
                             "proven_by": proof,
                         }),
                     )
                 })
                 .collect();
-            serde_json::json!({ "name": c.generator, "version": c.version, "support": support })
+            serde_json::json!({
+                "name": c.generator,
+                // The floor, as before ranges: what a target declaring the
+                // oldest version gets.
+                "version": c.versions.floor,
+                "versions": {
+                    "floor": c.versions.floor,
+                    "changes": c.versions.changes,
+                    "verified_up_to": c.versions.verified_up_to,
+                    "forward_compatible": c.versions.forward_compatible,
+                },
+                "support": support,
+            })
         })
         .collect();
     serde_json::json!({ "features": features, "generators": generators })
@@ -729,11 +812,45 @@ mod tests {
             FeatureUse { feature: Feature::Unions, namespace: "api".into(), owner: "struct 'A', field 'x'".into(), span: None },
             FeatureUse { feature: Feature::Unions, namespace: "api".into(), owner: "type alias 'B'".into(), span: None },
         ];
-        let refused = unsupported_uses(&uses, TABLE);
+        let at = LangVersion::parse("1.70.0").unwrap();
+        let refused = unsupported_uses(&uses, TABLE, &at);
         assert_eq!(
-            refusal("rust", &refused, TABLE),
+            refusal("rust", &refused, TABLE, &at),
             "the rust generator doesn't support unions (unions): no sum types yet - core#1 tracks it\n  \
              - schema 'api', struct 'A', field 'x'\n  - schema 'api', type alias 'B'"
         );
+    }
+
+    #[test]
+    fn below_its_gate_a_feature_is_refused_naming_the_version_to_declare() {
+        const TABLE: SupportTable = &[(Feature::Connections, Support::supported().from("1.75.0", "`async fn` in traits"))];
+        let uses = vec![FeatureUse {
+            feature: Feature::Connections,
+            namespace: String::new(),
+            owner: "protocol 'Chat'".into(),
+            span: None,
+        }];
+        let at = |v| LangVersion::parse(v).unwrap();
+        assert!(unsupported_uses(&uses, TABLE, &at("1.75")).is_empty());
+        assert!(unsupported_uses(&uses, TABLE, &at("1.80.1")).is_empty());
+        let refused = unsupported_uses(&uses, TABLE, &at("1.70.0"));
+        assert_eq!(
+            refusal("rust", &refused, TABLE, &at("1.70.0")),
+            "the rust generator supports connections (connections) only from `rust#1.75.0`, and this target \
+             declares `rust#1.70.0`: `async fn` in traits - declare `rust#1.75.0` or later\n  - protocol 'Chat'"
+        );
+    }
+
+    #[test]
+    fn the_matrix_shows_a_gate() {
+        const TABLE: SupportTable = &[(Feature::Connections, Support::supported().from("1.75.0", "`async fn` in traits"))];
+        let versions = Versions { floor: "1.70.0", changes: &["1.75.0"], verified_up_to: "1.90.0", forward_compatible: true };
+        let columns = [Column { generator: "rust", versions, support: TABLE }];
+        let table = markdown(&columns, &BTreeMap::new());
+        assert!(table.contains("| rust ≥ 1.70.0 |"), "{table}");
+        assert!(table.contains("✅ supported from 1.75.0 (❌ below: `async fn` in traits)"), "{table}");
+        let json = json(&columns, &BTreeMap::new());
+        assert_eq!(json["generators"][0]["support"]["connections"]["since"]["version"], "1.75.0");
+        assert_eq!(json["generators"][0]["versions"]["changes"][0], "1.75.0");
     }
 }
