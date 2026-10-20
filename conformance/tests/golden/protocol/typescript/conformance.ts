@@ -3,7 +3,6 @@
 import {
     Client,
     Server,
-    Handshake,
     RuntimeError,
     resolveKind,
     DatagramFraming,
@@ -98,8 +97,7 @@ export class ServiceClient {
     constructor(private readonly client: Client) {}
 
     static async connect(transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<ServiceClient> {
-        const hs = new Handshake({ irHash: IR_HASH, wireFormat: codec.name, framing: framing.name });
-        return new ServiceClient(await Client.connect(transport, codec, hs, framing));
+        return new ServiceClient(await Client.connect(transport, codec, IR_HASH, framing));
     }
 
     async lookup(params: ServiceLookupParams): Promise<Record> {
@@ -127,7 +125,6 @@ export class ServiceClient {
 }
 
 export function serveService(impl: Service, transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<void> {
-    const hs = new Handshake({ irHash: IR_HASH, wireFormat: codec.name, framing: framing.name });
-    return new Server(new ServiceDispatcher(impl), codec, framing).serveHandshaked(transport, hs);
+    return new Server(new ServiceDispatcher(impl), codec, framing).serve(transport, IR_HASH);
 }
 

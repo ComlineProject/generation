@@ -3,7 +3,6 @@
 import {
     Client,
     Server,
-    Handshake,
     RuntimeError,
     resolveKind,
     JsonRpcFraming,
@@ -57,8 +56,7 @@ export class RpcClient {
     constructor(private readonly client: Client) {}
 
     static async connect(transport: Transport, codec: Codec, framing: Framing = new JsonRpcFraming()): Promise<RpcClient> {
-        const hs = new Handshake({ irHash: IR_HASH, wireFormat: codec.name, framing: framing.name });
-        return new RpcClient(await Client.connect(transport, codec, hs, framing));
+        return new RpcClient(await Client.connect(transport, codec, IR_HASH, framing));
     }
 
     async ping(params: RpcPingParams): Promise<number> {
@@ -70,7 +68,6 @@ export class RpcClient {
 }
 
 export function serveRpc(impl: Rpc, transport: Transport, codec: Codec, framing: Framing = new JsonRpcFraming()): Promise<void> {
-    const hs = new Handshake({ irHash: IR_HASH, wireFormat: codec.name, framing: framing.name });
-    return new Server(new RpcDispatcher(impl), codec, framing).serveHandshaked(transport, hs);
+    return new Server(new RpcDispatcher(impl), codec, framing).serve(transport, IR_HASH);
 }
 
