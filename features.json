@@ -120,6 +120,7 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -128,6 +129,7 @@
           "proven_by": [
             "connections"
           ],
+          "since": null,
           "state": "partial",
           "tracking": "runtime#19"
         },
@@ -139,6 +141,7 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -147,6 +150,7 @@
           "proven_by": [
             "enum_basic"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -156,6 +160,7 @@
             "protocol",
             "error_shapes"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -164,6 +169,7 @@
           "proven_by": [
             "external_std"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -172,6 +178,7 @@
           "proven_by": [
             "shapes"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -180,6 +187,7 @@
           "proven_by": [
             "framing_jsonrpc"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -188,6 +196,7 @@
           "proven_by": [
             "handshake_none"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -202,6 +211,7 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -210,6 +220,7 @@
           "proven_by": [
             "large_fixed_arrays_nested"
           ],
+          "since": null,
           "state": "unsupported",
           "tracking": null
         },
@@ -219,6 +230,7 @@
             "nested_namespace",
             "external_std"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -230,6 +242,7 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -243,6 +256,7 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -257,6 +271,7 @@
             "handshake_none",
             "connections"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -276,6 +291,7 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -285,6 +301,7 @@
             "protocol",
             "error_shapes"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -294,6 +311,7 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -302,6 +320,7 @@
           "proven_by": [
             "unions"
           ],
+          "since": null,
           "state": "unsupported",
           "tracking": null
         },
@@ -310,6 +329,7 @@
           "proven_by": [
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -319,11 +339,18 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         }
       },
-      "version": "1.70.0"
+      "version": "1.70.0",
+      "versions": {
+        "changes": [],
+        "floor": "1.70.0",
+        "forward_compatible": true,
+        "verified_up_to": "1.99"
+      }
     },
     {
       "name": "typescript",
@@ -339,6 +366,7 @@
             "validators_on_decode",
             "large_fixed_arrays_nested"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -347,6 +375,7 @@
           "proven_by": [
             "connections"
           ],
+          "since": null,
           "state": "partial",
           "tracking": "runtime#19"
         },
@@ -358,6 +387,7 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -366,6 +396,7 @@
           "proven_by": [
             "enum_basic"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -375,6 +406,7 @@
             "protocol",
             "error_shapes"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -383,6 +415,7 @@
           "proven_by": [
             "external_std"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -392,6 +425,7 @@
             "shapes",
             "large_fixed_arrays_nested"
           ],
+          "since": null,
           "state": "partial",
           "tracking": null
         },
@@ -400,6 +434,7 @@
           "proven_by": [
             "framing_jsonrpc"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -408,6 +443,7 @@
           "proven_by": [
             "handshake_none"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -422,6 +458,7 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -430,6 +467,7 @@
           "proven_by": [
             "large_fixed_arrays_nested"
           ],
+          "since": null,
           "state": "partial",
           "tracking": null
         },
@@ -439,6 +477,7 @@
             "nested_namespace",
             "external_std"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -450,6 +489,7 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -464,6 +504,7 @@
             "validators_on_decode",
             "large_fixed_arrays_nested"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -478,6 +519,7 @@
             "handshake_none",
             "connections"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -499,6 +541,7 @@
             "unions",
             "large_fixed_arrays_nested"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -508,6 +551,7 @@
             "protocol",
             "error_shapes"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -518,6 +562,7 @@
             "validators_on_decode",
             "unions"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -526,6 +571,7 @@
           "proven_by": [
             "unions"
           ],
+          "since": null,
           "state": "supported",
           "tracking": null
         },
@@ -534,6 +580,7 @@
           "proven_by": [
             "validators_on_decode"
           ],
+          "since": null,
           "state": "ignored",
           "tracking": "core#96"
         },
@@ -543,11 +590,18 @@
             "validators",
             "validators_on_decode"
           ],
+          "since": null,
           "state": "ignored",
           "tracking": "core#96"
         }
       },
-      "version": "5.0"
+      "version": "5.0",
+      "versions": {
+        "changes": [],
+        "floor": "5.0",
+        "forward_compatible": false,
+        "verified_up_to": "5.9"
+      }
     }
   ]
 }
