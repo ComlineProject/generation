@@ -54,6 +54,7 @@ pub enum Feature {
     ValidateOnDecode,
     FramingJsonRpc,
     HandshakeNone,
+    Connections,
 }
 
 impl Feature {
@@ -79,6 +80,7 @@ impl Feature {
         Feature::ValidateOnDecode,
         Feature::FramingJsonRpc,
         Feature::HandshakeNone,
+        Feature::Connections,
     ];
 
     /// The stable id: `unions`, `validate-on-decode`.
@@ -104,6 +106,7 @@ impl Feature {
             Feature::ValidateOnDecode => "validate-on-decode",
             Feature::FramingJsonRpc => "framing-jsonrpc",
             Feature::HandshakeNone => "handshake-none",
+            Feature::Connections => "connections",
         }
     }
 
@@ -135,6 +138,7 @@ impl Feature {
             Feature::ValidateOnDecode => "`validate_on_decode`",
             Feature::FramingJsonRpc => "JSON-RPC framing",
             Feature::HandshakeNone => "no handshake",
+            Feature::Connections => "connections",
         }
     }
 
@@ -164,6 +168,10 @@ impl Feature {
             Feature::ValidateOnDecode => "`[generate] validate_on_decode`: decoding runs the checks",
             Feature::FramingJsonRpc => "`@framing = \"jsonrpc\"` (or as the package default)",
             Feature::HandshakeNone => "`@handshake = \"none\"` (or as the package default)",
+            Feature::Connections => {
+                "protocols on a connection, with calls in both directions: \
+                 `@framing = \"datagram@2\"`, or `@provider = Client` / `Multiple`"
+            }
         }
     }
 }
@@ -318,6 +326,9 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                     // Core has already applied the package's default here.
                     if annotation(parameters, "handshake") == Some(HANDSHAKE_NONE) {
                         push(Feature::HandshakeNone, owner.clone(), Some(*span));
+                    }
+                    if crate::connections::on_connection(parameters, options.default_framing.as_deref()) {
+                        push(Feature::Connections, owner.clone(), Some(*span));
                     }
                     for function in functions {
                         let FrozenUnit::Function { name: f, arguments, _return, throws, span, .. } = function
