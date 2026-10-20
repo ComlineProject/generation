@@ -99,6 +99,11 @@
       "description": "`@handshake = \"none\"` (or as the package default)",
       "id": "handshake-none",
       "title": "no handshake"
+    },
+    {
+      "description": "protocols on a connection, with calls in both directions: `@framing = \"datagram@2\"`, or `@provider = Client` / `Multiple`",
+      "id": "connections",
+      "title": "connections"
     }
   ],
   "generators": [
@@ -117,6 +122,14 @@
           ],
           "state": "supported",
           "tracking": null
+        },
+        "connections": {
+          "note": "over `datagram@2`; JSON-RPC on a connection isn't supported yet",
+          "proven_by": [
+            "connections"
+          ],
+          "state": "partial",
+          "tracking": "runtime#19"
         },
         "constants": {
           "note": null,
@@ -241,7 +254,8 @@
             "validators",
             "validators_on_decode",
             "framing_jsonrpc",
-            "handshake_none"
+            "handshake_none",
+            "connections"
           ],
           "state": "supported",
           "tracking": null
@@ -327,6 +341,14 @@
           ],
           "state": "supported",
           "tracking": null
+        },
+        "connections": {
+          "note": "over `datagram@2`; JSON-RPC on a connection isn't supported yet",
+          "proven_by": [
+            "connections"
+          ],
+          "state": "partial",
+          "tracking": "runtime#19"
         },
         "constants": {
           "note": null,
@@ -453,7 +475,8 @@
             "validators",
             "validators_on_decode",
             "framing_jsonrpc",
-            "handshake_none"
+            "handshake_none",
+            "connections"
           ],
           "state": "supported",
           "tracking": null

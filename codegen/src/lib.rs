@@ -7,6 +7,7 @@
 
 pub mod builder;
 pub mod collisions;
+pub mod connections;
 pub mod features;
 pub mod modules;
 pub mod naming;

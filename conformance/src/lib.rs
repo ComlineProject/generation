@@ -100,6 +100,7 @@ pub fn corpus() -> Vec<Fixture> {
         large_fixed_arrays_nested(),
         framing_jsonrpc(),
         handshake_none(),
+        connections(),
     ]
 }
 
@@ -740,5 +741,43 @@ fn handshake_none() -> Fixture {
             functions: vec![function("ping", vec![arg("n", PrimitiveType::U32)], Some("u32"), vec![])],
             span: (0, 0),
         }],
+    )
+}
+
+/// Two protocols on one connection: `Chat`, which the accepting side
+/// provides over `datagram@2`, and `Events`, which the dialling side does.
+fn connections() -> Fixture {
+    let datagram2 = || FrozenUnit::Property {
+        name: "framing".to_string(),
+        value: ConfigValue::Str("datagram@2".to_string()),
+    };
+    Fixture::one(
+        "connections",
+        "conformance",
+        vec![
+            FrozenUnit::Protocol {
+                docstring: "What the server provides".to_string(),
+                parameters: vec![datagram2()],
+                name: "Chat".to_string(),
+                functions: vec![function("send", vec![arg("n", PrimitiveType::U32)], Some("u32"), vec![])],
+                span: (0, 0),
+            },
+            FrozenUnit::Protocol {
+                docstring: "What the client provides".to_string(),
+                parameters: vec![
+                    FrozenUnit::Property {
+                        name: "provider".to_string(),
+                        value: ConfigValue::Name("Client".to_string()),
+                    },
+                    datagram2(),
+                ],
+                name: "Events".to_string(),
+                functions: vec![
+                    function("shown", vec![arg("n", PrimitiveType::U32)], Some("bool"), vec![]),
+                    function("ping", vec![], None, vec![]),
+                ],
+                span: (0, 0),
+            },
+        ],
     )
 }
