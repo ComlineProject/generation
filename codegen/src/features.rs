@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use comline_core::schema::ir::frozen::types::TypeRef;
+use comline_core::schema::idl::annotations::HANDSHAKE_NONE;
 use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenUnit};
 use eyre::{eyre, Result};
 
@@ -52,6 +53,7 @@ pub enum Feature {
     ExternalStd,
     ValidateOnDecode,
     FramingJsonRpc,
+    HandshakeNone,
 }
 
 impl Feature {
@@ -76,6 +78,7 @@ impl Feature {
         Feature::ExternalStd,
         Feature::ValidateOnDecode,
         Feature::FramingJsonRpc,
+        Feature::HandshakeNone,
     ];
 
     /// The stable id: `unions`, `validate-on-decode`.
@@ -100,6 +103,7 @@ impl Feature {
             Feature::ExternalStd => "external-std",
             Feature::ValidateOnDecode => "validate-on-decode",
             Feature::FramingJsonRpc => "framing-jsonrpc",
+            Feature::HandshakeNone => "handshake-none",
         }
     }
 
@@ -130,6 +134,7 @@ impl Feature {
             Feature::ExternalStd => "`external_std`",
             Feature::ValidateOnDecode => "`validate_on_decode`",
             Feature::FramingJsonRpc => "JSON-RPC framing",
+            Feature::HandshakeNone => "no handshake",
         }
     }
 
@@ -158,6 +163,7 @@ impl Feature {
             Feature::ExternalStd => "`[generate] external_std`: `std` referenced as its own package",
             Feature::ValidateOnDecode => "`[generate] validate_on_decode`: decoding runs the checks",
             Feature::FramingJsonRpc => "`@framing = \"jsonrpc\"` (or as the package default)",
+            Feature::HandshakeNone => "`@handshake = \"none\"` (or as the package default)",
         }
     }
 }
@@ -308,6 +314,10 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                     let framing = annotation(parameters, "framing").or(options.default_framing.as_deref());
                     if framing.and_then(|f| canonical_framing(f)) == Some("jsonrpc") {
                         push(Feature::FramingJsonRpc, owner.clone(), Some(*span));
+                    }
+                    // Core has already applied the package's default here.
+                    if annotation(parameters, "handshake") == Some(HANDSHAKE_NONE) {
+                        push(Feature::HandshakeNone, owner.clone(), Some(*span));
                     }
                     for function in functions {
                         let FrozenUnit::Function { name: f, arguments, _return, throws, span, .. } = function
