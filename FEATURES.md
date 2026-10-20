@@ -15,7 +15,7 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 | unions <br><sub>`unions`</sub> | ❌ unsupported: Rust has no anonymous sum type to render one as <br><sub>proven by `unions`</sub> | ✅ supported <br><sub>proven by `unions`</sub> |
 | type aliases <br><sub>`type-aliases`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`, `unions`</sub> |
 | constants <br><sub>`constants`</sub> | ✅ supported <br><sub>proven by `constant`, `shapes`, `validators` +1 more</sub> | ✅ supported <br><sub>proven by `constant`, `shapes`, `validators` +1 more</sub> |
-| protocols <br><sub>`protocols`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +2 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +2 more</sub> |
+| protocols <br><sub>`protocols`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +3 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +3 more</sub> |
 | errors <br><sub>`errors`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> |
 | functions that throw <br><sub>`throws`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> |
 | validators <br><sub>`validators`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`</sub> | ⚪ ignored: the types are generated; the checks aren't run yet (core#96) <br><sub>proven by `validators`, `validators_on_decode`</sub> |
@@ -25,3 +25,4 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 | `external_std` <br><sub>`external-std`</sub> | ✅ supported <br><sub>proven by `external_std`</sub> | ✅ supported <br><sub>proven by `external_std`</sub> |
 | `validate_on_decode` <br><sub>`validate-on-decode`</sub> | ✅ supported <br><sub>proven by `validators_on_decode`</sub> | ⚪ ignored: no checks are generated to run on decode yet (core#96) <br><sub>proven by `validators_on_decode`</sub> |
 | JSON-RPC framing <br><sub>`framing-jsonrpc`</sub> | ✅ supported <br><sub>proven by `framing_jsonrpc`</sub> | ✅ supported <br><sub>proven by `framing_jsonrpc`</sub> |
+| no handshake <br><sub>`handshake-none`</sub> | ✅ supported <br><sub>proven by `handshake_none`</sub> | ✅ supported <br><sub>proven by `handshake_none`</sub> |

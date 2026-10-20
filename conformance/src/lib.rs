@@ -17,7 +17,7 @@
 use comline_codegen::validation::ValidateOnDecode;
 use comline_codegen::Mode;
 use comline_core::schema::ir::frozen::types::{Literal, PrimitiveType, TypeRef};
-use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenArgument, FrozenUnit};
+use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenArgument, FrozenUnit, Guarantee};
 
 /// One package: every schema in it, and the request knobs it exists to
 /// exercise.
@@ -99,6 +99,7 @@ pub fn corpus() -> Vec<Fixture> {
         unions(),
         large_fixed_arrays_nested(),
         framing_jsonrpc(),
+        handshake_none(),
     ]
 }
 
@@ -707,6 +708,35 @@ fn framing_jsonrpc() -> Fixture {
                 value: ConfigValue::Str("jsonrpc".to_string()),
             }],
             name: "Rpc".to_string(),
+            functions: vec![function("ping", vec![arg("n", PrimitiveType::U32)], Some("u32"), vec![])],
+            span: (0, 0),
+        }],
+    )
+}
+
+/// A protocol that runs no handshake, marked `@unverified` with the set core
+/// freezes for it.
+fn handshake_none() -> Fixture {
+    Fixture::one(
+        "handshake_none",
+        "conformance",
+        vec![FrozenUnit::Protocol {
+            docstring: "Talks to a peer with no handshake".to_string(),
+            parameters: vec![
+                FrozenUnit::Property {
+                    name: "handshake".to_string(),
+                    value: ConfigValue::Str("none".to_string()),
+                },
+                FrozenUnit::Property {
+                    name: "unverified".to_string(),
+                    value: ConfigValue::Str("the gateway predates Comline".to_string()),
+                },
+                FrozenUnit::Unverified(vec![
+                    Guarantee::SchemaAgreement,
+                    Guarantee::EncodingAgreement,
+                ]),
+            ],
+            name: "Gateway".to_string(),
             functions: vec![function("ping", vec![arg("n", PrimitiveType::U32)], Some("u32"), vec![])],
             span: (0, 0),
         }],
