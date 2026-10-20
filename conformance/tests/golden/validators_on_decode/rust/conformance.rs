@@ -2,14 +2,13 @@
 use serde::{Deserialize, Serialize};
 use comline_runtime::client::Client;
 use comline_runtime::contract::{
-    Call, CallError, Dispatch, Envelope, Fault, Handshake, Kind, Reply,
-    RuntimeError, WireFormat, FRAMING_DATAGRAM,
+    Call, CallError, Dispatch, Envelope, Fault, Kind, Reply, RuntimeError, WireFormat,
 };
 use comline_runtime::serve::Server;
 use comline_runtime::transport::Transport;
 
 /// Canonical digest of the frozen IR this file was generated from — the
-/// two ends of a connection [`Handshake`] must agree on it.
+/// two ends of a connection must agree on it, and the handshake checks.
 pub const IR_HASH: u64 = 0xeab4408b940579fb;
 
 pub const MIN_HANDLE: u32 = 2;
@@ -296,11 +295,11 @@ impl<S: Social> Dispatch for SocialDispatcher<S> {
 
 impl<S: Social> SocialDispatcher<S> {
     /// Serve this protocol over `transport`, running the connection
-    /// handshake (`IR_HASH` + `format`'s name) against the peer first.
+    /// handshake (`IR_HASH` + `format`'s and the framing's names) against
+    /// the peer first.
     pub fn serve<T: Transport, W: WireFormat>(self, transport: &mut T, format: W)
     -> Result<(), RuntimeError> {
-        let hs = Handshake::new(IR_HASH, format.name(), FRAMING_DATAGRAM, 0);
-        Server::new(self, format).serve_handshaked(transport, hs)
+        Server::new(self, format).serve(transport, IR_HASH)
     }
 }
 
@@ -313,8 +312,7 @@ impl<T: Transport, W: WireFormat> SocialClient<T, W> {
 
     /// Bind + run the connection handshake against the provider.
     pub fn connect(transport: T, format: W) -> Result<Self, RuntimeError> {
-        let hs = Handshake::new(IR_HASH, format.name(), FRAMING_DATAGRAM, 0);
-        Ok(Self(Client::connect(transport, format, hs)?))
+        Ok(Self(Client::connect(transport, format, IR_HASH)?))
     }
 
     pub fn rename(&mut self, to: Handle) -> Result<Handle, CallError<SocialRenameError>> {

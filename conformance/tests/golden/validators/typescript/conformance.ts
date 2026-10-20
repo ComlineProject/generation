@@ -3,7 +3,6 @@
 import {
     Client,
     Server,
-    Handshake,
     RuntimeError,
     resolveKind,
     DatagramFraming,
@@ -73,8 +72,7 @@ export class SocialClient {
     constructor(private readonly client: Client) {}
 
     static async connect(transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<SocialClient> {
-        const hs = new Handshake({ irHash: IR_HASH, wireFormat: codec.name, framing: framing.name });
-        return new SocialClient(await Client.connect(transport, codec, hs, framing));
+        return new SocialClient(await Client.connect(transport, codec, IR_HASH, framing));
     }
 
     async rename(params: SocialRenameParams): Promise<Handle> {
@@ -86,7 +84,6 @@ export class SocialClient {
 }
 
 export function serveSocial(impl: Social, transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<void> {
-    const hs = new Handshake({ irHash: IR_HASH, wireFormat: codec.name, framing: framing.name });
-    return new Server(new SocialDispatcher(impl), codec, framing).serveHandshaked(transport, hs);
+    return new Server(new SocialDispatcher(impl), codec, framing).serve(transport, IR_HASH);
 }
 

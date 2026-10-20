@@ -2,14 +2,13 @@
 use serde::{Deserialize, Serialize};
 use comline_runtime::client::Client;
 use comline_runtime::contract::{
-    Call, CallError, Dispatch, Envelope, Fault, Handshake, Kind, Reply,
-    RuntimeError, WireFormat, FRAMING_DATAGRAM,
+    Call, CallError, Dispatch, Envelope, Fault, Kind, Reply, RuntimeError, WireFormat,
 };
 use comline_runtime::serve::Server;
 use comline_runtime::transport::Transport;
 
 /// Canonical digest of the frozen IR this file was generated from — the
-/// two ends of a connection [`Handshake`] must agree on it.
+/// two ends of a connection must agree on it, and the handshake checks.
 pub const IR_HASH: u64 = 0x6fc29e1014b9b9c8;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -134,11 +133,11 @@ impl<S: Multi> Dispatch for MultiDispatcher<S> {
 
 impl<S: Multi> MultiDispatcher<S> {
     /// Serve this protocol over `transport`, running the connection
-    /// handshake (`IR_HASH` + `format`'s name) against the peer first.
+    /// handshake (`IR_HASH` + `format`'s and the framing's names) against
+    /// the peer first.
     pub fn serve<T: Transport, W: WireFormat>(self, transport: &mut T, format: W)
     -> Result<(), RuntimeError> {
-        let hs = Handshake::new(IR_HASH, format.name(), FRAMING_DATAGRAM, 0);
-        Server::new(self, format).serve_handshaked(transport, hs)
+        Server::new(self, format).serve(transport, IR_HASH)
     }
 }
 
@@ -151,8 +150,7 @@ impl<T: Transport, W: WireFormat> MultiClient<T, W> {
 
     /// Bind + run the connection handshake against the provider.
     pub fn connect(transport: T, format: W) -> Result<Self, RuntimeError> {
-        let hs = Handshake::new(IR_HASH, format.name(), FRAMING_DATAGRAM, 0);
-        Ok(Self(Client::connect(transport, format, hs)?))
+        Ok(Self(Client::connect(transport, format, IR_HASH)?))
     }
 
     pub fn send(&mut self, body: &str) -> Result<u64, CallError<MultiSendError>> {
@@ -233,11 +231,11 @@ impl<S: Quiet> Dispatch for QuietDispatcher<S> {
 
 impl<S: Quiet> QuietDispatcher<S> {
     /// Serve this protocol over `transport`, running the connection
-    /// handshake (`IR_HASH` + `format`'s name) against the peer first.
+    /// handshake (`IR_HASH` + `format`'s and the framing's names) against
+    /// the peer first.
     pub fn serve<T: Transport, W: WireFormat>(self, transport: &mut T, format: W)
     -> Result<(), RuntimeError> {
-        let hs = Handshake::new(IR_HASH, format.name(), FRAMING_DATAGRAM, 0);
-        Server::new(self, format).serve_handshaked(transport, hs)
+        Server::new(self, format).serve(transport, IR_HASH)
     }
 }
 
@@ -250,8 +248,7 @@ impl<T: Transport, W: WireFormat> QuietClient<T, W> {
 
     /// Bind + run the connection handshake against the provider.
     pub fn connect(transport: T, format: W) -> Result<Self, RuntimeError> {
-        let hs = Handshake::new(IR_HASH, format.name(), FRAMING_DATAGRAM, 0);
-        Ok(Self(Client::connect(transport, format, hs)?))
+        Ok(Self(Client::connect(transport, format, IR_HASH)?))
     }
 
     pub fn ping(&mut self) -> Result<u64, CallError<QuietPingError>> {

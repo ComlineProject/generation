@@ -3,7 +3,6 @@
 import {
     Client,
     Server,
-    Handshake,
     RuntimeError,
     resolveKind,
     DatagramFraming,
@@ -83,8 +82,7 @@ export class MultiClient {
     constructor(private readonly client: Client) {}
 
     static async connect(transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<MultiClient> {
-        const hs = new Handshake({ irHash: IR_HASH, wireFormat: codec.name, framing: framing.name });
-        return new MultiClient(await Client.connect(transport, codec, hs, framing));
+        return new MultiClient(await Client.connect(transport, codec, IR_HASH, framing));
     }
 
     async send(params: MultiSendParams): Promise<bigint> {
@@ -103,8 +101,7 @@ export class MultiClient {
 }
 
 export function serveMulti(impl: Multi, transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<void> {
-    const hs = new Handshake({ irHash: IR_HASH, wireFormat: codec.name, framing: framing.name });
-    return new Server(new MultiDispatcher(impl), codec, framing).serveHandshaked(transport, hs);
+    return new Server(new MultiDispatcher(impl), codec, framing).serve(transport, IR_HASH);
 }
 
 export interface Quiet {
@@ -149,8 +146,7 @@ export class QuietClient {
     constructor(private readonly client: Client) {}
 
     static async connect(transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<QuietClient> {
-        const hs = new Handshake({ irHash: IR_HASH, wireFormat: codec.name, framing: framing.name });
-        return new QuietClient(await Client.connect(transport, codec, hs, framing));
+        return new QuietClient(await Client.connect(transport, codec, IR_HASH, framing));
     }
 
     async ping(): Promise<bigint> {
@@ -166,7 +162,6 @@ export class QuietClient {
 }
 
 export function serveQuiet(impl: Quiet, transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<void> {
-    const hs = new Handshake({ irHash: IR_HASH, wireFormat: codec.name, framing: framing.name });
-    return new Server(new QuietDispatcher(impl), codec, framing).serveHandshaked(transport, hs);
+    return new Server(new QuietDispatcher(impl), codec, framing).serve(transport, IR_HASH);
 }
 
