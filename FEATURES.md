@@ -4,7 +4,7 @@
 
 What each generator implements, and the conformance fixtures that prove it. A claim is checked, not trusted: a supported feature has a fixture that generates and matches its golden, an ignored one generates exactly what it would without the feature, and an unsupported one is refused with an error naming every use.
 
-| Feature | rust ≥ 1.70.0 | typescript ≥ 5.0 |
+| Feature | rust ≥ 1.85.0 | typescript ≥ 5.0 |
 |---|---|---|
 | structs <br><sub>`structs`</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +9 more</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +11 more</sub> |
 | enums <br><sub>`enums`</sub> | ✅ supported <br><sub>proven by `enum_basic`</sub> | ✅ supported <br><sub>proven by `enum_basic`</sub> |

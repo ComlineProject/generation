@@ -2,8 +2,8 @@
 [package]
 name = "conformance"
 version = "0.0.0"
-edition = "2021"
-rust-version = "1.70.0"
+edition = "2024"
+rust-version = "1.85.0"
 # A schema namespace named `main` would otherwise be picked up as a
 # binary target (`src/main.rs`) with no `fn main`. Core refuses that
 # name outright now; this stays as a belt-and-braces guard for a
@@ -12,4 +12,4 @@ autobins = false
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-comline_std = { git = "https://github.com/ComlineProject/comline-rust", rev = "30a70cb30dfbd9e1812e85ea1949df02410c4d7e" }
+comline_std = { git = "https://github.com/ComlineProject/comline-rust", rev = "3c6df80fa2b47760fc8932d6035b22193bbc35f1" }
