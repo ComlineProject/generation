@@ -94,6 +94,11 @@
       "description": "`@framing = \"jsonrpc\"` (or as the package default)",
       "id": "framing-jsonrpc",
       "title": "JSON-RPC framing"
+    },
+    {
+      "description": "`@handshake = \"none\"` (or as the package default)",
+      "id": "handshake-none",
+      "title": "no handshake"
     }
   ],
   "generators": [
@@ -165,6 +170,14 @@
           "state": "supported",
           "tracking": null
         },
+        "handshake-none": {
+          "note": null,
+          "proven_by": [
+            "handshake_none"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
         "imports": {
           "note": null,
           "proven_by": [
@@ -227,7 +240,8 @@
             "error_shapes",
             "validators",
             "validators_on_decode",
-            "framing_jsonrpc"
+            "framing_jsonrpc",
+            "handshake_none"
           ],
           "state": "supported",
           "tracking": null
@@ -367,6 +381,14 @@
           "state": "supported",
           "tracking": null
         },
+        "handshake-none": {
+          "note": null,
+          "proven_by": [
+            "handshake_none"
+          ],
+          "state": "supported",
+          "tracking": null
+        },
         "imports": {
           "note": null,
           "proven_by": [
@@ -430,7 +452,8 @@
             "error_shapes",
             "validators",
             "validators_on_decode",
-            "framing_jsonrpc"
+            "framing_jsonrpc",
+            "handshake_none"
           ],
           "state": "supported",
           "tracking": null
