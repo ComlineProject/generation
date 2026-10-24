@@ -33,6 +33,8 @@ pub struct Fixture {
     pub external_std: bool,
     /// Whether decoding runs the `@validators` checks.
     pub validate_on_decode: ValidateOnDecode,
+    /// Whether connection protocols get async handlers and senders.
+    pub async_api: bool,
 }
 
 impl Fixture {
@@ -44,6 +46,7 @@ impl Fixture {
             mode: Mode::Code,
             external_std: false,
             validate_on_decode: ValidateOnDecode::Off,
+            async_api: false,
         }
     }
 
@@ -56,6 +59,7 @@ impl Fixture {
             mode: Mode::Code,
             external_std: false,
             validate_on_decode: ValidateOnDecode::Off,
+            async_api: false,
         }
     }
 

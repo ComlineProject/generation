@@ -79,6 +79,11 @@ pub struct GenRequest<'a> {
     /// value runs its `@validators` checks. A generator that emits no checks
     /// ignores it.
     pub validate_on_decode: validation::ValidateOnDecode,
+    /// `comline.toml`'s `[generate] async` - whether protocols on a
+    /// connection get async handlers and senders (Rust's `AsyncConnection`)
+    /// instead of blocking ones. A generator whose output is async anyway,
+    /// or that has no connections, ignores it.
+    pub async_api: bool,
 }
 
 impl GenRequest<'_> {
@@ -304,6 +309,7 @@ mod tests {
             lang_version: v.into(),
             external_std: false,
             validate_on_decode: Default::default(),
+            async_api: false,
         };
         assert!(req("1.81").at_least("1.81.0"));
         assert!(req("1.90.0").at_least("1.81.0"));
