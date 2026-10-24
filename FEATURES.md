@@ -15,7 +15,7 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 | unions <br><sub>`unions`</sub> | ❌ unsupported: Rust has no anonymous sum type to render one as <br><sub>proven by `unions`</sub> | ✅ supported <br><sub>proven by `unions`</sub> |
 | type aliases <br><sub>`type-aliases`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`, `unions`</sub> |
 | constants <br><sub>`constants`</sub> | ✅ supported <br><sub>proven by `constant`, `shapes`, `validators` +1 more</sub> | ✅ supported <br><sub>proven by `constant`, `shapes`, `validators` +1 more</sub> |
-| protocols <br><sub>`protocols`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +5 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +5 more</sub> |
+| protocols <br><sub>`protocols`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +6 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +6 more</sub> |
 | errors <br><sub>`errors`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> |
 | functions that throw <br><sub>`throws`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> |
 | validators <br><sub>`validators`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`</sub> | ⚪ ignored: the types are generated; the checks aren't run yet (core#96) <br><sub>proven by `validators`, `validators_on_decode`</sub> |
@@ -24,7 +24,7 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 | `lib` mode <br><sub>`lib-mode`</sub> | ✅ supported <br><sub>proven by `nested_namespace`, `external_std`</sub> | ✅ supported <br><sub>proven by `nested_namespace`, `external_std`</sub> |
 | `external_std` <br><sub>`external-std`</sub> | ✅ supported <br><sub>proven by `external_std`</sub> | ✅ supported <br><sub>proven by `external_std`</sub> |
 | `validate_on_decode` <br><sub>`validate-on-decode`</sub> | ✅ supported <br><sub>proven by `validators_on_decode`</sub> | ⚪ ignored: no checks are generated to run on decode yet (core#96) <br><sub>proven by `validators_on_decode`</sub> |
-| JSON-RPC framing <br><sub>`framing-jsonrpc`</sub> | ✅ supported <br><sub>proven by `framing_jsonrpc`</sub> | ✅ supported <br><sub>proven by `framing_jsonrpc`</sub> |
+| JSON-RPC framing <br><sub>`framing-jsonrpc`</sub> | ✅ supported <br><sub>proven by `framing_jsonrpc`, `connections_jsonrpc`</sub> | ✅ supported <br><sub>proven by `framing_jsonrpc`, `connections_jsonrpc`</sub> |
 | no handshake <br><sub>`handshake-none`</sub> | ✅ supported <br><sub>proven by `handshake_none`</sub> | ✅ supported <br><sub>proven by `handshake_none`</sub> |
-| connections <br><sub>`connections`</sub> | 🟡 partial: over `datagram@2`; JSON-RPC on a connection isn't supported yet (runtime#19) <br><sub>proven by `connections`, `connections_async`</sub> | 🟡 partial: over `datagram@2`; JSON-RPC on a connection isn't supported yet (runtime#19) <br><sub>proven by `connections`, `connections_async`</sub> |
+| connections <br><sub>`connections`</sub> | ✅ supported <br><sub>proven by `connections`, `connections_async`, `connections_jsonrpc`</sub> | ✅ supported <br><sub>proven by `connections`, `connections_async`, `connections_jsonrpc`</sub> |
 | `async` <br><sub>`async`</sub> | ✅ supported <br><sub>proven by `connections_async`</sub> | ⚪ ignored: handlers and senders always return Promises: the output is async either way <br><sub>proven by `connections_async`</sub> |

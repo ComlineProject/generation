@@ -368,15 +368,15 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                 FrozenUnit::Protocol { name, functions, parameters, span, .. } => {
                     let owner = format!("protocol '{name}'");
                     push(Feature::Protocols, owner.clone(), Some(*span));
-                    let framing = annotation(parameters, "framing").or(options.default_framing.as_deref());
-                    if framing.and_then(|f| canonical_framing(f)) == Some("jsonrpc") {
+                    let framing = crate::connections::framing(parameters, options.default_framing.as_deref());
+                    if framing.map(|f| f.name) == Some("jsonrpc") {
                         push(Feature::FramingJsonRpc, owner.clone(), Some(*span));
                     }
                     // Core has already applied the package's default here.
                     if annotation(parameters, "handshake") == Some(HANDSHAKE_NONE) {
                         push(Feature::HandshakeNone, owner.clone(), Some(*span));
                     }
-                    if crate::connections::on_connection(parameters, options.default_framing.as_deref()) {
+                    if crate::connections::on_connection(schemas, parameters, options.default_framing.as_deref()) {
                         push(Feature::Connections, owner.clone(), Some(*span));
                         connections = true;
                     }
@@ -507,10 +507,6 @@ fn annotation<'a>(parameters: &'a [FrozenUnit], key: &str) -> Option<&'a str> {
         },
         _ => None,
     })
-}
-
-fn canonical_framing(name: &str) -> Option<&'static str> {
-    comline_core::schema::idl::annotations::canonical_value("framing", name)
 }
 
 /// Refuses `req` when it uses a feature `support` marks unsupported, naming

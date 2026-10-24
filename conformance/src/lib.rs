@@ -111,6 +111,7 @@ pub fn corpus() -> Vec<Fixture> {
         handshake_none(),
         connections(),
         connections_async(),
+        connections_jsonrpc(),
     ]
 }
 
@@ -760,6 +761,33 @@ fn handshake_none() -> Fixture {
 /// driver where a generator has one.
 fn connections_async() -> Fixture {
     Fixture { name: "connections_async", ..connections() }.with_async()
+}
+
+/// [`connections`] over JSON-RPC: `Chat` names only its framing and joins
+/// the connection `Events` is on; `Events` qualifies its method names.
+fn connections_jsonrpc() -> Fixture {
+    let jsonrpc = FrozenUnit::Property { name: "framing".to_string(), value: ConfigValue::Str("jsonrpc".to_string()) };
+    let qualified = FrozenUnit::Property {
+        name: "framing".to_string(),
+        value: ConfigValue::Dict(vec![
+            ("name".to_string(), ConfigValue::Str("jsonrpc".to_string())),
+            ("method_names".to_string(), ConfigValue::Name("qualified".to_string())),
+        ]),
+    };
+    let mut fixture = Fixture { name: "connections_jsonrpc", ..connections() };
+    for (_, units) in &mut fixture.schemas {
+        for unit in units {
+            if let FrozenUnit::Protocol { name, parameters, .. } = unit {
+                let framing = if name == "Chat" { jsonrpc.clone() } else { qualified.clone() };
+                for p in parameters.iter_mut() {
+                    if matches!(p, FrozenUnit::Property { name, .. } if name == "framing") {
+                        *p = framing.clone();
+                    }
+                }
+            }
+        }
+    }
+    fixture
 }
 
 fn connections() -> Fixture {
