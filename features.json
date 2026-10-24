@@ -101,7 +101,7 @@
       "title": "no handshake"
     },
     {
-      "description": "protocols on a connection, with calls in both directions: `@framing = \"datagram@2\"`, or `@provider = Client` / `Multiple`",
+      "description": "protocols on a connection, with calls in both directions: `datagram@2` (the default), or `@provider = Client` / `Multiple`",
       "id": "connections",
       "title": "connections"
     },
@@ -109,6 +109,21 @@
       "description": "`[generate] async`: connection protocols get async handlers and senders",
       "id": "async",
       "title": "`async`"
+    },
+    {
+      "description": "`wire.format = \"packed@1\"`, the default: fixed-width fields, no tags",
+      "id": "format-packed",
+      "title": "the `packed@1` format"
+    },
+    {
+      "description": "`wire.format = \"json@1\"`",
+      "id": "format-json",
+      "title": "the `json@1` format"
+    },
+    {
+      "description": "`wire.format = \"msgpack@1\"`",
+      "id": "format-msgpack",
+      "title": "the `msgpack@1` format"
     }
   ],
   "generators": [
@@ -141,9 +156,16 @@
         "connections": {
           "note": null,
           "proven_by": [
+            "protocol",
+            "error_shapes",
+            "validators",
+            "validators_on_decode",
+            "handshake_none",
             "connections",
             "connections_async",
-            "connections_jsonrpc"
+            "connections_jsonrpc",
+            "format_json",
+            "format_msgpack"
           ],
           "since": null,
           "state": "supported",
@@ -174,7 +196,9 @@
           "note": null,
           "proven_by": [
             "protocol",
-            "error_shapes"
+            "error_shapes",
+            "format_json",
+            "format_msgpack"
           ],
           "since": null,
           "state": "supported",
@@ -193,6 +217,39 @@
           "note": null,
           "proven_by": [
             "shapes"
+          ],
+          "since": null,
+          "state": "supported",
+          "tracking": null
+        },
+        "format-json": {
+          "note": null,
+          "proven_by": [
+            "format_json"
+          ],
+          "since": null,
+          "state": "supported",
+          "tracking": null
+        },
+        "format-msgpack": {
+          "note": null,
+          "proven_by": [
+            "format_msgpack"
+          ],
+          "since": null,
+          "state": "supported",
+          "tracking": null
+        },
+        "format-packed": {
+          "note": null,
+          "proven_by": [
+            "protocol",
+            "error_shapes",
+            "validators",
+            "validators_on_decode",
+            "handshake_none",
+            "connections",
+            "connections_async"
           ],
           "since": null,
           "state": "supported",
@@ -288,7 +345,9 @@
             "handshake_none",
             "connections",
             "connections_async",
-            "connections_jsonrpc"
+            "connections_jsonrpc",
+            "format_json",
+            "format_msgpack"
           ],
           "since": null,
           "state": "supported",
@@ -308,7 +367,9 @@
             "nested_namespace",
             "external_std",
             "validators",
-            "validators_on_decode"
+            "validators_on_decode",
+            "format_json",
+            "format_msgpack"
           ],
           "since": null,
           "state": "supported",
@@ -318,7 +379,9 @@
           "note": null,
           "proven_by": [
             "protocol",
-            "error_shapes"
+            "error_shapes",
+            "format_json",
+            "format_msgpack"
           ],
           "since": null,
           "state": "supported",
@@ -401,9 +464,15 @@
         "connections": {
           "note": null,
           "proven_by": [
+            "protocol",
+            "error_shapes",
+            "validators",
+            "validators_on_decode",
+            "handshake_none",
             "connections",
             "connections_async",
-            "connections_jsonrpc"
+            "connections_jsonrpc",
+            "format_json"
           ],
           "since": null,
           "state": "supported",
@@ -434,7 +503,8 @@
           "note": null,
           "proven_by": [
             "protocol",
-            "error_shapes"
+            "error_shapes",
+            "format_json"
           ],
           "since": null,
           "state": "supported",
@@ -457,6 +527,39 @@
           ],
           "since": null,
           "state": "partial",
+          "tracking": null
+        },
+        "format-json": {
+          "note": null,
+          "proven_by": [
+            "format_json"
+          ],
+          "since": null,
+          "state": "supported",
+          "tracking": null
+        },
+        "format-msgpack": {
+          "note": "`@comline/runtime` has no MessagePack codec yet",
+          "proven_by": [
+            "format_msgpack"
+          ],
+          "since": null,
+          "state": "unsupported",
+          "tracking": null
+        },
+        "format-packed": {
+          "note": null,
+          "proven_by": [
+            "protocol",
+            "error_shapes",
+            "validators",
+            "validators_on_decode",
+            "handshake_none",
+            "connections",
+            "connections_async"
+          ],
+          "since": null,
+          "state": "supported",
           "tracking": null
         },
         "framing-jsonrpc": {
@@ -550,7 +653,8 @@
             "handshake_none",
             "connections",
             "connections_async",
-            "connections_jsonrpc"
+            "connections_jsonrpc",
+            "format_json"
           ],
           "since": null,
           "state": "supported",
@@ -572,7 +676,8 @@
             "validators",
             "validators_on_decode",
             "unions",
-            "large_fixed_arrays_nested"
+            "large_fixed_arrays_nested",
+            "format_json"
           ],
           "since": null,
           "state": "supported",
@@ -582,7 +687,8 @@
           "note": null,
           "proven_by": [
             "protocol",
-            "error_shapes"
+            "error_shapes",
+            "format_json"
           ],
           "since": null,
           "state": "supported",

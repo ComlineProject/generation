@@ -7,10 +7,12 @@ import {
     RuntimeError,
     resolveKind,
     JsonRpcFraming,
+    JsonCodec,
     type Codec,
     type Dispatch,
     type Framing,
     type Kind,
+    type Layout,
     type Reply,
     type Transport,
 } from "@comline/runtime";
@@ -22,6 +24,8 @@ export const IR_HASH = 0x1a95418a1177cd91n;
 export interface RpcPingParams {
     n: number;
 }
+
+export const RpcPingParamsLayout: Layout = { struct: [["n", "u32"]] };
 
 export interface Rpc {
     ping(params: RpcPingParams): Promise<number>;
@@ -44,8 +48,8 @@ export class RpcDispatcher implements Dispatch {
         switch (resolveKind(call, RPC_CALLS)) {
             case 0: {
                 try {
-                    const p = codec.decode<RpcPingParams>(params);
-                    reply.ok(codec.encode((await this.impl.ping(p)) ?? null));
+                    const p = codec.decode<RpcPingParams>(params, RpcPingParamsLayout);
+                    reply.ok(codec.encode((await this.impl.ping(p)) ?? null, "u32"));
                 } catch {
                     reply.fault();
                 }
@@ -64,19 +68,19 @@ export class RpcClient {
         this.client = client;
     }
 
-    static async connect(transport: Transport, codec: Codec, framing: Framing = new JsonRpcFraming()): Promise<RpcClient> {
+    static async connect(transport: Transport, codec: Codec = new JsonCodec(), framing: Framing = new JsonRpcFraming()): Promise<RpcClient> {
         return new RpcClient(await Client.connect(transport, codec, IR_HASH, framing));
     }
 
     async ping(params: RpcPingParams): Promise<number> {
-        const env = await this.client.call({ id: 0, name: "ping" }, params);
-        if ("ok" in env) return this.client.codec.decode<number>(env.ok);
+        const env = await this.client.call({ id: 0, name: "ping" }, params, { layout: RpcPingParamsLayout });
+        if ("ok" in env) return this.client.codec.decode<number>(env.ok, "u32");
         if ("fault" in env) throw RuntimeError.provider();
         throw RuntimeError.remote(env.err.id);
     }
 }
 
-export function serveRpc(impl: Rpc, transport: Transport, codec: Codec, framing: Framing = new JsonRpcFraming()): Promise<void> {
+export function serveRpc(impl: Rpc, transport: Transport, codec: Codec = new JsonCodec(), framing: Framing = new JsonRpcFraming()): Promise<void> {
     return new Server(new RpcDispatcher(impl), codec, framing).serve(transport, IR_HASH);
 }
 

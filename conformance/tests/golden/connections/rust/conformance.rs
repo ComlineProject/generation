@@ -16,6 +16,10 @@ pub const IR_HASH: u64 = 0xb97e34b203ec1425;
 /// checks, so both ends agree on each protocol's number.
 pub const CONNECTION_IR_HASH: u64 = 0xb97e34b203ec1425;
 
+/// The package's wire format (`wire.format`): what this file's helpers
+/// encode with, and what the peer has to speak too.
+pub type Format = comline_runtime::format::Packed;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatSendParams {
     pub n: u32,
@@ -88,7 +92,7 @@ impl<S: Chat> ChatDispatcher<S> {
     pub const PROTOCOL: ProtocolNumber = 0;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
-    /// Open `conn` with `Connection::accept(transport, format, CONNECTION_IR_HASH)`.
+    /// Open `conn` with `Connection::accept(transport, format, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it.
     pub fn provide_on<T: Transport, W: WireFormat, F: ConnectionFraming>(
         self,
         conn: &mut Connection<T, W, F>,
@@ -202,7 +206,7 @@ impl<S: Events> EventsDispatcher<S> {
     pub const PROTOCOL: ProtocolNumber = 1;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
-    /// Open `conn` with `Connection::accept(transport, format, CONNECTION_IR_HASH)`.
+    /// Open `conn` with `Connection::connect(transport, format, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it.
     pub fn provide_on<T: Transport, W: WireFormat, F: ConnectionFraming>(
         self,
         conn: &mut Connection<T, W, F>,

@@ -11,10 +11,12 @@ use std::path::{Path, PathBuf};
 
 use std::collections::BTreeMap;
 
+use comline_codegen::connections;
 use comline_codegen::features::{self, Column, Feature, Options, State, SupportTable};
 use comline_codegen::versions::{LangVersion, Versions};
 use comline_codegen::{GenRequest, GeneratedFile, PackageMeta};
 use comline_conformance::{corpus, Fixture};
+use comline_core::schema::idl::annotations::DEFAULT_FORMAT;
 use comline_core::schema::ir::frozen::cas::blob::schema_ir_hash;
 use comline_core::schema::ir::frozen::unit::FrozenUnit;
 
@@ -62,7 +64,7 @@ fn options(fx: &Fixture) -> Options {
         mode: Some(fx.mode),
         external_std: fx.external_std,
         validate_on_decode: fx.validate_on_decode,
-        default_framing: None,
+        wire_format: fx.wire_format.map(str::to_string),
         async_api: fx.async_api,
     }
 }
@@ -104,7 +106,7 @@ fn request_for<'a>(
         // One of the generator's own boundaries: what a target declaring it
         // gets, and every version up to the next boundary gets the same.
         lang_version: version.to_string(),
-        default_framing: options.default_framing.clone(),
+        wire_format: options.wire_format.clone().unwrap_or_else(|| DEFAULT_FORMAT.to_string()),
         external_std: options.external_std,
         validate_on_decode: options.validate_on_decode,
         async_api: options.async_api,
@@ -480,9 +482,12 @@ fn support_is_proven() {
     assert!(failures.is_empty(), "unproven feature support ({}):\n  {}", failures.len(), failures.join("\n  "));
 }
 
-/// Every schema's IR hash in `a` and `b`, to mask when comparing their output.
+/// Every schema's IR hash in `a` and `b`, and each package's connection
+/// hash, to mask when comparing their output.
 fn ir_hashes(a: &[(String, Vec<FrozenUnit>)], b: &[(String, Vec<FrozenUnit>)]) -> Vec<u64> {
-    a.iter().chain(b).map(|(_, units)| schema_ir_hash(units)).collect()
+    let mut hashes: Vec<u64> = a.iter().chain(b).map(|(_, units)| schema_ir_hash(units)).collect();
+    hashes.extend([connections::connection_ir_hash(a), connections::connection_ir_hash(b)]);
+    hashes
 }
 
 /// The same files with the same contents, in any order, once each of

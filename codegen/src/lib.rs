@@ -55,12 +55,13 @@ pub struct GenRequest<'a> {
     pub mode: Mode,
     pub schemas: &'a [(String, Vec<FrozenUnit>)],
     pub package: PackageMeta,
-    /// Consumer-set fallback wire framing (`comline.toml`'s
-    /// `[generate] default_framing`), applied by a generator to any protocol
-    /// that does not pick one itself with `@framing`. `None` ⇒ the generator's
-    /// built-in default. The value is a framing name the generator recognises
-    /// (`"jsonrpc"`, `"datagram"`, …); an unknown one falls back to the default.
-    pub default_framing: Option<String>,
+    /// The package's wire format (`config.idp`'s `wire.format`), canonical:
+    /// `packed@1` (the default), `json@1` or `msgpack@1`. What the generated
+    /// code encodes with, except for JSON-RPC protocols, which carry JSON.
+    ///
+    /// There's no framing here: core writes the package's `wire.framing`
+    /// into each protocol's IR, where [`connections::framing`] reads it.
+    pub wire_format: String,
     /// The target's language/toolchain version - the `#`-suffix of the
     /// language the congregation declared (`rust#1.70.0` -> `"1.70.0"`,
     /// `typescript#5.0` -> `"5.0"`), which is also what selected this
@@ -305,7 +306,7 @@ mod tests {
             mode: Mode::Code,
             schemas: &[],
             package: PackageMeta { name: "p".into(), version: "0.0.0".into() },
-            default_framing: None,
+            wire_format: comline_core::schema::idl::annotations::DEFAULT_FORMAT.into(),
             lang_version: v.into(),
             external_std: false,
             validate_on_decode: Default::default(),

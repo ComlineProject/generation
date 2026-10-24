@@ -2,26 +2,35 @@
 // For TypeScript 5.0 or later; verified up to 5.9.
 
 import {
-    Client,
-    Server,
     RuntimeError,
     resolveKind,
-    DatagramFraming,
+    PackedCodec,
     type Codec,
+    type Connection,
     type Dispatch,
-    type Framing,
     type Kind,
+    type Layout,
+    type Peer,
     type Reply,
-    type Transport,
 } from "@comline/runtime";
 
 /** Canonical digest of the frozen IR this file was generated from — the
 *  two ends of a connection must agree on it. */
 export const IR_HASH = 0xeab4408b940579fbn;
 
+/** Digest of every schema in the package — what a connection's handshake
+*  checks, so both ends agree on each protocol's number. */
+export const CONNECTION_IR_HASH = 0x87c0a4abdc2a26bcn;
+
+/** The package's wire format (`wire.format`): what this file's helpers
+*  encode with, and what the peer has to speak too. */
+export const Format: Codec = new PackedCodec();
+
 export const MIN_HANDLE = 2;
 
 export type Handle = string;
+
+export const HandleLayout: Layout = "string";
 
 export interface Profile {
     handle: Handle;
@@ -30,22 +39,31 @@ export interface Profile {
     friends: Handle[];
 }
 
+export const ProfileLayout: Layout = { struct: [["handle", () => HandleLayout], ["age", "u32"], ["nickname", { option: () => HandleLayout }], ["friends", { array: () => HandleLayout }]] };
+
 export interface Post {
     author: Profile;
     body: string;
 }
 
+export const PostLayout: Layout = { struct: [["author", () => ProfileLayout], ["body", "string"]] };
+
 export interface SocialRenameParams {
     to: Handle;
 }
 
+export const SocialRenameParamsLayout: Layout = { struct: [["to", () => HandleLayout]] };
+
 export interface Social {
-    rename(params: SocialRenameParams): Promise<Handle>;
+    rename(peer: Peer, params: SocialRenameParams): Promise<Handle>;
 }
 
 export const SOCIAL_CALLS = ["rename"] as const;
 
 export class SocialDispatcher implements Dispatch {
+    /** This protocol's number on a connection. */
+    static readonly PROTOCOL = 0;
+
     private readonly impl: Social;
 
     constructor(impl: Social) {
@@ -56,12 +74,18 @@ export class SocialDispatcher implements Dispatch {
         return SOCIAL_CALLS;
     }
 
-    async dispatch(call: Kind, params: Uint8Array, codec: Codec, reply: Reply): Promise<void> {
+    /** Only served on a connection, whose handlers are given the peer: anywhere else the caller hears a fault. */
+    async dispatch(_call: Kind, _params: Uint8Array, _codec: Codec, reply: Reply): Promise<void> {
+        reply.fault();
+    }
+
+    async dispatchWith(call: Kind, params: Uint8Array, reply: Reply, peer: Peer): Promise<void> {
+        const codec = peer.codec;
         switch (resolveKind(call, SOCIAL_CALLS)) {
             case 0: {
                 try {
-                    const p = codec.decode<SocialRenameParams>(params);
-                    reply.ok(codec.encode((await this.impl.rename(p)) ?? null));
+                    const p = codec.decode<SocialRenameParams>(params, SocialRenameParamsLayout);
+                    reply.ok(codec.encode((await this.impl.rename(peer, p)) ?? null, HandleLayout));
                 } catch {
                     reply.fault();
                 }
@@ -71,28 +95,29 @@ export class SocialDispatcher implements Dispatch {
                 throw RuntimeError.unknownCall();
         }
     }
+
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it. */
+    provideOn(conn: Connection): void {
+        conn.provide(SocialDispatcher.PROTOCOL, this);
+    }
 }
 
-export class SocialClient {
-    private readonly client: Client;
+/** Calls protocol `Social` on the other end of a connection: the peer a `Connection` reaches, or the one a handler was given. */
+export class SocialSender {
+    /** This protocol's number on a connection. */
+    static readonly PROTOCOL = 0;
 
-    constructor(client: Client) {
-        this.client = client;
-    }
+    private readonly peer: Peer;
 
-    static async connect(transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<SocialClient> {
-        return new SocialClient(await Client.connect(transport, codec, IR_HASH, framing));
+    constructor(peer: Peer) {
+        this.peer = peer;
     }
 
     async rename(params: SocialRenameParams): Promise<Handle> {
-        const env = await this.client.call({ id: 0, name: "rename" }, params);
-        if ("ok" in env) return this.client.codec.decode<Handle>(env.ok);
+        const env = await this.peer.call(SocialSender.PROTOCOL, { id: 0, name: "rename" }, params, { layout: SocialRenameParamsLayout });
+        if ("ok" in env) return this.peer.codec.decode<Handle>(env.ok, HandleLayout);
         if ("fault" in env) throw RuntimeError.provider();
         throw RuntimeError.remote(env.err.id);
     }
-}
-
-export function serveSocial(impl: Social, transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<void> {
-    return new Server(new SocialDispatcher(impl), codec, framing).serve(transport, IR_HASH);
 }
 
