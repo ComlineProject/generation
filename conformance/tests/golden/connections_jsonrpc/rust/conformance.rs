@@ -88,7 +88,7 @@ impl<S: Chat> ChatDispatcher<S> {
     pub const PROTOCOL: ProtocolNumber = 0;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
-    /// Open `conn` with `Connection::accept_with(transport, format, comline_runtime::framing::JsonRpcFraming, &mut ComlineHandshake, CONNECTION_IR_HASH)`.
+    /// Open `conn` with `Connection::accept_with(transport, format, comline_runtime::framing::JsonRpcFraming, &mut ComlineHandshake, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it.
     pub fn provide_on<T: Transport, W: WireFormat, F: ConnectionFraming>(
         self,
         conn: &mut Connection<T, W, F>,
@@ -202,7 +202,7 @@ impl<S: Events> EventsDispatcher<S> {
     pub const PROTOCOL: ProtocolNumber = 1;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
-    /// Open `conn` with `Connection::accept_with(transport, format, comline_runtime::framing::JsonRpcFraming, &mut ComlineHandshake, CONNECTION_IR_HASH)`.
+    /// Open `conn` with `Connection::connect_with(transport, format, comline_runtime::framing::JsonRpcFraming, &mut ComlineHandshake, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it.
     pub fn provide_on<T: Transport, W: WireFormat, F: ConnectionFraming>(
         self,
         conn: &mut Connection<T, W, F>,

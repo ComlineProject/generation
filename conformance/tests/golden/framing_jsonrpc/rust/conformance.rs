@@ -70,7 +70,13 @@ impl<S: Rpc> RpcDispatcher<S> {
     /// Serve this protocol over `transport`, running the connection
     /// handshake (`IR_HASH` + `format`'s and the framing's names) against
     /// the peer first.
-    pub fn serve<T: Transport, W: WireFormat>(self, transport: &mut T, format: W)
+    /// Encodes with `Json`.
+    pub fn serve<T: Transport>(self, transport: &mut T) -> Result<(), RuntimeError> {
+        self.serve_with_format(transport, comline_runtime::format::Json::default())
+    }
+
+    /// [`serve`](Self::serve), encoding with `format` instead.
+    pub fn serve_with_format<T: Transport, W: WireFormat>(self, transport: &mut T, format: W)
     -> Result<(), RuntimeError> {
         let framing = comline_runtime::framing::JsonRpcFraming;
         Server::with_framing(self, format, framing).serve(transport, IR_HASH)
@@ -85,7 +91,8 @@ impl<T: Transport, W: WireFormat> RpcClient<T, W> {
     }
 
     /// Bind + run the connection handshake against the provider.
-    pub fn connect(transport: T, format: W) -> Result<Self, RuntimeError> {
+    /// [`connect`](Self::connect), encoding with `format`.
+    pub fn connect_with_format(transport: T, format: W) -> Result<Self, RuntimeError> {
         let framing = comline_runtime::framing::JsonRpcFraming;
         Ok(Self(Client::connect_with_framing(transport, format, framing, IR_HASH)?))
     }
@@ -97,6 +104,14 @@ impl<T: Transport, W: WireFormat> RpcClient<T, W> {
             Envelope::Err { id, .. } => Err(CallError::Runtime(RuntimeError::Remote { id })),
             Envelope::Fault => Err(CallError::Runtime(RuntimeError::Provider)),
         }
+    }
+}
+
+impl<T: Transport> RpcClient<T, comline_runtime::format::Json> {
+    /// Bind + run the connection handshake against the provider.
+    /// Encodes with `Json`.
+    pub fn connect(transport: T) -> Result<Self, RuntimeError> {
+        Self::connect_with_format(transport, comline_runtime::format::Json::default())
     }
 }
 

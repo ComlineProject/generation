@@ -2,26 +2,35 @@
 // For TypeScript 5.0 or later; verified up to 5.9.
 
 import {
-    Client,
-    Server,
     RuntimeError,
     resolveKind,
-    DatagramFraming,
+    PackedCodec,
     type Codec,
+    type Connection,
     type Dispatch,
-    type Framing,
     type Kind,
+    type Layout,
+    type Peer,
     type Reply,
-    type Transport,
 } from "@comline/runtime";
 
 /** Canonical digest of the frozen IR this file was generated from — the
 *  two ends of a connection must agree on it. */
 export const IR_HASH = 0x6fc29e1014b9b9c8n;
 
+/** Digest of every schema in the package — what a connection's handshake
+*  checks, so both ends agree on each protocol's number. */
+export const CONNECTION_IR_HASH = 0x6fc29e1014b9b9c8n;
+
+/** The package's wire format (`wire.format`): what this file's helpers
+*  encode with, and what the peer has to speak too. */
+export const Format: Codec = new PackedCodec();
+
 export interface TooLong {
     limit: number;
 }
+
+export const TooLongLayout: Layout = { struct: [["limit", "u32"]] };
 
 export class TooLongError extends Error {
     static readonly ordinal = 1;
@@ -35,6 +44,8 @@ export class TooLongError extends Error {
 
 export interface Denied {
 }
+
+export const DeniedLayout: Layout = { struct: [] };
 
 export class DeniedError extends Error {
     static readonly ordinal = 2;
@@ -50,14 +61,19 @@ export interface MultiSendParams {
     body: string;
 }
 
+export const MultiSendParamsLayout: Layout = { struct: [["body", "string"]] };
+
 export interface Multi {
     /** @throws {DeniedError | TooLongError} */
-    send(params: MultiSendParams): Promise<bigint>;
+    send(peer: Peer, params: MultiSendParams): Promise<bigint>;
 }
 
 export const MULTI_CALLS = ["send"] as const;
 
 export class MultiDispatcher implements Dispatch {
+    /** This protocol's number on a connection. */
+    static readonly PROTOCOL = 0;
+
     private readonly impl: Multi;
 
     constructor(impl: Multi) {
@@ -68,15 +84,21 @@ export class MultiDispatcher implements Dispatch {
         return MULTI_CALLS;
     }
 
-    async dispatch(call: Kind, params: Uint8Array, codec: Codec, reply: Reply): Promise<void> {
+    /** Only served on a connection, whose handlers are given the peer: anywhere else the caller hears a fault. */
+    async dispatch(_call: Kind, _params: Uint8Array, _codec: Codec, reply: Reply): Promise<void> {
+        reply.fault();
+    }
+
+    async dispatchWith(call: Kind, params: Uint8Array, reply: Reply, peer: Peer): Promise<void> {
+        const codec = peer.codec;
         switch (resolveKind(call, MULTI_CALLS)) {
             case 0: {
                 try {
-                    const p = codec.decode<MultiSendParams>(params);
-                    reply.ok(codec.encode((await this.impl.send(p)) ?? null));
+                    const p = codec.decode<MultiSendParams>(params, MultiSendParamsLayout);
+                    reply.ok(codec.encode((await this.impl.send(peer, p)) ?? null, "u64"));
                 } catch (e) {
-                    if (e instanceof DeniedError) { reply.err(DeniedError.ordinal, codec.encode(e.data)); return; }
-                    if (e instanceof TooLongError) { reply.err(TooLongError.ordinal, codec.encode(e.data)); return; }
+                    if (e instanceof DeniedError) { reply.err(DeniedError.ordinal, codec.encode(e.data, DeniedLayout)); return; }
+                    if (e instanceof TooLongError) { reply.err(TooLongError.ordinal, codec.encode(e.data, TooLongLayout)); return; }
                     reply.fault();
                 }
                 return;
@@ -85,46 +107,50 @@ export class MultiDispatcher implements Dispatch {
                 throw RuntimeError.unknownCall();
         }
     }
+
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it. */
+    provideOn(conn: Connection): void {
+        conn.provide(MultiDispatcher.PROTOCOL, this);
+    }
 }
 
-export class MultiClient {
-    private readonly client: Client;
+/** Calls protocol `Multi` on the other end of a connection: the peer a `Connection` reaches, or the one a handler was given. */
+export class MultiSender {
+    /** This protocol's number on a connection. */
+    static readonly PROTOCOL = 0;
 
-    constructor(client: Client) {
-        this.client = client;
-    }
+    private readonly peer: Peer;
 
-    static async connect(transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<MultiClient> {
-        return new MultiClient(await Client.connect(transport, codec, IR_HASH, framing));
+    constructor(peer: Peer) {
+        this.peer = peer;
     }
 
     async send(params: MultiSendParams): Promise<bigint> {
-        const env = await this.client.call({ id: 0, name: "send" }, params);
-        if ("ok" in env) return this.client.codec.decode<bigint>(env.ok, "bigint");
+        const env = await this.peer.call(MultiSender.PROTOCOL, { id: 0, name: "send" }, params, { layout: MultiSendParamsLayout });
+        if ("ok" in env) return this.peer.codec.decode<bigint>(env.ok, "u64");
         if ("fault" in env) throw RuntimeError.provider();
         switch (env.err.id) {
             case DeniedError.ordinal:
-                throw new DeniedError(this.client.codec.decode<Denied>(env.err.body));
+                throw new DeniedError(this.peer.codec.decode<Denied>(env.err.body, DeniedLayout));
             case TooLongError.ordinal:
-                throw new TooLongError(this.client.codec.decode<TooLong>(env.err.body));
+                throw new TooLongError(this.peer.codec.decode<TooLong>(env.err.body, TooLongLayout));
             default:
                 throw RuntimeError.remote(env.err.id);
         }
     }
 }
 
-export function serveMulti(impl: Multi, transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<void> {
-    return new Server(new MultiDispatcher(impl), codec, framing).serve(transport, IR_HASH);
-}
-
 export interface Quiet {
-    ping(): Promise<bigint>;
-    hush(): Promise<void>;
+    ping(peer: Peer): Promise<bigint>;
+    hush(peer: Peer): Promise<void>;
 }
 
 export const QUIET_CALLS = ["ping", "hush"] as const;
 
 export class QuietDispatcher implements Dispatch {
+    /** This protocol's number on a connection. */
+    static readonly PROTOCOL = 1;
+
     private readonly impl: Quiet;
 
     constructor(impl: Quiet) {
@@ -135,11 +161,17 @@ export class QuietDispatcher implements Dispatch {
         return QUIET_CALLS;
     }
 
-    async dispatch(call: Kind, params: Uint8Array, codec: Codec, reply: Reply): Promise<void> {
+    /** Only served on a connection, whose handlers are given the peer: anywhere else the caller hears a fault. */
+    async dispatch(_call: Kind, _params: Uint8Array, _codec: Codec, reply: Reply): Promise<void> {
+        reply.fault();
+    }
+
+    async dispatchWith(call: Kind, params: Uint8Array, reply: Reply, peer: Peer): Promise<void> {
+        const codec = peer.codec;
         switch (resolveKind(call, QUIET_CALLS)) {
             case 0: {
                 try {
-                    reply.ok(codec.encode((await this.impl.ping()) ?? null));
+                    reply.ok(codec.encode((await this.impl.ping(peer)) ?? null, "u64"));
                 } catch {
                     reply.fault();
                 }
@@ -147,7 +179,7 @@ export class QuietDispatcher implements Dispatch {
             }
             case 1: {
                 try {
-                    await this.impl.hush();
+                    await this.impl.hush(peer);
                 } catch {
                     /* one-way: nowhere to report this */
                 }
@@ -157,32 +189,33 @@ export class QuietDispatcher implements Dispatch {
                 throw RuntimeError.unknownCall();
         }
     }
+
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it. */
+    provideOn(conn: Connection): void {
+        conn.provide(QuietDispatcher.PROTOCOL, this);
+    }
 }
 
-export class QuietClient {
-    private readonly client: Client;
+/** Calls protocol `Quiet` on the other end of a connection: the peer a `Connection` reaches, or the one a handler was given. */
+export class QuietSender {
+    /** This protocol's number on a connection. */
+    static readonly PROTOCOL = 1;
 
-    constructor(client: Client) {
-        this.client = client;
-    }
+    private readonly peer: Peer;
 
-    static async connect(transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<QuietClient> {
-        return new QuietClient(await Client.connect(transport, codec, IR_HASH, framing));
+    constructor(peer: Peer) {
+        this.peer = peer;
     }
 
     async ping(): Promise<bigint> {
-        const env = await this.client.call({ id: 0, name: "ping" }, null);
-        if ("ok" in env) return this.client.codec.decode<bigint>(env.ok, "bigint");
+        const env = await this.peer.call(QuietSender.PROTOCOL, { id: 0, name: "ping" }, null, { layout: "unit" });
+        if ("ok" in env) return this.peer.codec.decode<bigint>(env.ok, "u64");
         if ("fault" in env) throw RuntimeError.provider();
         throw RuntimeError.remote(env.err.id);
     }
 
     async hush(): Promise<void> {
-        await this.client.notify({ id: 1, name: "hush" }, null);
+        await this.peer.notify(QuietSender.PROTOCOL, { id: 1, name: "hush" }, null, { layout: "unit" });
     }
-}
-
-export function serveQuiet(impl: Quiet, transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<void> {
-    return new Server(new QuietDispatcher(impl), codec, framing).serve(transport, IR_HASH);
 }
 

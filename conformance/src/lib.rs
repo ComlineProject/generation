@@ -35,6 +35,8 @@ pub struct Fixture {
     pub validate_on_decode: ValidateOnDecode,
     /// Whether connection protocols get async handlers and senders.
     pub async_api: bool,
+    /// The package's `wire.format`; `None` is the built-in default.
+    pub wire_format: Option<&'static str>,
 }
 
 impl Fixture {
@@ -47,6 +49,7 @@ impl Fixture {
             external_std: false,
             validate_on_decode: ValidateOnDecode::Off,
             async_api: false,
+            wire_format: None,
         }
     }
 
@@ -60,6 +63,7 @@ impl Fixture {
             external_std: false,
             validate_on_decode: ValidateOnDecode::Off,
             async_api: false,
+            wire_format: None,
         }
     }
 
@@ -80,6 +84,11 @@ impl Fixture {
 
     fn with_async(mut self) -> Self {
         self.async_api = true;
+        self
+    }
+
+    fn with_format(mut self, format: &'static str) -> Self {
+        self.wire_format = Some(format);
         self
     }
 }
@@ -112,6 +121,8 @@ pub fn corpus() -> Vec<Fixture> {
         connections(),
         connections_async(),
         connections_jsonrpc(),
+        format_json(),
+        format_msgpack(),
     ]
 }
 
@@ -824,4 +835,14 @@ fn connections() -> Fixture {
             },
         ],
     )
+}
+
+/// [`protocol`] under `wire.format = "json@1"`.
+fn format_json() -> Fixture {
+    Fixture { name: "format_json", ..protocol() }.with_format("json@1")
+}
+
+/// [`protocol`] under `wire.format = "msgpack@1"`.
+fn format_msgpack() -> Fixture {
+    Fixture { name: "format_msgpack", ..protocol() }.with_format("msgpack@1")
 }

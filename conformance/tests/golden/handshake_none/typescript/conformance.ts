@@ -2,30 +2,38 @@
 // For TypeScript 5.0 or later; verified up to 5.9.
 
 import {
-    Client,
-    Server,
     RuntimeError,
     resolveKind,
-    DatagramFraming,
-    NoHandshake,
+    PackedCodec,
     type Codec,
+    type Connection,
     type Dispatch,
-    type Framing,
     type Kind,
+    type Layout,
+    type Peer,
     type Reply,
-    type Transport,
 } from "@comline/runtime";
 
 /** Canonical digest of the frozen IR this file was generated from — the
 *  two ends of a connection must agree on it. */
 export const IR_HASH = 0xb7e7d5c80c4d8287n;
 
+/** Digest of every schema in the package — what a connection's handshake
+*  checks, so both ends agree on each protocol's number. */
+export const CONNECTION_IR_HASH = 0xb7e7d5c80c4d8287n;
+
+/** The package's wire format (`wire.format`): what this file's helpers
+*  encode with, and what the peer has to speak too. */
+export const Format: Codec = new PackedCodec();
+
 export interface GatewayPingParams {
     n: number;
 }
 
+export const GatewayPingParamsLayout: Layout = { struct: [["n", "u32"]] };
+
 export interface Gateway {
-    ping(params: GatewayPingParams): Promise<number>;
+    ping(peer: Peer, params: GatewayPingParams): Promise<number>;
 }
 
 export const GATEWAY_CALLS = ["ping"] as const;
@@ -35,6 +43,9 @@ export const GATEWAY_CALLS = ["ping"] as const;
  * Reason given: the gateway predates Comline
  */
 export class GatewayDispatcher implements Dispatch {
+    /** This protocol's number on a connection. */
+    static readonly PROTOCOL = 0;
+
     private readonly impl: Gateway;
 
     constructor(impl: Gateway) {
@@ -45,12 +56,18 @@ export class GatewayDispatcher implements Dispatch {
         return GATEWAY_CALLS;
     }
 
-    async dispatch(call: Kind, params: Uint8Array, codec: Codec, reply: Reply): Promise<void> {
+    /** Only served on a connection, whose handlers are given the peer: anywhere else the caller hears a fault. */
+    async dispatch(_call: Kind, _params: Uint8Array, _codec: Codec, reply: Reply): Promise<void> {
+        reply.fault();
+    }
+
+    async dispatchWith(call: Kind, params: Uint8Array, reply: Reply, peer: Peer): Promise<void> {
+        const codec = peer.codec;
         switch (resolveKind(call, GATEWAY_CALLS)) {
             case 0: {
                 try {
-                    const p = codec.decode<GatewayPingParams>(params);
-                    reply.ok(codec.encode((await this.impl.ping(p)) ?? null));
+                    const p = codec.decode<GatewayPingParams>(params, GatewayPingParamsLayout);
+                    reply.ok(codec.encode((await this.impl.ping(peer, p)) ?? null, "u32"));
                 } catch {
                     reply.fault();
                 }
@@ -60,34 +77,33 @@ export class GatewayDispatcher implements Dispatch {
                 throw RuntimeError.unknownCall();
         }
     }
+
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH, framing, new NoHandshake())`, or let the package's `serve` / `connect` do it. */
+    provideOn(conn: Connection): void {
+        conn.provide(GatewayDispatcher.PROTOCOL, this);
+    }
 }
 
 /**
  * **Unverified:** gives up schema agreement and encoding agreement (handshake `none`).
  * Reason given: the gateway predates Comline
  */
-export class GatewayClient {
-    private readonly client: Client;
+/** Calls protocol `Gateway` on the other end of a connection: the peer a `Connection` reaches, or the one a handler was given. */
+export class GatewaySender {
+    /** This protocol's number on a connection. */
+    static readonly PROTOCOL = 0;
 
-    constructor(client: Client) {
-        this.client = client;
-    }
+    private readonly peer: Peer;
 
-    static async connect(transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<GatewayClient> {
-        // No handshake: `@handshake = "none"`.
-        return new GatewayClient(await Client.connect(transport, codec, IR_HASH, framing, new NoHandshake()));
+    constructor(peer: Peer) {
+        this.peer = peer;
     }
 
     async ping(params: GatewayPingParams): Promise<number> {
-        const env = await this.client.call({ id: 0, name: "ping" }, params);
-        if ("ok" in env) return this.client.codec.decode<number>(env.ok);
+        const env = await this.peer.call(GatewaySender.PROTOCOL, { id: 0, name: "ping" }, params, { layout: GatewayPingParamsLayout });
+        if ("ok" in env) return this.peer.codec.decode<number>(env.ok, "u32");
         if ("fault" in env) throw RuntimeError.provider();
         throw RuntimeError.remote(env.err.id);
     }
-}
-
-export function serveGateway(impl: Gateway, transport: Transport, codec: Codec, framing: Framing = new DatagramFraming()): Promise<void> {
-        // No handshake: `@handshake = "none"`.
-    return new Server(new GatewayDispatcher(impl), codec, framing).serve(transport, IR_HASH, new NoHandshake());
 }
 

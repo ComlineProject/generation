@@ -6,7 +6,7 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 
 | Feature | rust ≥ 1.85.0 | typescript ≥ 5.0 |
 |---|---|---|
-| structs <br><sub>`structs`</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +9 more</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +11 more</sub> |
+| structs <br><sub>`structs`</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +11 more</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +12 more</sub> |
 | enums <br><sub>`enums`</sub> | ✅ supported <br><sub>proven by `enum_basic`</sub> | ✅ supported <br><sub>proven by `enum_basic`</sub> |
 | optional fields <br><sub>`optional-fields`</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +3 more</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +4 more</sub> |
 | arrays <br><sub>`arrays`</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +3 more</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +4 more</sub> |
@@ -15,9 +15,9 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 | unions <br><sub>`unions`</sub> | ❌ unsupported: Rust has no anonymous sum type to render one as <br><sub>proven by `unions`</sub> | ✅ supported <br><sub>proven by `unions`</sub> |
 | type aliases <br><sub>`type-aliases`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`, `unions`</sub> |
 | constants <br><sub>`constants`</sub> | ✅ supported <br><sub>proven by `constant`, `shapes`, `validators` +1 more</sub> | ✅ supported <br><sub>proven by `constant`, `shapes`, `validators` +1 more</sub> |
-| protocols <br><sub>`protocols`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +6 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +6 more</sub> |
-| errors <br><sub>`errors`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> |
-| functions that throw <br><sub>`throws`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`</sub> |
+| protocols <br><sub>`protocols`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +8 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +7 more</sub> |
+| errors <br><sub>`errors`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `format_json` +1 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `format_json`</sub> |
+| functions that throw <br><sub>`throws`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `format_json` +1 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `format_json`</sub> |
 | validators <br><sub>`validators`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`</sub> | ⚪ ignored: the types are generated; the checks aren't run yet (core#96) <br><sub>proven by `validators`, `validators_on_decode`</sub> |
 | imports between schemas <br><sub>`imports`</sub> | ✅ supported <br><sub>proven by `cross_schema`, `import_alias`, `import_glob` +4 more</sub> | ✅ supported <br><sub>proven by `cross_schema`, `import_alias`, `import_glob` +4 more</sub> |
 | nested namespaces <br><sub>`nested-namespaces`</sub> | ✅ supported <br><sub>proven by `nested_namespace`, `external_std`, `validators` +1 more</sub> | ✅ supported <br><sub>proven by `nested_namespace`, `external_std`, `validators` +1 more</sub> |
@@ -26,5 +26,8 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 | `validate_on_decode` <br><sub>`validate-on-decode`</sub> | ✅ supported <br><sub>proven by `validators_on_decode`</sub> | ⚪ ignored: no checks are generated to run on decode yet (core#96) <br><sub>proven by `validators_on_decode`</sub> |
 | JSON-RPC framing <br><sub>`framing-jsonrpc`</sub> | ✅ supported <br><sub>proven by `framing_jsonrpc`, `connections_jsonrpc`</sub> | ✅ supported <br><sub>proven by `framing_jsonrpc`, `connections_jsonrpc`</sub> |
 | no handshake <br><sub>`handshake-none`</sub> | ✅ supported <br><sub>proven by `handshake_none`</sub> | ✅ supported <br><sub>proven by `handshake_none`</sub> |
-| connections <br><sub>`connections`</sub> | ✅ supported <br><sub>proven by `connections`, `connections_async`, `connections_jsonrpc`</sub> | ✅ supported <br><sub>proven by `connections`, `connections_async`, `connections_jsonrpc`</sub> |
+| connections <br><sub>`connections`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +7 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +6 more</sub> |
 | `async` <br><sub>`async`</sub> | ✅ supported <br><sub>proven by `connections_async`</sub> | ⚪ ignored: handlers and senders always return Promises: the output is async either way <br><sub>proven by `connections_async`</sub> |
+| the `packed@1` format <br><sub>`format-packed`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +4 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +4 more</sub> |
+| the `json@1` format <br><sub>`format-json`</sub> | ✅ supported <br><sub>proven by `format_json`</sub> | ✅ supported <br><sub>proven by `format_json`</sub> |
+| the `msgpack@1` format <br><sub>`format-msgpack`</sub> | ✅ supported <br><sub>proven by `format_msgpack`</sub> | ❌ unsupported: `@comline/runtime` has no MessagePack codec yet <br><sub>proven by `format_msgpack`</sub> |

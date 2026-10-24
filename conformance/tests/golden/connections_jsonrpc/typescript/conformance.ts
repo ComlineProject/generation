@@ -8,6 +8,7 @@ import {
     type Connection,
     type Dispatch,
     type Kind,
+    type Layout,
     type Peer,
     type Reply,
 } from "@comline/runtime";
@@ -23,6 +24,8 @@ export const CONNECTION_IR_HASH = 0x30c29bde2ae397d9n;
 export interface ChatSendParams {
     n: number;
 }
+
+export const ChatSendParamsLayout: Layout = { struct: [["n", "u32"]] };
 
 export interface Chat {
     send(peer: Peer, params: ChatSendParams): Promise<number>;
@@ -54,8 +57,8 @@ export class ChatDispatcher implements Dispatch {
         switch (resolveKind(call, CHAT_CALLS)) {
             case 0: {
                 try {
-                    const p = codec.decode<ChatSendParams>(params);
-                    reply.ok(codec.encode((await this.impl.send(peer, p)) ?? null));
+                    const p = codec.decode<ChatSendParams>(params, ChatSendParamsLayout);
+                    reply.ok(codec.encode((await this.impl.send(peer, p)) ?? null, "u32"));
                 } catch {
                     reply.fault();
                 }
@@ -66,7 +69,7 @@ export class ChatDispatcher implements Dispatch {
         }
     }
 
-    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, codec, CONNECTION_IR_HASH, new JsonRpcConnectionFraming())`. */
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, new JsonCodec(), CONNECTION_IR_HASH, new JsonRpcConnectionFraming())`, or let the package's `serve` / `connect` do it. */
     provideOn(conn: Connection): void {
         conn.provide(ChatDispatcher.PROTOCOL, this);
     }
@@ -84,8 +87,8 @@ export class ChatSender {
     }
 
     async send(params: ChatSendParams): Promise<number> {
-        const env = await this.peer.call(ChatSender.PROTOCOL, { id: 0, name: "send" }, params);
-        if ("ok" in env) return this.peer.codec.decode<number>(env.ok);
+        const env = await this.peer.call(ChatSender.PROTOCOL, { id: 0, name: "send" }, params, { layout: ChatSendParamsLayout });
+        if ("ok" in env) return this.peer.codec.decode<number>(env.ok, "u32");
         if ("fault" in env) throw RuntimeError.provider();
         throw RuntimeError.remote(env.err.id);
     }
@@ -94,6 +97,8 @@ export class ChatSender {
 export interface EventsShownParams {
     n: number;
 }
+
+export const EventsShownParamsLayout: Layout = { struct: [["n", "u32"]] };
 
 export interface Events {
     shown(peer: Peer, params: EventsShownParams): Promise<boolean>;
@@ -126,8 +131,8 @@ export class EventsDispatcher implements Dispatch {
         switch (resolveKind(call, EVENTS_CALLS)) {
             case 0: {
                 try {
-                    const p = codec.decode<EventsShownParams>(params);
-                    reply.ok(codec.encode((await this.impl.shown(peer, p)) ?? null));
+                    const p = codec.decode<EventsShownParams>(params, EventsShownParamsLayout);
+                    reply.ok(codec.encode((await this.impl.shown(peer, p)) ?? null, "bool"));
                 } catch {
                     reply.fault();
                 }
@@ -146,7 +151,7 @@ export class EventsDispatcher implements Dispatch {
         }
     }
 
-    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, codec, CONNECTION_IR_HASH, new JsonRpcConnectionFraming())`. */
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.connect(transport, new JsonCodec(), CONNECTION_IR_HASH, new JsonRpcConnectionFraming())`, or let the package's `serve` / `connect` do it. */
     provideOn(conn: Connection): void {
         conn.provide(EventsDispatcher.PROTOCOL, this);
     }
@@ -164,14 +169,14 @@ export class EventsSender {
     }
 
     async shown(params: EventsShownParams): Promise<boolean> {
-        const env = await this.peer.call(EventsSender.PROTOCOL, { id: 0, name: "conformance.Events/shown" }, params);
-        if ("ok" in env) return this.peer.codec.decode<boolean>(env.ok);
+        const env = await this.peer.call(EventsSender.PROTOCOL, { id: 0, name: "conformance.Events/shown" }, params, { layout: EventsShownParamsLayout });
+        if ("ok" in env) return this.peer.codec.decode<boolean>(env.ok, "bool");
         if ("fault" in env) throw RuntimeError.provider();
         throw RuntimeError.remote(env.err.id);
     }
 
     async ping(): Promise<void> {
-        await this.peer.notify(EventsSender.PROTOCOL, { id: 1, name: "conformance.Events/ping" }, null);
+        await this.peer.notify(EventsSender.PROTOCOL, { id: 1, name: "conformance.Events/ping" }, null, { layout: "unit" });
     }
 }
 
