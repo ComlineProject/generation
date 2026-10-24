@@ -263,6 +263,7 @@ impl<'a> Validation<'a> {
             ConfigValue::Name(r) | ConfigValue::Path(r) => self.reference(ns, r),
             ConfigValue::FString(_) => Err(eyre!("an f-string isn't a validator argument")),
             ConfigValue::Marker => Err(eyre!("no value given")),
+            ConfigValue::Dict(_) => Err(eyre!("a dictionary isn't a validator argument")),
         }
     }
 

@@ -11,7 +11,7 @@ publish = false
 # to their own repos. See design/runtime-repo-structure.md (rollout step 3).
 
 [dependencies]
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "a3f9eef50c939b4cd5e7563f96d67c8db4012747" }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "a5d6f8597c8c2f4ac44ae9feabfdfbb4bb671e82" }
 # Not dev-only: a `Fixture` states the `Mode` it exercises, so the contract
 # types are part of the corpus's own public shape.
 comline-codegen = { path = "../codegen" }
