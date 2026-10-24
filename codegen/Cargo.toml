@@ -8,7 +8,7 @@ license = "GPL-3.0-only"
 # Interim: track `core` by git rev (see design/runtime-repo-structure.md — no
 # crates.io publishing at this stage). Local iteration: uncomment the
 # workspace-root [patch] onto a sibling checkout.
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "eb5802f2d8ab12fcf8f9b63afba10d71dcbbc98d" }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "7a73f629b4867e26cedb7d28adb250c15de2414f" }
 
 eyre = "0.6.8"
 serde_json = "1.0"
