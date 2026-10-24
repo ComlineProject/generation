@@ -77,6 +77,11 @@ impl Fixture {
         self.validate_on_decode = on_decode;
         self
     }
+
+    fn with_async(mut self) -> Self {
+        self.async_api = true;
+        self
+    }
 }
 
 /// Every fixture, in a stable order.
@@ -105,6 +110,7 @@ pub fn corpus() -> Vec<Fixture> {
         framing_jsonrpc(),
         handshake_none(),
         connections(),
+        connections_async(),
     ]
 }
 
@@ -750,6 +756,12 @@ fn handshake_none() -> Fixture {
 
 /// Two protocols on one connection: `Chat`, which the accepting side
 /// provides over `datagram@2`, and `Events`, which the dialling side does.
+/// `connections`, with `async`: the same protocols, generated for an async
+/// driver where a generator has one.
+fn connections_async() -> Fixture {
+    Fixture { name: "connections_async", ..connections() }.with_async()
+}
+
 fn connections() -> Fixture {
     let datagram2 = || FrozenUnit::Property {
         name: "framing".to_string(),
