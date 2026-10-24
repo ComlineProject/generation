@@ -33,6 +33,8 @@ pub struct Fixture {
     pub external_std: bool,
     /// Whether decoding runs the `@validators` checks.
     pub validate_on_decode: ValidateOnDecode,
+    /// Whether connection protocols get async handlers and senders.
+    pub async_api: bool,
 }
 
 impl Fixture {
@@ -44,6 +46,7 @@ impl Fixture {
             mode: Mode::Code,
             external_std: false,
             validate_on_decode: ValidateOnDecode::Off,
+            async_api: false,
         }
     }
 
@@ -56,6 +59,7 @@ impl Fixture {
             mode: Mode::Code,
             external_std: false,
             validate_on_decode: ValidateOnDecode::Off,
+            async_api: false,
         }
     }
 
@@ -71,6 +75,11 @@ impl Fixture {
 
     fn with_validate_on_decode(mut self, on_decode: ValidateOnDecode) -> Self {
         self.validate_on_decode = on_decode;
+        self
+    }
+
+    fn with_async(mut self) -> Self {
+        self.async_api = true;
         self
     }
 }
@@ -101,6 +110,7 @@ pub fn corpus() -> Vec<Fixture> {
         framing_jsonrpc(),
         handshake_none(),
         connections(),
+        connections_async(),
     ]
 }
 
@@ -746,6 +756,12 @@ fn handshake_none() -> Fixture {
 
 /// Two protocols on one connection: `Chat`, which the accepting side
 /// provides over `datagram@2`, and `Events`, which the dialling side does.
+/// `connections`, with `async`: the same protocols, generated for an async
+/// driver where a generator has one.
+fn connections_async() -> Fixture {
+    Fixture { name: "connections_async", ..connections() }.with_async()
+}
+
 fn connections() -> Fixture {
     let datagram2 = || FrozenUnit::Property {
         name: "framing".to_string(),

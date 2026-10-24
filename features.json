@@ -104,6 +104,11 @@
       "description": "protocols on a connection, with calls in both directions: `@framing = \"datagram@2\"`, or `@provider = Client` / `Multiple`",
       "id": "connections",
       "title": "connections"
+    },
+    {
+      "description": "`[generate] async`: connection protocols get async handlers and senders",
+      "id": "async",
+      "title": "`async`"
     }
   ],
   "generators": [
@@ -124,10 +129,20 @@
           "state": "supported",
           "tracking": null
         },
+        "async": {
+          "note": null,
+          "proven_by": [
+            "connections_async"
+          ],
+          "since": null,
+          "state": "supported",
+          "tracking": null
+        },
         "connections": {
           "note": "over `datagram@2`; JSON-RPC on a connection isn't supported yet",
           "proven_by": [
-            "connections"
+            "connections",
+            "connections_async"
           ],
           "since": null,
           "state": "partial",
@@ -269,7 +284,8 @@
             "validators_on_decode",
             "framing_jsonrpc",
             "handshake_none",
-            "connections"
+            "connections",
+            "connections_async"
           ],
           "since": null,
           "state": "supported",
@@ -370,10 +386,20 @@
           "state": "supported",
           "tracking": null
         },
+        "async": {
+          "note": "handlers and senders always return Promises: the output is async either way",
+          "proven_by": [
+            "connections_async"
+          ],
+          "since": null,
+          "state": "ignored",
+          "tracking": null
+        },
         "connections": {
           "note": "over `datagram@2`; JSON-RPC on a connection isn't supported yet",
           "proven_by": [
-            "connections"
+            "connections",
+            "connections_async"
           ],
           "since": null,
           "state": "partial",
@@ -517,7 +543,8 @@
             "validators_on_decode",
             "framing_jsonrpc",
             "handshake_none",
-            "connections"
+            "connections",
+            "connections_async"
           ],
           "since": null,
           "state": "supported",

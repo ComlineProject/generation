@@ -56,6 +56,7 @@ pub enum Feature {
     FramingJsonRpc,
     HandshakeNone,
     Connections,
+    Async,
 }
 
 impl Feature {
@@ -82,6 +83,7 @@ impl Feature {
         Feature::FramingJsonRpc,
         Feature::HandshakeNone,
         Feature::Connections,
+        Feature::Async,
     ];
 
     /// The stable id: `unions`, `validate-on-decode`.
@@ -108,6 +110,7 @@ impl Feature {
             Feature::FramingJsonRpc => "framing-jsonrpc",
             Feature::HandshakeNone => "handshake-none",
             Feature::Connections => "connections",
+            Feature::Async => "async",
         }
     }
 
@@ -140,6 +143,7 @@ impl Feature {
             Feature::FramingJsonRpc => "JSON-RPC framing",
             Feature::HandshakeNone => "no handshake",
             Feature::Connections => "connections",
+            Feature::Async => "`async`",
         }
     }
 
@@ -173,6 +177,7 @@ impl Feature {
                 "protocols on a connection, with calls in both directions: \
                  `@framing = \"datagram@2\"`, or `@provider = Client` / `Multiple`"
             }
+            Feature::Async => "`[generate] async`: connection protocols get async handlers and senders",
         }
     }
 }
@@ -291,6 +296,7 @@ pub struct Options {
     pub external_std: bool,
     pub validate_on_decode: ValidateOnDecode,
     pub default_framing: Option<String>,
+    pub async_api: bool,
 }
 
 impl Options {
@@ -300,6 +306,7 @@ impl Options {
             external_std: req.external_std,
             validate_on_decode: req.validate_on_decode,
             default_framing: req.default_framing.clone(),
+            async_api: req.async_api,
         }
     }
 }
@@ -320,6 +327,7 @@ pub struct FeatureUse {
 pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<FeatureUse> {
     let mut uses = Vec::new();
     let mut validators = false;
+    let mut connections = false;
 
     for (namespace, units) in schemas {
         let mut push = |feature, owner: String, span: Option<(usize, usize)>| {
@@ -370,6 +378,7 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                     }
                     if crate::connections::on_connection(parameters, options.default_framing.as_deref()) {
                         push(Feature::Connections, owner.clone(), Some(*span));
+                        connections = true;
                     }
                     for function in functions {
                         let FrozenUnit::Function { name: f, arguments, _return, throws, span, .. } = function
@@ -406,6 +415,10 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
     // Only a schema with checks to run makes the option mean anything.
     if validators && options.validate_on_decode != ValidateOnDecode::Off {
         option(Feature::ValidateOnDecode, "the generation request (`validate_on_decode`)");
+    }
+    // Only connection protocols have an async form.
+    if connections && options.async_api {
+        option(Feature::Async, "the generation request (`async`)");
     }
 
     uses
@@ -613,6 +626,7 @@ pub fn strip(
             let options = Options { validate_on_decode: ValidateOnDecode::Off, ..options.clone() };
             Some((schemas.to_vec(), options))
         }
+        Feature::Async => Some((schemas.to_vec(), Options { async_api: false, ..options.clone() })),
         _ => None,
     }
 }
@@ -792,6 +806,26 @@ mod tests {
         // Stripped, neither is left.
         let (schemas, options) = strip(Feature::Validators, &schemas, &options).unwrap();
         assert_eq!(ids(&used(&schemas, &options)), ["type-aliases"]);
+    }
+
+    #[test]
+    fn async_is_only_a_use_with_a_protocol_on_a_connection() {
+        let protocol = |name: &str| FrozenUnit::Protocol {
+            docstring: String::new(),
+            parameters: vec![],
+            name: name.into(),
+            functions: vec![],
+            span: (0, 1),
+        };
+        let schemas = [("api".to_string(), vec![protocol("Chat")])];
+        let asynchronous = Options { async_api: true, ..Options::default() };
+        // A plain client/server protocol has no async form.
+        assert_eq!(ids(&used(&schemas, &asynchronous)), ["protocols"]);
+
+        let on_connection = Options { default_framing: Some("datagram@2".into()), ..asynchronous.clone() };
+        assert_eq!(ids(&used(&schemas, &on_connection)), ["protocols", "connections", "async"]);
+        let (schemas, options) = strip(Feature::Async, &schemas, &on_connection).unwrap();
+        assert_eq!(ids(&used(&schemas, &options)), ["protocols", "connections"]);
     }
 
     /// `@validators = [V()]` on `type Name = string`.

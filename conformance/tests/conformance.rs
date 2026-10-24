@@ -63,6 +63,7 @@ fn options(fx: &Fixture) -> Options {
         external_std: fx.external_std,
         validate_on_decode: fx.validate_on_decode,
         default_framing: None,
+        async_api: fx.async_api,
     }
 }
 
@@ -106,6 +107,7 @@ fn request_for<'a>(
         default_framing: options.default_framing.clone(),
         external_std: options.external_std,
         validate_on_decode: options.validate_on_decode,
+        async_api: options.async_api,
     }
 }
 
