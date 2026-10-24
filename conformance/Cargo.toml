@@ -11,7 +11,7 @@ publish = false
 # to their own repos. See design/runtime-repo-structure.md (rollout step 3).
 
 [dependencies]
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "eb5802f2d8ab12fcf8f9b63afba10d71dcbbc98d" }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "a3f9eef50c939b4cd5e7563f96d67c8db4012747" }
 # Not dev-only: a `Fixture` states the `Mode` it exercises, so the contract
 # types are part of the corpus's own public shape.
 comline-codegen = { path = "../codegen" }
@@ -19,5 +19,5 @@ comline-codegen = { path = "../codegen" }
 [dev-dependencies]
 eyre = "0.6.8"
 serde_json = "1.0"
-comline-codegen-rust = { git = "https://github.com/ComlineProject/comline-rust", rev = "bbf2fcf4055e4902a5f8d1467a3722951dfac86c" }
-comline-codegen-typescript = { git = "https://github.com/ComlineProject/comline-typescript", rev = "928fe4e23441846ad9e2f49478ad2a352a38c81c" }
+comline-codegen-rust = { git = "https://github.com/ComlineProject/comline-rust", rev = "577bdb2910db8b3aedb6061f5436816836a08942" }
+comline-codegen-typescript = { git = "https://github.com/ComlineProject/comline-typescript", rev = "c72d14efa93135f892c04c6546f690a8e65b6cc1" }
