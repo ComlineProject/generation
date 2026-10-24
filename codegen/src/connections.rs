@@ -2,9 +2,9 @@
 //! on the wire, and the hash a connection's handshake checks.
 //!
 //! A protocol runs on a `Connection` (the runtime's, calls in both
-//! directions) when it uses `datagram@2`, or when the client provides it
-//! (`@provider = Client` or `Multiple`), which core only allows with a
-//! framing that tells requests from replies. JSON-RPC's frames look the same
+//! directions) when it uses `datagram@2`, the default, or when the client
+//! provides it (`@provider = Client` or `Multiple`), which core only allows
+//! with a framing that tells requests from replies. JSON-RPC's frames look the same
 //! either way, so once any JSON-RPC protocol in the package runs on a
 //! connection, every JSON-RPC protocol does: the server's API shares the
 //! connection its calls to the client use. The rest keep the lockstep
@@ -21,7 +21,9 @@
 //! the same IR, which the handshake checks with [`connection_ir_hash`], so
 //! they agree. `comline@2` will hand numbers out at the handshake instead.
 
-use comline_core::schema::idl::annotations::{FramingValue, MethodNames, FRAMING_DATAGRAM2, FRAMING_JSONRPC};
+use comline_core::schema::idl::annotations::{
+    FramingValue, MethodNames, DEFAULT_FRAMING, DEFAULT_HANDSHAKE, FRAMING_DATAGRAM2, FRAMING_JSONRPC,
+};
 use comline_core::schema::ir::frozen::schema_ir_hash;
 use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenUnit};
 use eyre::{bail, Result};
@@ -47,38 +49,29 @@ impl Provider {
     }
 }
 
-/// A protocol's framing: its own `@framing` in either form, else the
-/// package's `default_framing`. `None` when neither names a known one.
-pub fn framing(parameters: &[FrozenUnit], default_framing: Option<&str>) -> Option<FramingValue> {
-    let own = parameters.iter().find_map(|p| match p {
-        FrozenUnit::Property { name, value } if name == "framing" => Some(value),
-        _ => None,
-    });
-    match own {
-        Some(value) => FramingValue::of(value),
-        None => default_framing.and_then(FramingValue::named),
-    }
+/// A protocol's framing: its `@framing` in either form, else `datagram@2`.
+/// Core has already written the package's `wire.framing` into every
+/// protocol without its own, so this is the whole resolution.
+pub fn framing(parameters: &[FrozenUnit]) -> FramingValue {
+    FramingValue::of_protocol(parameters)
+        .or_else(|| FramingValue::named(DEFAULT_FRAMING))
+        .expect("the default framing is a known one")
 }
 
 /// Whether a protocol with these parameters, in a package of `schemas`,
 /// runs on a connection.
-pub fn on_connection(
-    schemas: &[(String, Vec<FrozenUnit>)],
-    parameters: &[FrozenUnit],
-    default_framing: Option<&str>,
-) -> bool {
-    let name = framing(parameters, default_framing).map(|f| f.name);
-    name == Some(FRAMING_DATAGRAM2)
+pub fn on_connection(schemas: &[(String, Vec<FrozenUnit>)], parameters: &[FrozenUnit]) -> bool {
+    let name = framing(parameters).name;
+    name == FRAMING_DATAGRAM2
         || Provider::of(parameters) != Provider::Server
-        || (name == Some(FRAMING_JSONRPC) && jsonrpc_on_connection(schemas, default_framing))
+        || (name == FRAMING_JSONRPC && jsonrpc_on_connection(schemas))
 }
 
 /// Whether any JSON-RPC protocol in `schemas` runs on a connection, which
 /// puts all of them on it.
-fn jsonrpc_on_connection(schemas: &[(String, Vec<FrozenUnit>)], default_framing: Option<&str>) -> bool {
+fn jsonrpc_on_connection(schemas: &[(String, Vec<FrozenUnit>)]) -> bool {
     protocols(schemas).any(|(_, _, parameters, _)| {
-        framing(parameters, default_framing).map(|f| f.name) == Some(FRAMING_JSONRPC)
-            && Provider::of(parameters) != Provider::Server
+        framing(parameters).name == FRAMING_JSONRPC && Provider::of(parameters) != Provider::Server
     })
 }
 
@@ -96,8 +89,8 @@ pub fn method_name(namespace: &str, protocol: &str, function: &str, names: Metho
 /// Refuses JSON-RPC protocols on one connection whose bare method names one
 /// side couldn't tell apart: two protocols the same side provides, both
 /// with a function of the same name.
-pub fn check(schemas: &[(String, Vec<FrozenUnit>)], default_framing: Option<&str>) -> Result<()> {
-    let problems = bare_name_clashes(schemas, default_framing);
+pub fn check(schemas: &[(String, Vec<FrozenUnit>)]) -> Result<()> {
+    let problems = bare_name_clashes(schemas);
     if !problems.is_empty() {
         bail!("{}", problems.join("\n"));
     }
@@ -105,7 +98,7 @@ pub fn check(schemas: &[(String, Vec<FrozenUnit>)], default_framing: Option<&str
 }
 
 /// [`check`]'s problems, one sentence each.
-pub fn bare_name_clashes(schemas: &[(String, Vec<FrozenUnit>)], default_framing: Option<&str>) -> Vec<String> {
+pub fn bare_name_clashes(schemas: &[(String, Vec<FrozenUnit>)]) -> Vec<String> {
     let mut problems = Vec::new();
     // Each side looks a method up among the protocols it provides.
     for (side, provides) in [
@@ -114,11 +107,11 @@ pub fn bare_name_clashes(schemas: &[(String, Vec<FrozenUnit>)], default_framing:
     ] {
         let mut seen: Vec<(&str, String)> = Vec::new();
         for (namespace, name, parameters, functions) in protocols(schemas) {
-            let framing = framing(parameters, default_framing);
-            let bare = framing.is_some_and(|f| f.name == FRAMING_JSONRPC && f.method_names == MethodNames::Bare);
+            let framing = framing(parameters);
+            let bare = framing.name == FRAMING_JSONRPC && framing.method_names == MethodNames::Bare;
             if !bare
                 || !provides.contains(&Provider::of(parameters))
-                || !on_connection(schemas, parameters, default_framing)
+                || !on_connection(schemas, parameters)
             {
                 continue;
             }
@@ -140,6 +133,84 @@ pub fn bare_name_clashes(schemas: &[(String, Vec<FrozenUnit>)], default_framing:
         }
     }
     problems
+}
+
+/// One protocol a side provides on the package's connection, for the
+/// `Services` a generator emits.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Provided {
+    /// The schema it's declared in.
+    pub namespace: String,
+    pub name: String,
+    /// Its field in `Services`, snake case: the protocol's name, prefixed
+    /// with its namespace only where two the same side provides would
+    /// otherwise share one.
+    pub field: String,
+}
+
+/// The package's one connection: how it frames and greets, and what each
+/// side provides on it. A generator emits `Services` and a package-level
+/// `serve` / `connect` from it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackageConnection {
+    /// Canonical: `datagram@2` or `jsonrpc`.
+    pub framing: &'static str,
+    /// Canonical: `comline@1` or `none`.
+    pub handshake: String,
+    /// What the accepting side provides (`@provider = Server`, the default,
+    /// and `Multiple`).
+    pub server: Vec<Provided>,
+    /// What the dialling side provides (`Client` and `Multiple`).
+    pub client: Vec<Provided>,
+}
+
+/// The package's connection, when its protocols on one agree on a framing
+/// and a handshake. `Ok(None)` when no protocol is on a connection; `Err`,
+/// one sentence, when they disagree, since no single connection carries
+/// them.
+pub fn package_connection(schemas: &[(String, Vec<FrozenUnit>)]) -> Result<Option<PackageConnection>, String> {
+    let on: Vec<_> = protocols(schemas).filter(|(_, _, parameters, _)| on_connection(schemas, parameters)).collect();
+    let Some((first_ns, first, first_parameters, _)) = on.first() else {
+        return Ok(None);
+    };
+    let framing_name = framing(first_parameters).name;
+    let handshake_name = property(first_parameters, "handshake").unwrap_or(DEFAULT_HANDSHAKE);
+    for (namespace, name, parameters, _) in &on[1..] {
+        let (f, h) = (framing(parameters).name, property(parameters, "handshake").unwrap_or(DEFAULT_HANDSHAKE));
+        if f != framing_name {
+            return Err(format!(
+                "`{first_ns}::{first}` is on a `{framing_name}` connection and `{namespace}::{name}` on a `{f}` \
+                 one, so there's no one connection to serve them on"
+            ));
+        }
+        if h != handshake_name {
+            return Err(format!(
+                "`{first_ns}::{first}` runs the `{handshake_name}` handshake and `{namespace}::{name}` the `{h}` \
+                 one, so there's no one connection to serve them on"
+            ));
+        }
+    }
+    let side = |sides: [Provider; 2]| {
+        let provided: Vec<_> =
+            on.iter().filter(|(_, _, parameters, _)| sides.contains(&Provider::of(parameters))).collect();
+        provided
+            .iter()
+            .map(|(namespace, name, _, _)| {
+                let clash = provided.iter().filter(|(_, other, _, _)| other == name).count() > 1;
+                let field = match clash {
+                    true => format!("{}_{}", namespace.replace("::", "_").replace('/', "_"), crate::naming::snake(name)),
+                    false => crate::naming::snake(name),
+                };
+                Provided { namespace: namespace.to_string(), name: name.to_string(), field }
+            })
+            .collect()
+    };
+    Ok(Some(PackageConnection {
+        framing: framing_name,
+        handshake: handshake_name.to_string(),
+        server: side([Provider::Server, Provider::Multiple]),
+        client: side([Provider::Client, Provider::Multiple]),
+    }))
 }
 
 /// Every protocol in `schemas`: its namespace, name, parameters and
@@ -265,20 +336,54 @@ mod tests {
     }
 
     #[test]
-    fn datagram2_or_a_client_provider_puts_a_protocol_on_a_connection() {
-        let alone = |parameters: Vec<FrozenUnit>, default: Option<&str>| {
+    fn datagram2_by_default_or_a_client_provider_puts_a_protocol_on_a_connection() {
+        let alone = |parameters: Vec<FrozenUnit>| {
             let schemas = vec![("app".to_string(), vec![protocol("P", parameters.clone())])];
-            on_connection(&schemas, &parameters, default)
+            on_connection(&schemas, &parameters)
         };
-        assert!(!alone(vec![], None));
-        assert!(!alone(vec![framing("jsonrpc")], None));
-        assert!(alone(vec![framing("datagram@2")], None));
-        assert!(alone(vec![], Some("datagram@2")));
-        assert!(!alone(vec![framing("datagram")], Some("datagram@2")));
-        assert!(alone(vec![provider("Client"), framing("jsonrpc")], None));
-        assert!(alone(vec![provider("Client"), qualified()], None));
-        assert!(alone(vec![provider("Multiple")], None));
-        assert!(!alone(vec![provider("Server")], None));
+        assert!(alone(vec![]));
+        assert!(alone(vec![provider("Server")]));
+        assert!(alone(vec![framing("datagram@2")]));
+        assert!(!alone(vec![framing("datagram")]));
+        assert!(!alone(vec![framing("datagram@1")]));
+        assert!(!alone(vec![framing("jsonrpc")]));
+        assert!(alone(vec![provider("Client"), framing("jsonrpc")]));
+        assert!(alone(vec![provider("Client"), qualified()]));
+        assert!(alone(vec![provider("Multiple")]));
+    }
+
+    #[test]
+    fn the_package_connection_says_what_each_side_provides() {
+        let schemas = vec![
+            ("game".to_string(), vec![protocol("Account", vec![]), protocol("Player", vec![provider("Multiple")])]),
+            ("game::admin".to_string(), vec![protocol("Player", vec![]), protocol("Events", vec![provider("Client")])]),
+            ("legacy".to_string(), vec![protocol("Old", vec![framing("datagram")])]),
+        ];
+        let c = package_connection(&schemas).unwrap().unwrap();
+        assert_eq!((c.framing, c.handshake.as_str()), ("datagram@2", "comline@1"));
+        let fields = |side: &[Provided]| side.iter().map(|p| p.field.clone()).collect::<Vec<_>>();
+        // Two `Player`s on the server side: both prefixed; the lone one on
+        // the client side isn't.
+        assert_eq!(fields(&c.server), ["account", "game_player", "game_admin_player"]);
+        assert_eq!(fields(&c.client), ["player", "events"]);
+
+        assert_eq!(package_connection(&[("legacy".to_string(), vec![protocol("Old", vec![framing("datagram")])])]), Ok(None));
+    }
+
+    #[test]
+    fn protocols_that_disagree_have_no_package_connection() {
+        let none = property("handshake", ConfigValue::Str("none".to_string()));
+        let schemas =
+            vec![("app".to_string(), vec![protocol("A", vec![]), protocol("B", vec![none])])];
+        let err = package_connection(&schemas).unwrap_err();
+        assert!(err.contains("`app::A` runs the `comline@1` handshake and `app::B` the `none` one"), "{err}");
+
+        let schemas = vec![(
+            "app".to_string(),
+            vec![protocol("A", vec![]), protocol("B", vec![provider("Client"), framing("jsonrpc")])],
+        )];
+        let err = package_connection(&schemas).unwrap_err();
+        assert!(err.contains("`datagram@2` connection and `app::B` on a `jsonrpc` one"), "{err}");
     }
 
     #[test]
@@ -290,10 +395,10 @@ mod tests {
                 ("events".to_string(), vec![protocol("Events", client)]),
             ]
         };
-        assert!(!on_connection(&schemas(vec![framing("jsonrpc")]), &chat, None));
-        assert!(on_connection(&schemas(vec![provider("Client"), qualified()]), &chat, None));
+        assert!(!on_connection(&schemas(vec![framing("jsonrpc")]), &chat));
+        assert!(on_connection(&schemas(vec![provider("Client"), qualified()]), &chat));
         // A datagram@2 connection doesn't take JSON-RPC protocols along.
-        assert!(!on_connection(&schemas(vec![provider("Client"), framing("datagram@2")]), &chat, None));
+        assert!(!on_connection(&schemas(vec![provider("Client"), framing("datagram@2")]), &chat));
     }
 
     #[test]
@@ -311,20 +416,20 @@ mod tests {
 
         // Both provided by the server, both bare: `send` is ambiguous.
         let clash = vec![("app".to_string(), vec![chat(vec![framing("jsonrpc")]), admin(vec![framing("jsonrpc")]), events.clone()])];
-        let problems = bare_name_clashes(&clash, None);
+        let problems = bare_name_clashes(&clash);
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert!(problems[0].contains("`app::Chat` and `app::Admin` both have a function `send`"), "{problems:?}");
         assert!(problems[0].contains("the server provides both"), "{problems:?}");
-        assert!(check(&clash, None).is_err());
+        assert!(check(&clash).is_err());
 
         // Qualifying either is enough; `Events` is the client's, so its
         // `send` never meets the server's.
         let fine = vec![("app".to_string(), vec![chat(vec![framing("jsonrpc")]), admin(vec![qualified()]), events.clone()])];
-        assert!(check(&fine, None).is_ok());
+        assert!(check(&fine).is_ok());
 
         // Off a connection there's one protocol per server, so nothing clashes.
         let lockstep = vec![("app".to_string(), vec![chat(vec![framing("jsonrpc")]), admin(vec![framing("jsonrpc")])])];
-        assert!(check(&lockstep, None).is_ok());
+        assert!(check(&lockstep).is_ok());
     }
 
     #[test]

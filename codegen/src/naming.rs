@@ -49,6 +49,11 @@ pub fn screaming_snake(s: &str) -> String {
     out
 }
 
+/// `UserService` → `user_service`: [`screaming_snake`], lowered.
+pub fn snake(s: &str) -> String {
+    screaming_snake(s).to_lowercase()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,6 +78,12 @@ mod tests {
         // judgement call, and this helper doesn't make it.
         assert_eq!(camel("HTTP_server"), "hTTPServer");
         assert_eq!(camel(""), "");
+    }
+
+    #[test]
+    fn snake_lowers_the_split_words() {
+        assert_eq!(snake("CharacterInventory"), "character_inventory");
+        assert_eq!(snake("account"), "account");
     }
 
     #[test]

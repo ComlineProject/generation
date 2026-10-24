@@ -19,7 +19,9 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use comline_core::schema::ir::frozen::types::TypeRef;
-use comline_core::schema::idl::annotations::HANDSHAKE_NONE;
+use comline_core::schema::idl::annotations::{
+    DEFAULT_FORMAT, FORMAT_JSON, FORMAT_MSGPACK, FORMAT_PACKED, FRAMING_JSONRPC, HANDSHAKE_NONE,
+};
 use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenUnit};
 use eyre::{eyre, Result};
 
@@ -57,6 +59,9 @@ pub enum Feature {
     HandshakeNone,
     Connections,
     Async,
+    FormatPacked,
+    FormatJson,
+    FormatMsgPack,
 }
 
 impl Feature {
@@ -84,6 +89,9 @@ impl Feature {
         Feature::HandshakeNone,
         Feature::Connections,
         Feature::Async,
+        Feature::FormatPacked,
+        Feature::FormatJson,
+        Feature::FormatMsgPack,
     ];
 
     /// The stable id: `unions`, `validate-on-decode`.
@@ -111,6 +119,9 @@ impl Feature {
             Feature::HandshakeNone => "handshake-none",
             Feature::Connections => "connections",
             Feature::Async => "async",
+            Feature::FormatPacked => "format-packed",
+            Feature::FormatJson => "format-json",
+            Feature::FormatMsgPack => "format-msgpack",
         }
     }
 
@@ -144,6 +155,9 @@ impl Feature {
             Feature::HandshakeNone => "no handshake",
             Feature::Connections => "connections",
             Feature::Async => "`async`",
+            Feature::FormatPacked => "the `packed@1` format",
+            Feature::FormatJson => "the `json@1` format",
+            Feature::FormatMsgPack => "the `msgpack@1` format",
         }
     }
 
@@ -174,10 +188,13 @@ impl Feature {
             Feature::FramingJsonRpc => "`@framing = \"jsonrpc\"` (or as the package default)",
             Feature::HandshakeNone => "`@handshake = \"none\"` (or as the package default)",
             Feature::Connections => {
-                "protocols on a connection, with calls in both directions: \
-                 `@framing = \"datagram@2\"`, or `@provider = Client` / `Multiple`"
+                "protocols on a connection, with calls in both directions: `datagram@2` (the default), \
+                 or `@provider = Client` / `Multiple`"
             }
             Feature::Async => "`[generate] async`: connection protocols get async handlers and senders",
+            Feature::FormatPacked => "`wire.format = \"packed@1\"`, the default: fixed-width fields, no tags",
+            Feature::FormatJson => "`wire.format = \"json@1\"`",
+            Feature::FormatMsgPack => "`wire.format = \"msgpack@1\"`",
         }
     }
 }
@@ -295,7 +312,8 @@ pub struct Options {
     pub mode: Option<Mode>,
     pub external_std: bool,
     pub validate_on_decode: ValidateOnDecode,
-    pub default_framing: Option<String>,
+    /// The package's `wire.format`, canonical; `None` is the default.
+    pub wire_format: Option<String>,
     pub async_api: bool,
 }
 
@@ -305,7 +323,7 @@ impl Options {
             mode: Some(req.mode),
             external_std: req.external_std,
             validate_on_decode: req.validate_on_decode,
-            default_framing: req.default_framing.clone(),
+            wire_format: Some(req.wire_format.clone()),
             async_api: req.async_api,
         }
     }
@@ -328,6 +346,9 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
     let mut uses = Vec::new();
     let mut validators = false;
     let mut connections = false;
+    // Whether a protocol encodes with the package's format: JSON-RPC
+    // carries JSON whatever the package says.
+    let mut formatted = false;
 
     for (namespace, units) in schemas {
         let mut push = |feature, owner: String, span: Option<(usize, usize)>| {
@@ -368,15 +389,17 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                 FrozenUnit::Protocol { name, functions, parameters, span, .. } => {
                     let owner = format!("protocol '{name}'");
                     push(Feature::Protocols, owner.clone(), Some(*span));
-                    let framing = crate::connections::framing(parameters, options.default_framing.as_deref());
-                    if framing.map(|f| f.name) == Some("jsonrpc") {
+                    // Core has already applied the package's `wire.framing`.
+                    if crate::connections::framing(parameters).name == FRAMING_JSONRPC {
                         push(Feature::FramingJsonRpc, owner.clone(), Some(*span));
+                    } else {
+                        formatted = true;
                     }
                     // Core has already applied the package's default here.
                     if annotation(parameters, "handshake") == Some(HANDSHAKE_NONE) {
                         push(Feature::HandshakeNone, owner.clone(), Some(*span));
                     }
-                    if crate::connections::on_connection(schemas, parameters, options.default_framing.as_deref()) {
+                    if crate::connections::on_connection(schemas, parameters) {
                         push(Feature::Connections, owner.clone(), Some(*span));
                         connections = true;
                     }
@@ -419,6 +442,18 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
     // Only connection protocols have an async form.
     if connections && options.async_api {
         option(Feature::Async, "the generation request (`async`)");
+    }
+    if formatted {
+        let format = options.wire_format.as_deref().unwrap_or(DEFAULT_FORMAT);
+        let feature = match format {
+            FORMAT_JSON => Some(Feature::FormatJson),
+            FORMAT_MSGPACK => Some(Feature::FormatMsgPack),
+            FORMAT_PACKED => Some(Feature::FormatPacked),
+            _ => None,
+        };
+        if let Some(feature) = feature {
+            option(feature, "the package's `wire.format`");
+        }
     }
 
     uses
@@ -806,22 +841,44 @@ mod tests {
 
     #[test]
     fn async_is_only_a_use_with_a_protocol_on_a_connection() {
-        let protocol = |name: &str| FrozenUnit::Protocol {
+        let protocol = |name: &str, parameters: Vec<FrozenUnit>| FrozenUnit::Protocol {
             docstring: String::new(),
-            parameters: vec![],
+            parameters,
             name: name.into(),
             functions: vec![],
             span: (0, 1),
         };
-        let schemas = [("api".to_string(), vec![protocol("Chat")])];
         let asynchronous = Options { async_api: true, ..Options::default() };
-        // A plain client/server protocol has no async form.
-        assert_eq!(ids(&used(&schemas, &asynchronous)), ["protocols"]);
+        // A lockstep client/server protocol has no async form.
+        let datagram1 = FrozenUnit::Property { name: "framing".into(), value: ConfigValue::Str("datagram".into()) };
+        let lockstep = [("api".to_string(), vec![protocol("Chat", vec![datagram1])])];
+        assert_eq!(ids(&used(&lockstep, &asynchronous)), ["protocols", "format-packed"]);
 
-        let on_connection = Options { default_framing: Some("datagram@2".into()), ..asynchronous.clone() };
-        assert_eq!(ids(&used(&schemas, &on_connection)), ["protocols", "connections", "async"]);
-        let (schemas, options) = strip(Feature::Async, &schemas, &on_connection).unwrap();
-        assert_eq!(ids(&used(&schemas, &options)), ["protocols", "connections"]);
+        // A plain one is on a connection by default.
+        let schemas = [("api".to_string(), vec![protocol("Chat", vec![])])];
+        assert_eq!(ids(&used(&schemas, &asynchronous)), ["protocols", "connections", "async", "format-packed"]);
+        let (schemas, options) = strip(Feature::Async, &schemas, &asynchronous).unwrap();
+        assert_eq!(ids(&used(&schemas, &options)), ["protocols", "connections", "format-packed"]);
+    }
+
+    #[test]
+    fn the_format_is_a_use_where_a_protocol_encodes_with_it() {
+        let protocol = |parameters: Vec<FrozenUnit>| FrozenUnit::Protocol {
+            docstring: String::new(),
+            parameters,
+            name: "P".into(),
+            functions: vec![],
+            span: (0, 1),
+        };
+        let msgpack = Options { wire_format: Some("msgpack@1".into()), ..Options::default() };
+        let plain = [("api".to_string(), vec![protocol(vec![])])];
+        assert!(ids(&used(&plain, &msgpack)).contains(&"format-msgpack"));
+        // JSON-RPC carries JSON, and a package without protocols encodes
+        // nothing.
+        let jsonrpc = FrozenUnit::Property { name: "framing".into(), value: ConfigValue::Str("jsonrpc".into()) };
+        let rpc = [("api".to_string(), vec![protocol(vec![jsonrpc])])];
+        assert!(!ids(&used(&rpc, &msgpack)).iter().any(|id| id.starts_with("format-")));
+        assert!(!ids(&used(&[("api".to_string(), vec![])], &msgpack)).iter().any(|id| id.starts_with("format-")));
     }
 
     /// `@validators = [V()]` on `type Name = string`.
