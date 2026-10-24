@@ -139,14 +139,15 @@
           "tracking": null
         },
         "connections": {
-          "note": "over `datagram@2`; JSON-RPC on a connection isn't supported yet",
+          "note": null,
           "proven_by": [
             "connections",
-            "connections_async"
+            "connections_async",
+            "connections_jsonrpc"
           ],
           "since": null,
-          "state": "partial",
-          "tracking": "runtime#19"
+          "state": "supported",
+          "tracking": null
         },
         "constants": {
           "note": null,
@@ -200,7 +201,8 @@
         "framing-jsonrpc": {
           "note": null,
           "proven_by": [
-            "framing_jsonrpc"
+            "framing_jsonrpc",
+            "connections_jsonrpc"
           ],
           "since": null,
           "state": "supported",
@@ -285,7 +287,8 @@
             "framing_jsonrpc",
             "handshake_none",
             "connections",
-            "connections_async"
+            "connections_async",
+            "connections_jsonrpc"
           ],
           "since": null,
           "state": "supported",
@@ -396,14 +399,15 @@
           "tracking": null
         },
         "connections": {
-          "note": "over `datagram@2`; JSON-RPC on a connection isn't supported yet",
+          "note": null,
           "proven_by": [
             "connections",
-            "connections_async"
+            "connections_async",
+            "connections_jsonrpc"
           ],
           "since": null,
-          "state": "partial",
-          "tracking": "runtime#19"
+          "state": "supported",
+          "tracking": null
         },
         "constants": {
           "note": null,
@@ -458,7 +462,8 @@
         "framing-jsonrpc": {
           "note": null,
           "proven_by": [
-            "framing_jsonrpc"
+            "framing_jsonrpc",
+            "connections_jsonrpc"
           ],
           "since": null,
           "state": "supported",
@@ -544,7 +549,8 @@
             "framing_jsonrpc",
             "handshake_none",
             "connections",
-            "connections_async"
+            "connections_async",
+            "connections_jsonrpc"
           ],
           "since": null,
           "state": "supported",
