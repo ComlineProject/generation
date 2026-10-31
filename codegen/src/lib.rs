@@ -7,6 +7,7 @@
 
 pub mod builder;
 pub mod collisions;
+pub mod config;
 pub mod connections;
 pub mod encodings;
 pub mod features;

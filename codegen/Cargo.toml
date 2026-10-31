@@ -12,12 +12,22 @@ license = "GPL-3.0-only"
 # The IR only (`default-features = false`): a generator reads frozen IR and
 # never parses, and without core's parser (tree-sitter) a generator binary
 # can be built for `wasm32-wasip1`.
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "98d64faedfc48ab4d2c93722e2b099debedd503c", default-features = false }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "2ae998634bad418e4a03ce7494e673275dafcc01", default-features = false }
 
 eyre = "0.6.8"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+# `config`: `comline.toml`, parsed and resolved here so the CLI, the language
+# server and the JSON Schema share one definition. All three build for wasm32.
+toml = "0.8"
+miette = "7"
+# Exact pin: the committed `schemas/comline-toml.json` is this release's
+# output, and a test fails when it drifts.
+schemars = "=1.2.3"
 
 [dev-dependencies]
+# Checks `comline.toml` documents against the generated schema.
+jsonschema = { version = "=0.58.6", default-features = false }
+toml = "0.8"
 # The tests compile schemas, so they need core's compiler.
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "98d64faedfc48ab4d2c93722e2b099debedd503c" }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "2ae998634bad418e4a03ce7494e673275dafcc01" }

@@ -174,7 +174,14 @@ mod tests {
         if let Some(ty) = rust {
             map.insert("rust".to_string(), Suggested { ty: ty.into(), package: Some("acme".into()), version: Some("1".into()) });
         }
-        ConfigUnit::Encoding { name: name.into(), kind, profile_hash: String::new(), map }
+        ConfigUnit::Encoding {
+            name: name.into(),
+            kind,
+            profile_hash: String::new(),
+            map,
+            establishes: Vec::new(),
+            has_vectors: false,
+        }
     }
 
     fn protocol(framing: &str) -> FrozenUnit {
