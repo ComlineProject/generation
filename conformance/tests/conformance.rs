@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use comline_codegen::connections;
 use comline_codegen::features::{self, Column, Feature, Options, State, SupportTable};
 use comline_codegen::versions::{LangVersion, Versions};
-use comline_codegen::{GenRequest, GeneratedFile, PackageMeta};
+use comline_codegen::{protocol, GenerateRequest, GeneratedFile, PackageMeta, Registry, TargetLanguage};
 use comline_conformance::{corpus, Fixture};
 use comline_core::schema::idl::annotations::DEFAULT_FORMAT;
 use comline_core::schema::ir::frozen::cas::blob::schema_ir_hash;
@@ -22,7 +22,7 @@ use comline_core::schema::ir::frozen::unit::FrozenUnit;
 
 const LANGS: &[&str] = &["rust", "typescript"];
 
-fn generate(lang: &str, req: &GenRequest) -> eyre::Result<Vec<GeneratedFile>> {
+fn generate(lang: &str, req: &GenerateRequest) -> eyre::Result<Vec<GeneratedFile>> {
     match lang {
         "rust" => comline_codegen_rust::generate_rust(req),
         "typescript" => comline_codegen_typescript::generate_typescript(req),
@@ -85,31 +85,33 @@ fn golden_dir(fixture: &str, lang: &str, version: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden").join(fixture).join(name)
 }
 
-fn request<'a>(fx: &'a Fixture, version: &str) -> GenRequest<'a> {
-    request_for(&fx.schemas, &options(fx), version)
+fn request(fx: &Fixture, lang: &str, version: &str) -> GenerateRequest {
+    request_for(&fx.schemas, &options(fx), lang, version)
 }
 
 /// A request for `schemas` under `options` at `version` - a fixture's own,
 /// or the same with a feature stripped out.
-fn request_for<'a>(
-    schemas: &'a [(String, Vec<FrozenUnit>)],
+fn request_for(
+    schemas: &[(String, Vec<FrozenUnit>)],
     options: &Options,
+    lang: &str,
     version: &str,
-) -> GenRequest<'a> {
-    GenRequest {
+) -> GenerateRequest {
+    GenerateRequest {
         mode: options.mode.expect("a fixture states its mode"),
-        schemas,
+        schemas: schemas.to_vec(),
         package: PackageMeta {
             name: "conformance".to_string(),
             version: "0.0.0".to_string(),
         },
         // One of the generator's own boundaries: what a target declaring it
         // gets, and every version up to the next boundary gets the same.
-        lang_version: version.to_string(),
+        target: TargetLanguage { language: lang.to_string(), version: version.to_string() },
         wire_format: options.wire_format.clone().unwrap_or_else(|| DEFAULT_FORMAT.to_string()),
         external_std: options.external_std,
         validate_on_decode: options.validate_on_decode,
         async_api: options.async_api,
+        encodings: Default::default(),
     }
 }
 
@@ -134,6 +136,35 @@ fn existing_goldens(dir: &Path) -> Vec<PathBuf> {
     walk(dir, dir, &mut out);
     out.sort();
     out
+}
+
+/// The generator protocol in process: for every fixture, at every boundary,
+/// a `Generate` request through [`protocol::handle`] answers exactly the
+/// files the generator returns when called directly, and a refusal comes
+/// back as an error.
+#[test]
+fn the_protocol_generates_what_the_generator_does() {
+    let mut registry = Registry::new();
+    comline_codegen_rust::register(&mut registry);
+    comline_codegen_typescript::register(&mut registry);
+    for fx in corpus() {
+        for &lang in LANGS {
+            for version in boundaries(lang) {
+                let req = request(&fx, lang, version);
+                let bytes = protocol::encode(&protocol::Request::generate(req.clone())).unwrap();
+                let response: protocol::Response = protocol::decode(&protocol::handle(&registry, &bytes)).unwrap();
+                let at = format!("{} / {lang}#{version}", fx.name);
+                match (generate(lang, &req), response) {
+                    (Ok(files), protocol::Response::Generate(generated)) => {
+                        let direct: Vec<protocol::FileOut> = files.into_iter().map(Into::into).collect();
+                        assert_eq!(generated.files, direct, "{at}");
+                    }
+                    (Err(e), protocol::Response::Error { message }) => assert_eq!(message, format!("{e:#}"), "{at}"),
+                    (direct, response) => panic!("{at}: directly {:?}, through the protocol {response:?}", direct.map(|f| f.len())),
+                }
+            }
+        }
+    }
 }
 
 #[test]
@@ -164,7 +195,7 @@ fn corpus_matches_golden() {
                     continue;
                 }
 
-                let files = generate(lang, &request(&fx, version))
+                let files = generate(lang, &request(&fx, lang, version))
                     .unwrap_or_else(|e| panic!("{at}: the generator failed: {e}"));
                 // A later boundary stores its own goldens only where its
                 // output differs from the boundary before.
@@ -349,12 +380,12 @@ fn support_is_proven() {
                             if refused(fx, lang, version) {
                                 continue;
                             }
-                            match generate(lang, &request(fx, version)) {
+                            match generate(lang, &request(fx, lang, version)) {
                                 Ok(with) => {
                                     proven.push(fx.name.to_string());
                                     if let Some((schemas, stripped)) = features::strip(feature, &fx.schemas, &options(fx)) {
                                         let hashes = ir_hashes(&fx.schemas, &schemas);
-                                        match generate(lang, &request_for(&schemas, &stripped, version)) {
+                                        match generate(lang, &request_for(&schemas, &stripped, lang, version)) {
                                             Ok(without) => differs |= !same_files(&with, &without, &hashes),
                                             Err(_) => differs = true,
                                         }
@@ -386,8 +417,8 @@ fn support_is_proven() {
                                 ));
                                 break;
                             };
-                            let with = generate(lang, &request(fx, version));
-                            let without = generate(lang, &request_for(&schemas, &stripped, version));
+                            let with = generate(lang, &request(fx, lang, version));
+                            let without = generate(lang, &request_for(&schemas, &stripped, lang, version));
                             // The IR hash names the schema itself, so it differs
                             // with the feature taken out - rightly: a peer that
                             // does check must not handshake as the same schema.
@@ -410,7 +441,7 @@ fn support_is_proven() {
                     }
                     State::Unsupported => {
                         for fx in &using {
-                            match generate(lang, &request(fx, version)) {
+                            match generate(lang, &request(fx, lang, version)) {
                                 Err(e) if e.to_string().contains(&format!("({})", feature.id())) => {
                                     proven.push(fx.name.to_string())
                                 }

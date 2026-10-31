@@ -11,6 +11,7 @@ pub mod connections;
 pub mod features;
 pub mod modules;
 pub mod naming;
+pub mod protocol;
 pub mod stdlib;
 pub mod symbols;
 pub mod utils;
@@ -21,11 +22,12 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 
-use comline_core::schema::ir::frozen::unit::FrozenUnit;
-
-use eyre::{eyre, Result};
+use eyre::Result;
+use serde::{Deserialize, Serialize};
 
 use versions::{LangVersion, Versions};
+
+pub use protocol::{GenerateRequest, TargetLanguage};
 
 /// One file a generator wants written, relative to the target's output root.
 #[derive(Debug, Clone)]
@@ -36,78 +38,22 @@ pub struct GeneratedFile {
 
 /// How far generation goes: `Code` = bare source files; `Lib` = a buildable
 /// package (manifest + module tree).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Mode {
     Code,
     Lib,
 }
 
 /// Package identity, for the manifest a `Lib` build emits. Unused by `Code`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PackageMeta {
     pub name: String,
     pub version: String,
 }
 
-/// Everything a generator needs for one (target, version): every schema in the
-/// package (namespace + IR), the mode, and the package identity.
-pub struct GenRequest<'a> {
-    pub mode: Mode,
-    pub schemas: &'a [(String, Vec<FrozenUnit>)],
-    pub package: PackageMeta,
-    /// The package's wire format (`config.idp`'s `wire.format`), canonical:
-    /// `packed@1` (the default), `json@1` or `msgpack@1`. What the generated
-    /// code encodes with, except for JSON-RPC protocols, which carry JSON.
-    ///
-    /// There's no framing here: core writes the package's `wire.framing`
-    /// into each protocol's IR, where [`connections::framing`] reads it.
-    pub wire_format: String,
-    /// The target's language/toolchain version - the `#`-suffix of the
-    /// language the congregation declared (`rust#1.70.0` -> `"1.70.0"`,
-    /// `typescript#5.0` -> `"5.0"`), which is also what selected this
-    /// generator. A generator records it in whatever its own ecosystem's
-    /// manifest calls that (`rust-version` in a `Cargo.toml`), and ignores
-    /// it otherwise - `Mode::Code` has no manifest to put it in.
-    pub lang_version: String,
-    /// `comline.toml`'s `[generate] external_std` - `true` means `std`
-    /// should be referenced as its own crate instead of inlined into this
-    /// package's own generated output. Only a generator that knows how to
-    /// do that (today, Rust's) acts on it; others ignore it, same as any
-    /// other field they have no use for. Default `false` (inlined,
-    /// unchanged) everywhere this isn't explicitly set.
-    pub external_std: bool,
-    /// `comline.toml`'s `[generate] validate_on_decode` - whether decoding a
-    /// value runs its `@validators` checks. A generator that emits no checks
-    /// ignores it.
-    pub validate_on_decode: validation::ValidateOnDecode,
-    /// `comline.toml`'s `[generate] async` - whether protocols on a
-    /// connection get async handlers and senders (Rust's `AsyncConnection`)
-    /// instead of blocking ones. A generator whose output is async anyway,
-    /// or that has no connections, ignores it.
-    pub async_api: bool,
-}
-
-impl GenRequest<'_> {
-    /// [`lang_version`](Self::lang_version), parsed.
-    pub fn version(&self) -> Result<LangVersion> {
-        LangVersion::parse(&self.lang_version)
-            .ok_or_else(|| eyre!("`{}` isn't a version: expected dotted numbers, like `1.70.0`", self.lang_version))
-    }
-
-    /// Whether the target's version is at least `boundary`, one of the
-    /// generator's own [`Versions`] boundaries: how a generator picks output
-    /// that needs a newer toolchain. An unparsable version counts as the
-    /// floor; [`features::refuse_unsupported`] has already refused it.
-    pub fn at_least(&self, boundary: &str) -> bool {
-        match (LangVersion::parse(&self.lang_version), LangVersion::parse(boundary)) {
-            (Some(version), Some(boundary)) => version >= boundary,
-            _ => false,
-        }
-    }
-}
-
 /// A code generator: frozen IR in, generated files out.
-pub type GeneratorFn = fn(&GenRequest) -> Result<Vec<GeneratedFile>>;
+pub type GeneratorFn = fn(&GenerateRequest) -> Result<Vec<GeneratedFile>>;
 
 /// One generator, as it registers: its language, what it generates with,
 /// what it supports, and which versions of the language it handles.
@@ -228,6 +174,11 @@ impl Registry {
     }
 
     /// Every generator this registry has, sorted by language and floor.
+    pub fn generators(&self) -> impl Iterator<Item = &Generator> {
+        self.langs.values().flatten()
+    }
+
+    /// Every generator this registry has, sorted by language and floor.
     pub fn targets(&self) -> Vec<Target> {
         self.langs
             .values()
@@ -241,7 +192,7 @@ impl Registry {
 mod tests {
     use super::*;
 
-    fn noop(_req: &GenRequest) -> Result<Vec<GeneratedFile>> {
+    fn noop(_req: &GenerateRequest) -> Result<Vec<GeneratedFile>> {
         Ok(vec![])
     }
 
@@ -302,15 +253,16 @@ mod tests {
 
     #[test]
     fn at_least_compares_the_declared_version() {
-        let req = |v: &str| GenRequest {
+        let req = |v: &str| GenerateRequest {
             mode: Mode::Code,
-            schemas: &[],
+            schemas: vec![],
             package: PackageMeta { name: "p".into(), version: "0.0.0".into() },
+            target: TargetLanguage { language: "rust".into(), version: v.into() },
             wire_format: comline_core::schema::idl::annotations::DEFAULT_FORMAT.into(),
-            lang_version: v.into(),
             external_std: false,
             validate_on_decode: Default::default(),
             async_api: false,
+            encodings: Default::default(),
         };
         assert!(req("1.81").at_least("1.81.0"));
         assert!(req("1.90.0").at_least("1.81.0"));

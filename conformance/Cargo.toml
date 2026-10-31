@@ -19,5 +19,5 @@ comline-codegen = { path = "../codegen" }
 [dev-dependencies]
 eyre = "0.6.8"
 serde_json = "1.0"
-comline-codegen-rust = { git = "https://github.com/ComlineProject/comline-rust", rev = "eb9aabbc4f3a7fd9ce496592c183a644aa8ae631" }
-comline-codegen-typescript = { git = "https://github.com/ComlineProject/comline-typescript", rev = "76b58cdde145cd1e79ccb9187df1ee524b2ee492" }
+comline-codegen-rust = { git = "https://github.com/ComlineProject/comline-rust", rev = "d7977a9e81060c4ad9dbe77285141fc40a124c39" }
+comline-codegen-typescript = { git = "https://github.com/ComlineProject/comline-typescript", rev = "f57e17c7e379d2cbaffa400dd8f9284b4a242792" }

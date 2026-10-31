@@ -27,7 +27,7 @@ use eyre::{eyre, Result};
 
 use crate::validation::ValidateOnDecode;
 use crate::versions::{LangVersion, Versions};
-use crate::{GenRequest, Mode};
+use crate::{GenerateRequest, Mode};
 
 /// A language feature a generator may or may not implement.
 ///
@@ -318,7 +318,7 @@ pub struct Options {
 }
 
 impl Options {
-    pub fn of(req: &GenRequest) -> Self {
+    pub fn of(req: &GenerateRequest) -> Self {
         Options {
             mode: Some(req.mode),
             external_std: req.external_std,
@@ -547,9 +547,9 @@ fn annotation<'a>(parameters: &'a [FrozenUnit], key: &str) -> Option<&'a str> {
 /// Refuses `req` when it uses a feature `support` marks unsupported, naming
 /// every such use - not only the first. A generator calls this before
 /// generating anything.
-pub fn refuse_unsupported(generator: &str, req: &GenRequest, support: SupportTable) -> Result<()> {
+pub fn refuse_unsupported(generator: &str, req: &GenerateRequest, support: SupportTable) -> Result<()> {
     let version = req.version()?;
-    let uses = used(req.schemas, &Options::of(req));
+    let uses = used(&req.schemas, &Options::of(req));
     let unsupported = unsupported_uses(&uses, support, &version);
     if unsupported.is_empty() {
         return Ok(());
