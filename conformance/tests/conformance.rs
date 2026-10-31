@@ -111,7 +111,7 @@ fn request_for(
         external_std: options.external_std,
         validate_on_decode: options.validate_on_decode,
         async_api: options.async_api,
-        encodings: Default::default(),
+        encodings: comline_codegen::encodings::official_for(lang),
     }
 }
 
