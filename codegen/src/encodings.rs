@@ -138,6 +138,14 @@ pub fn type_of<'a>(encodings: &'a BTreeMap<String, EncodingMapping>, name: &str)
     }
 }
 
+/// Every official encoding's mapping onto `language`: what a package that
+/// declares and overrides nothing gets. For a request built by hand (tests,
+/// tools); the CLI and the playground go through [`fill`].
+pub fn official_for(language: &str) -> BTreeMap<String, EncodingMapping> {
+    resolve(language, official::units(), &[], &BTreeMap::new(), &BTreeSet::new())
+        .expect("nothing is used, so nothing can be missing")
+}
+
 /// Fill `req.encodings` for its target's language: [`resolve`] over what
 /// the request's package uses.
 pub fn fill(
