@@ -24,7 +24,8 @@ use crate::symbols::SymbolTable;
 
 /// Whether decoding a value runs its checks: `comline.toml`'s
 /// `[generate] validate_on_decode`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ValidateOnDecode {
     /// Emit the checks; never run them on the caller's behalf.
     #[default]
