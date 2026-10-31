@@ -16,3 +16,15 @@ jobs:
       - run: rustup update stable && rustup default stable
       - run: cargo build --verbose
       - run: cargo test --verbose
+
+  # `comline-codegen` takes core's IR only, with no parser, so it (and so a
+  # generator binary) builds for WASI and the browser.
+  wasm:
+    name: comline-codegen - wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup update stable && rustup default stable
+      - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
+      - run: cargo build --verbose -p comline-codegen --target wasm32-wasip1
+      - run: cargo build --verbose -p comline-codegen --target wasm32-unknown-unknown
