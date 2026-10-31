@@ -26,7 +26,7 @@ use crate::protocol::{EncodingMapping, GenerateRequest};
 // External Uses
 use comline_core::encodings::{official, EncodingKind};
 use comline_core::package::config::ir::frozen::FrozenUnit as ConfigUnit;
-use comline_core::schema::idl::annotations::HANDSHAKE_NONE;
+use comline_core::schema::idl::annotations::{FORMAT_JSON, FRAMING_JSONRPC, HANDSHAKE_NONE};
 use comline_core::schema::ir::frozen::unit::FrozenUnit;
 use eyre::{bail, Result};
 
@@ -41,10 +41,16 @@ pub fn canonical(name: &str) -> String {
 
 /// Every encoding a package uses, canonical: its wire format, and each
 /// protocol's framing and handshake (`none` is no handshake, so not one).
+/// A JSON-RPC protocol carries JSON whatever the wire format is, so it uses
+/// `json@1` too.
 pub fn used(schemas: &[(String, Vec<FrozenUnit>)], wire_format: &str) -> BTreeSet<String> {
     let mut used = BTreeSet::from([canonical(wire_format)]);
     for (_, _, parameters, _) in connections::protocols(schemas) {
-        used.insert(connections::framing_name(parameters));
+        let framing = connections::framing_name(parameters);
+        if framing == FRAMING_JSONRPC {
+            used.insert(FORMAT_JSON.to_string());
+        }
+        used.insert(framing);
         let handshake = connections::handshake_name(parameters);
         if handshake != HANDSHAKE_NONE {
             used.insert(handshake);
@@ -99,6 +105,37 @@ pub fn resolve(
         bail!("{}", lines.join("\n"));
     }
     Ok(resolved)
+}
+
+/// What a generator checks before rendering: every encoding the request's
+/// package uses has a mapping in `req.encodings`. One sentence per missing
+/// encoding, naming it and the target's language; after this, a generator
+/// may look any used encoding up and rely on finding it.
+pub fn check(req: &GenerateRequest) -> Result<()> {
+    let missing: Vec<String> = used(&req.schemas, &req.wire_format)
+        .into_iter()
+        .filter(|name| !req.encodings.contains_key(name))
+        .map(|name| {
+            format!(
+                "encoding `{name}` has no {} mapping in the request: map it in comline.toml, as \
+                 `encodings = {{ \"{name}\" = \"<type>\" }}`",
+                req.target.language
+            )
+        })
+        .collect();
+    if !missing.is_empty() {
+        bail!("{}", missing.join("\n"));
+    }
+    Ok(())
+}
+
+/// The type a used encoding maps to. Only for a name [`check`] has
+/// already vouched for.
+pub fn type_of<'a>(encodings: &'a BTreeMap<String, EncodingMapping>, name: &str) -> &'a str {
+    match encodings.get(name) {
+        Some(mapping) => &mapping.type_path,
+        None => panic!("encoding `{name}` wasn't checked: call encodings::check first"),
+    }
 }
 
 /// Fill `req.encodings` for its target's language: [`resolve`] over what
@@ -190,6 +227,6 @@ mod tests {
     fn used_names_the_format_framings_and_handshakes() {
         let schemas = vec![("app".to_string(), vec![protocol("com.acme.lines@1"), protocol("json-rpc")])];
         let used: Vec<String> = used(&schemas, "packed@1").into_iter().collect();
-        assert_eq!(used, ["com.acme.lines@1", "comline@1", "jsonrpc", "packed@1"]);
+        assert_eq!(used, ["com.acme.lines@1", "comline@1", "json@1", "jsonrpc", "packed@1"]);
     }
 }
