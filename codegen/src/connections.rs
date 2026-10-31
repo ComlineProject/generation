@@ -58,10 +58,39 @@ pub fn framing(parameters: &[FrozenUnit]) -> FramingValue {
         .expect("the default framing is a known one")
 }
 
+/// A protocol's framing by name, canonical: an official one in its
+/// canonical spelling (`jsonrpc`, `datagram@2`), a namespaced one as
+/// declared (`com.acme.lines@1`), else `datagram@2`. Unlike [`framing`],
+/// which only knows the official framings, this is every framing core lets
+/// through: what a generator looks up in the request's `encodings`.
+pub fn framing_name(parameters: &[FrozenUnit]) -> String {
+    if let Some(value) = FramingValue::of_protocol(parameters) {
+        return value.name.to_string();
+    }
+    let written = parameters.iter().find_map(|p| match p {
+        FrozenUnit::Property { name, value } if name == "framing" => match value {
+            ConfigValue::Str(s) | ConfigValue::Name(s) => Some(s.as_str()),
+            ConfigValue::Dict(_) => match value.entry("name") {
+                Some(ConfigValue::Str(s)) => Some(s.as_str()),
+                _ => None,
+            },
+            _ => None,
+        },
+        _ => None,
+    });
+    written.map(crate::encodings::canonical).unwrap_or_else(|| DEFAULT_FRAMING.to_string())
+}
+
+/// A protocol's handshake by name, canonical: `comline@1` (the default),
+/// `none`, or a namespaced one as declared.
+pub fn handshake_name(parameters: &[FrozenUnit]) -> String {
+    property(parameters, "handshake").map(crate::encodings::canonical).unwrap_or_else(|| DEFAULT_HANDSHAKE.to_string())
+}
+
 /// Whether a protocol with these parameters, in a package of `schemas`,
 /// runs on a connection.
 pub fn on_connection(schemas: &[(String, Vec<FrozenUnit>)], parameters: &[FrozenUnit]) -> bool {
-    let name = framing(parameters).name;
+    let name = framing_name(parameters);
     name == FRAMING_DATAGRAM2
         || Provider::of(parameters) != Provider::Server
         || (name == FRAMING_JSONRPC && jsonrpc_on_connection(schemas))
@@ -71,7 +100,7 @@ pub fn on_connection(schemas: &[(String, Vec<FrozenUnit>)], parameters: &[Frozen
 /// puts all of them on it.
 fn jsonrpc_on_connection(schemas: &[(String, Vec<FrozenUnit>)]) -> bool {
     protocols(schemas).any(|(_, _, parameters, _)| {
-        framing(parameters).name == FRAMING_JSONRPC && Provider::of(parameters) != Provider::Server
+        framing_name(parameters) == FRAMING_JSONRPC && Provider::of(parameters) != Provider::Server
     })
 }
 
@@ -153,8 +182,8 @@ pub struct Provided {
 /// `serve` / `connect` from it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageConnection {
-    /// Canonical: `datagram@2` or `jsonrpc`.
-    pub framing: &'static str,
+    /// Canonical: `datagram@2`, `jsonrpc`, or a namespaced framing.
+    pub framing: String,
     /// Canonical: `comline@1` or `none`.
     pub handshake: String,
     /// What the accepting side provides (`@provider = Server`, the default,
@@ -173,10 +202,10 @@ pub fn package_connection(schemas: &[(String, Vec<FrozenUnit>)]) -> Result<Optio
     let Some((first_ns, first, first_parameters, _)) = on.first() else {
         return Ok(None);
     };
-    let framing_name = framing(first_parameters).name;
-    let handshake_name = property(first_parameters, "handshake").unwrap_or(DEFAULT_HANDSHAKE);
+    let framing_name = self::framing_name(first_parameters);
+    let handshake_name = self::handshake_name(first_parameters);
     for (namespace, name, parameters, _) in &on[1..] {
-        let (f, h) = (framing(parameters).name, property(parameters, "handshake").unwrap_or(DEFAULT_HANDSHAKE));
+        let (f, h) = (self::framing_name(parameters), self::handshake_name(parameters));
         if f != framing_name {
             return Err(format!(
                 "`{first_ns}::{first}` is on a `{framing_name}` connection and `{namespace}::{name}` on a `{f}` \
@@ -207,7 +236,7 @@ pub fn package_connection(schemas: &[(String, Vec<FrozenUnit>)]) -> Result<Optio
     };
     Ok(Some(PackageConnection {
         framing: framing_name,
-        handshake: handshake_name.to_string(),
+        handshake: handshake_name,
         server: side([Provider::Server, Provider::Multiple]),
         client: side([Provider::Client, Provider::Multiple]),
     }))
@@ -215,7 +244,7 @@ pub fn package_connection(schemas: &[(String, Vec<FrozenUnit>)]) -> Result<Optio
 
 /// Every protocol in `schemas`: its namespace, name, parameters and
 /// functions.
-fn protocols(
+pub(crate) fn protocols(
     schemas: &[(String, Vec<FrozenUnit>)],
 ) -> impl Iterator<Item = (&str, &str, &[FrozenUnit], &[FrozenUnit])> {
     schemas.iter().flat_map(|(ns, units)| {
@@ -360,7 +389,7 @@ mod tests {
             ("legacy".to_string(), vec![protocol("Old", vec![framing("datagram")])]),
         ];
         let c = package_connection(&schemas).unwrap().unwrap();
-        assert_eq!((c.framing, c.handshake.as_str()), ("datagram@2", "comline@1"));
+        assert_eq!((c.framing.as_str(), c.handshake.as_str()), ("datagram@2", "comline@1"));
         let fields = |side: &[Provided]| side.iter().map(|p| p.field.clone()).collect::<Vec<_>>();
         // Two `Player`s on the server side: both prefixed; the lone one on
         // the client side isn't.
