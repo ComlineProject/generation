@@ -1,0 +1,231 @@
+{
+  "$id": "https://comlineproject.github.io/docs/schemas/comline-toml/0.x.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "definitions": {
+    "EncodingEntry": {
+      "anyOf": [
+        {
+          "description": "The type implementing the encoding, e.g. `\"acme::LinesFraming\"`.",
+          "type": "string"
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/EncodingTable"
+            }
+          ],
+          "description": "The type and the package it comes from, e.g.\n`{ type = \"LinesFraming\", package = \"acme-encodings\", version = \"^0.2\" }`."
+        }
+      ],
+      "description": "One entry of `encodings`: the type alone, or with its package."
+    },
+    "EncodingTable": {
+      "additionalProperties": false,
+      "description": "The table form of an `encodings` entry.",
+      "properties": {
+        "package": {
+          "description": "The package the type comes from.",
+          "type": "string"
+        },
+        "type": {
+          "description": "The type implementing the encoding, as the generated code names it.",
+          "type": "string"
+        },
+        "version": {
+          "description": "The version requirement on that package.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "Generate": {
+      "additionalProperties": false,
+      "description": "The `[generate]` table.",
+      "properties": {
+        "async": {
+          "default": false,
+          "description": "`true`: protocols on a connection get async handlers and senders\n(Rust's `AsyncConnection`), shared by every target unless overridden.\nA generator whose output is async anyway ignores it. Default `false`.",
+          "type": "boolean"
+        },
+        "encodings": {
+          "additionalProperties": {
+            "$ref": "#/definitions/EncodingEntry"
+          },
+          "description": "Which type implements each encoding (format, framing, handshake) in\nthe generated code, by encoding name:\n`encodings = { \"com.acme.lines@1\" = \"acme::LinesFraming\" }`, or with\nthe package it comes from, `{ type = \"...\", package = \"...\", version\n= \"...\" }`. Overrides the declaring package's suggested mapping, and\nmaps an encoding that has none. A target's own `encodings` override\nthese, name by name.",
+          "type": "object"
+        },
+        "external_std": {
+          "description": "`true`: reference `comline_std` as its own package instead of inlining\nit, shared by every target unless overridden. Only a generator that\nknows how (today, Rust's) acts on it. Defaults on in `lib` mode, off in\n`code` mode.",
+          "type": "boolean"
+        },
+        "layout": {
+          "default": "{{language}}/{{namespace}}.{{ext}}",
+          "description": "Where each file lands under the output root, as a template over\n`{{language}}`, `{{namespace}}`, `{{ext}}`, `{{lang_version}}`,\n`{{spec_version}}` and `{{package_version}}`. Shared by every target\nunless overridden. Has no effect in `lib` mode.",
+          "type": "string"
+        },
+        "mode": {
+          "default": "code",
+          "description": "Emit form shared by every target unless overridden: `code` (loose\nsource files, the default) or `lib` (a buildable package).",
+          "enum": [
+            "code",
+            "lib"
+          ],
+          "type": "string"
+        },
+        "only": {
+          "default": [],
+          "description": "Narrow generation to these languages, out of the ones `config.idp`\ndeclares. Empty (the default) means every declared language.\n\nThe consumer's half of the split: `config.idp` says which languages\nthe *package* is for, and this says which of them *this checkout*\nwants built. A name the congregation doesn't declare is an error\nrather than a silent no-op, so a typo here can't quietly stop\ngenerating something.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "out": {
+          "default": "generated",
+          "description": "Output root, relative to `comline.toml`, shared by every target unless\noverridden. Default `generated`.",
+          "type": "string"
+        },
+        "package_versions": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/VersionSpec"
+            }
+          ],
+          "description": "Version selection shared by every target unless overridden."
+        },
+        "target": {
+          "description": "`[[generate.target]]` blocks.",
+          "items": {
+            "$ref": "#/definitions/Target"
+          },
+          "type": "array"
+        },
+        "validate_on_decode": {
+          "default": "off",
+          "description": "Whether decoding a value runs its `@validators` checks: `off` (the\ndefault), `collect` (fail with every failure) or `first` (fail with\nthe first). Shared by every target unless overridden.",
+          "enum": [
+            "off",
+            "collect",
+            "first"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "description": "One `[[generate.target]]` block: the settings for one language the\npackage declares. It does not decide which languages are generated, and\nnaming one `config.idp` doesn't declare is an error.",
+      "properties": {
+        "async": {
+          "description": "Whether this target's protocols on a connection get async handlers and\nsenders. Overrides `[generate] async`.",
+          "type": "boolean"
+        },
+        "encodings": {
+          "additionalProperties": {
+            "$ref": "#/definitions/EncodingEntry"
+          },
+          "description": "Which type implements each encoding, by encoding name, for this\ntarget. Overrides `[generate] encodings`, name by name.",
+          "type": "object"
+        },
+        "external_std": {
+          "description": "Whether this target references `comline_std` as its own package.\nOverrides `[generate] external_std`.",
+          "type": "boolean"
+        },
+        "flatten": {
+          "default": false,
+          "description": "`lib` mode only: write the crate straight into `out` instead of\n`<out>/<language>/`. Target-only (no `[generate]` default, no flag/env)\n— a shared `out` across several `lib` targets needs the per-language\nsplit to avoid two crates colliding in one directory, so flattening\nonly makes sense once a target already has `out` to itself.",
+          "type": "boolean"
+        },
+        "generator": {
+          "description": "A generator outside this binary: a path to a `.wasm` (run sandboxed\nunder wasmtime) or to an executable, relative to `comline.toml`'s\ndirectory. Unset, the built-in generator for `language` is used.",
+          "type": "string"
+        },
+        "lang_version": {
+          "description": "Language/toolchain version selecting the generator (e.g. `1.88.0`).\nFalls back to the version the congregation declared for this language,\nand may raise it but never lower it.",
+          "type": "string"
+        },
+        "language": {
+          "description": "The language this block configures. Must match a language the\npackage declares under `code_generation.languages` in `config.idp`.\nWith `generator`, it also picks among the languages that generator\noffers, and may be left out when it offers one.",
+          "type": "string"
+        },
+        "layout": {
+          "description": "This target's layout template. Overrides `[generate] layout`.",
+          "type": "string"
+        },
+        "mode": {
+          "description": "This target's emit form: `code` or `lib`. Overrides `[generate] mode`.",
+          "enum": [
+            "code",
+            "lib"
+          ],
+          "type": "string"
+        },
+        "out": {
+          "description": "This target's output root, relative to `comline.toml`. Overrides\n`[generate] out`.",
+          "type": "string"
+        },
+        "package_versions": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/VersionSpec"
+            }
+          ],
+          "description": "This target's version selection. Overrides\n`[generate] package_versions`."
+        },
+        "timeout": {
+          "description": "The wall-time limit for each call to `generator`, in seconds.\nDefault 60.",
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "validate_on_decode": {
+          "description": "Whether this target's decoding runs `@validators` checks: `off`,\n`collect` or `first`. Overrides `[generate] validate_on_decode`.",
+          "enum": [
+            "off",
+            "collect",
+            "first"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "VersionSpec": {
+      "anyOf": [
+        {
+          "examples": [
+            "latest",
+            "all",
+            "0.3.0"
+          ],
+          "type": "string"
+        },
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      ],
+      "description": "Which package versions to generate bindings for: `latest` (the working tree, the default), `all` (every committed version), or one version or a list of them, each a version string or commit hash."
+    }
+  },
+  "description": "`comline.toml`: where `comline generate` writes code, and how. Which\nlanguages are generated comes from `config.idp`'s\n`code_generation.languages`; this file says where each one lands.",
+  "properties": {
+    "generate": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Generate"
+        }
+      ],
+      "description": "Code-generation settings: defaults shared by every target, and\n`[[generate.target]]` blocks configuring one language each."
+    }
+  },
+  "title": "comline.toml",
+  "type": "object"
+}
