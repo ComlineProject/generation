@@ -70,6 +70,15 @@ validate_on_decode = "collect"
 async = true
 encodings = { "com.acme.lines@1" = "mine::Lines" }
 flatten = true
+
+[doc]
+out = "docs/api"
+formats = ["html", "markdown", "json"]
+versions = { last = 5, since = "0.3.0", releases_only = true }
+renderer = "render.wasm"
+timeout = 30
+links = { std = "https://comlineproject.github.io/docs/std/" }
+changelog_from = "0.3.0"
 "#;
 
 fn toml_files(dir: &Path, found: &mut Vec<PathBuf>) {
@@ -101,6 +110,7 @@ fn every_comline_toml_the_parser_accepts_is_valid() {
             "[[generate.target]]\nlanguage = \"rust\"\n",
         ),
         ("a section only", "[generate]\nout = \"gen\"\n"),
+        ("every version", "[doc]\nversions = \"all\"\n"),
     ]
     .into_iter()
     .map(|(name, text)| (name.to_string(), text.to_string()))

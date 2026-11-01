@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>shop 0.2.0-dev.1</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="index.html" data-version="0.2.0-dev.1" data-root="">
+<header class="top">
+<a class="brand" href="index.html">shop 0.2.0-dev.1</a>
+<form class="picker" id="version-form">
+<label for="version-picker">Version</label>
+<select id="version-picker"><option value="0.2.0-dev.1" selected>0.2.0-dev.1</option></select>
+<button type="submit">Go</button>
+<a href="../compare.html">Compare</a>
+</form>
+<div class="search" role="search">
+<input id="search" type="search" placeholder="Search (press /)" aria-label="Search the documentation" autocomplete="off" spellcheck="false">
+<ul id="results" class="results" hidden></ul>
+</div>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Modules">
+<ul>
+<li><a href="index.html" aria-current="page">Overview</a></li>
+<li><details><summary><a href="api.html"><code>api</code></a></summary>
+<ul>
+<li><a href="api.html#outofstock"><span class="kind">error</span> OutOfStock</a></li>
+<li><a href="api.html#order"><span class="kind">struct</span> Order</a></li>
+<li><a href="api.html#orders"><span class="kind">protocol</span> Orders</a></li>
+</ul></details></li>
+<li><details><summary><a href="types.html"><code>types</code></a></summary>
+<ul>
+<li><a href="types.html#customer"><span class="kind">struct</span> Customer</a></li>
+<li><a href="types.html#payment"><span class="kind">enum</span> Payment</a></li>
+<li><a href="types.html#max_name"><span class="kind">const</span> MAX_NAME</a></li>
+<li><a href="types.html#customerid"><span class="kind">type</span> CustomerId</a></li>
+</ul></details></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul>
+</nav>
+<main>
+<p class="note" role="note">Built versions don&#39;t record their wire tables yet (core#153).</p>
+<p class="note" id="version-note" role="status" hidden></p>
+<h1>shop 0.2.0-dev.1</h1>
+<p>A small shop.</p>
+<p>It sells <strong>things</strong>.</p>
+<h2>Modules</h2>
+<div class="table"><table>
+<thead><tr><th>Module</th><th></th></tr></thead>
+<tbody>
+<tr><td><a href="api.html"><code>api</code></a></td><td>The shop's API.</td></tr>
+<tr><td><a href="types.html"><code>types</code></a></td><td>Shared types.</td></tr>
+</tbody>
+</table></div>
+<p>See the <a href="changelog.html">changelog</a>.</p>
+</main>
+</div>
+<script src="../versions.js"></script>
+<script src="search.js" data-root=""></script>
+</body>
+</html>

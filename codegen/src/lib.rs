@@ -83,6 +83,13 @@ pub struct Renderer {
     /// The documentation model versions (`comline_core::doc::DOC_MODEL_VERSION`)
     /// it reads.
     pub model_versions: &'static [u32],
+    /// Its own version, part of `comline doc`'s cache key: a renderer whose
+    /// output changes says so by changing it.
+    pub version: &'static str,
+    /// Whether it renders a multi-version site's index
+    /// ([`protocol::RenderOptions::versions`]). One that doesn't still
+    /// renders each version on its own.
+    pub sites: bool,
     pub render: RendererFn,
 }
 

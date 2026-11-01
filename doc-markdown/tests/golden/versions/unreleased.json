@@ -1,0 +1,394 @@
+{
+  "model_version": 1,
+  "package": {
+    "name": "shop",
+    "version": null,
+    "docs": "A small shop.\n\nIt sells **things**."
+  },
+  "modules": [
+    {
+      "path": "api",
+      "docs": "The shop's API.",
+      "units": [
+        {
+          "kind": "error",
+          "name": "OutOfStock",
+          "docs": {
+            "text": "Not in stock.",
+            "params": []
+          },
+          "annotations": [],
+          "ordinal": 0,
+          "message": "{item} is out of stock",
+          "fields": [
+            {
+              "name": "item",
+              "docs": null,
+              "annotations": [],
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              },
+              "optional": false,
+              "default": null
+            }
+          ]
+        },
+        {
+          "kind": "struct",
+          "name": "Order",
+          "docs": {
+            "text": "One order.",
+            "params": []
+          },
+          "annotations": [],
+          "fields": [
+            {
+              "name": "customer",
+              "docs": null,
+              "annotations": [],
+              "type": {
+                "kind": "named",
+                "name": "Customer",
+                "target": {
+                  "package": "shop",
+                  "schema": "types",
+                  "name": "Customer"
+                }
+              },
+              "optional": false,
+              "default": null
+            },
+            {
+              "name": "payments",
+              "docs": null,
+              "annotations": [],
+              "type": {
+                "kind": "array",
+                "element": {
+                  "kind": "named",
+                  "name": "Payment",
+                  "target": {
+                    "package": "shop",
+                    "schema": "types",
+                    "name": "Payment"
+                  }
+                },
+                "length": null
+              },
+              "optional": false,
+              "default": null
+            },
+            {
+              "name": "method",
+              "docs": null,
+              "annotations": [],
+              "type": {
+                "kind": "named",
+                "name": "HttpMethod",
+                "target": {
+                  "package": "std",
+                  "schema": "http",
+                  "name": "HttpMethod"
+                }
+              },
+              "optional": false,
+              "default": null
+            },
+            {
+              "name": "lines",
+              "docs": null,
+              "annotations": [],
+              "type": {
+                "kind": "union",
+                "members": [
+                  {
+                    "kind": "primitive",
+                    "name": "u32"
+                  },
+                  {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                ]
+              },
+              "optional": false,
+              "default": null
+            }
+          ]
+        },
+        {
+          "kind": "protocol",
+          "name": "Orders",
+          "docs": {
+            "text": "Orders things.",
+            "params": []
+          },
+          "annotations": [],
+          "functions": [
+            {
+              "name": "place",
+              "docs": {
+                "text": "Place an order.",
+                "params": [
+                  {
+                    "name": "order",
+                    "text": "what to place"
+                  }
+                ]
+              },
+              "annotations": [],
+              "arguments": [
+                {
+                  "name": "order",
+                  "type": {
+                    "kind": "named",
+                    "name": "Order",
+                    "target": {
+                      "package": "shop",
+                      "schema": "api",
+                      "name": "Order"
+                    }
+                  }
+                }
+              ],
+              "returns": {
+                "kind": "primitive",
+                "name": "u64"
+              },
+              "throws": [
+                {
+                  "kind": "named",
+                  "name": "OutOfStock",
+                  "target": {
+                    "package": "shop",
+                    "schema": "api",
+                    "name": "OutOfStock"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "ping",
+              "docs": null,
+              "annotations": [],
+              "arguments": [],
+              "returns": null,
+              "throws": []
+            },
+            {
+              "name": "cancel",
+              "docs": {
+                "text": "Cancel an order.",
+                "params": []
+              },
+              "annotations": [],
+              "arguments": [
+                {
+                  "name": "order",
+                  "type": {
+                    "kind": "named",
+                    "name": "Order",
+                    "target": {
+                      "package": "shop",
+                      "schema": "api",
+                      "name": "Order"
+                    }
+                  }
+                }
+              ],
+              "returns": {
+                "kind": "primitive",
+                "name": "bool"
+              },
+              "throws": []
+            }
+          ],
+          "wire": {
+            "package": "shop",
+            "dependency": false,
+            "schema": "api",
+            "name": "Orders",
+            "format": {
+              "value": "packed@1",
+              "params": {},
+              "source": "core_default"
+            },
+            "framing": {
+              "value": "datagram@2",
+              "params": {},
+              "source": "core_default"
+            },
+            "handshake": {
+              "value": "comline@1",
+              "params": {},
+              "source": "core_default"
+            },
+            "unverified": false,
+            "guarantees": [
+              {
+                "guarantee": "schema_agreement",
+                "held": true,
+                "causes": [],
+                "reason": null,
+                "acceptance": {
+                  "state": "not_needed"
+                }
+              },
+              {
+                "guarantee": "encoding_agreement",
+                "held": true,
+                "causes": [],
+                "reason": null,
+                "acceptance": {
+                  "state": "not_needed"
+                }
+              },
+              {
+                "guarantee": "encoding_conformance",
+                "held": true,
+                "causes": [],
+                "reason": null,
+                "acceptance": {
+                  "state": "not_needed"
+                }
+              },
+              {
+                "guarantee": "version_honesty",
+                "held": true,
+                "causes": [],
+                "reason": null,
+                "acceptance": {
+                  "state": "not_needed"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "path": "types",
+      "docs": "Shared types.",
+      "units": [
+        {
+          "kind": "struct",
+          "name": "Customer",
+          "docs": {
+            "text": "Who buys.",
+            "params": [
+              {
+                "name": "id",
+                "text": "unique per shop"
+              }
+            ]
+          },
+          "annotations": [],
+          "fields": [
+            {
+              "name": "id",
+              "docs": {
+                "text": "The customer's id.",
+                "params": []
+              },
+              "annotations": [],
+              "type": {
+                "kind": "primitive",
+                "name": "u64"
+              },
+              "optional": false,
+              "default": null
+            },
+            {
+              "name": "name",
+              "docs": null,
+              "annotations": [
+                {
+                  "key": "deprecated",
+                  "value": "\"use email\""
+                }
+              ],
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              },
+              "optional": false,
+              "default": null
+            },
+            {
+              "name": "email",
+              "docs": null,
+              "annotations": [],
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              },
+              "optional": true,
+              "default": null
+            },
+            {
+              "name": "phone",
+              "docs": null,
+              "annotations": [],
+              "type": {
+                "kind": "primitive",
+                "name": "string"
+              },
+              "optional": true,
+              "default": null
+            }
+          ]
+        },
+        {
+          "kind": "enum",
+          "name": "Payment",
+          "docs": {
+            "text": "How an order is paid.",
+            "params": []
+          },
+          "variants": [
+            "Card"
+          ]
+        },
+        {
+          "kind": "constant",
+          "name": "MAX_NAME",
+          "docs": {
+            "text": "The longest name.",
+            "params": []
+          },
+          "type": {
+            "kind": "primitive",
+            "name": "u32"
+          },
+          "value": "64"
+        },
+        {
+          "kind": "type_alias",
+          "name": "CustomerId",
+          "docs": null,
+          "annotations": [],
+          "target": {
+            "kind": "primitive",
+            "name": "u64"
+          }
+        }
+      ]
+    }
+  ],
+  "changelog": [
+    {
+      "from": "0.2.0",
+      "to": "working tree",
+      "breaking": [],
+      "features": [
+        {
+          "kind": "added_function",
+          "protocol_name": "Orders",
+          "function_name": "cancel"
+        }
+      ],
+      "modifications": []
+    }
+  ]
+}

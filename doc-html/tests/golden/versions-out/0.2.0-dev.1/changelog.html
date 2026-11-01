@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog · shop 0.2.0-dev.1</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="changelog.html" data-version="0.2.0-dev.1" data-root="">
+<header class="top">
+<a class="brand" href="index.html">shop 0.2.0-dev.1</a>
+<form class="picker" id="version-form">
+<label for="version-picker">Version</label>
+<select id="version-picker"><option value="0.2.0-dev.1" selected>0.2.0-dev.1</option></select>
+<button type="submit">Go</button>
+<a href="../compare.html">Compare</a>
+</form>
+<div class="search" role="search">
+<input id="search" type="search" placeholder="Search (press /)" aria-label="Search the documentation" autocomplete="off" spellcheck="false">
+<ul id="results" class="results" hidden></ul>
+</div>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Modules">
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><details><summary><a href="api.html"><code>api</code></a></summary>
+<ul>
+<li><a href="api.html#outofstock"><span class="kind">error</span> OutOfStock</a></li>
+<li><a href="api.html#order"><span class="kind">struct</span> Order</a></li>
+<li><a href="api.html#orders"><span class="kind">protocol</span> Orders</a></li>
+</ul></details></li>
+<li><details><summary><a href="types.html"><code>types</code></a></summary>
+<ul>
+<li><a href="types.html#customer"><span class="kind">struct</span> Customer</a></li>
+<li><a href="types.html#payment"><span class="kind">enum</span> Payment</a></li>
+<li><a href="types.html#max_name"><span class="kind">const</span> MAX_NAME</a></li>
+<li><a href="types.html#customerid"><span class="kind">type</span> CustomerId</a></li>
+</ul></details></li>
+<li><a href="changelog.html" aria-current="page">Changelog</a></li>
+</ul>
+</nav>
+<main>
+<p class="note" role="note">Built versions don&#39;t record their wire tables yet (core#153).</p>
+<h1>Changelog: shop</h1>
+<h2>0.1.0 to 0.2.0-dev.1</h2>
+<h3>Breaking</h3>
+<ul>
+<li>Removed enum variant: enum name: <code>Payment</code>, variant: <code>Cash</code></li>
+</ul>
+<h3>Added</h3>
+<ul>
+<li>Added field: field name: <code>phone</code>, field type: <code>string</code>, optional: <code>true</code>, type name: <code>Customer</code></li>
+</ul>
+</main>
+</div>
+<script src="../versions.js"></script>
+<script src="search.js" data-root=""></script>
+</body>
+</html>

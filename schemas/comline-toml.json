@@ -3,6 +3,13 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "definitions": {
+    "AllVersions": {
+      "description": "The keyword `\"all\"`.",
+      "enum": [
+        "all"
+      ],
+      "type": "string"
+    },
     "Doc": {
       "additionalProperties": false,
       "description": "The `[doc]` table: `comline doc`'s settings. Each key has a flag that\noverrides it.",
@@ -11,15 +18,22 @@
           "description": "Add a changelog from this built version (a version or commit hash) to\nthe documented one. `--changelog-from` overrides it.",
           "type": "string"
         },
-        "format": {
-          "default": "markdown",
-          "description": "What to write: `markdown` (pages, from the official renderer or\n`renderer`), `html` (a static site, from the official HTML renderer or\n`renderer`), `json` (the documentation model itself, `model.json`), or\nanother renderer id `renderer` offers. Default `markdown`. `--format`\noverrides it.",
-          "examples": [
-            "markdown",
-            "html",
-            "json"
+        "formats": {
+          "default": [
+            "markdown"
           ],
-          "type": "string"
+          "description": "What to write, each into `<out>/<format>/` in one run: `markdown`\n(pages, from the official renderer or `renderer`), `html` (a static\nsite, from the official HTML renderer or `renderer`), `json` (the\ndocumentation model itself, `model.json`), or another renderer id\n`renderer` offers. Default `[\"markdown\"]`. `--format` overrides it.",
+          "examples": [
+            [
+              "html",
+              "markdown",
+              "json"
+            ]
+          ],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "links": {
           "additionalProperties": {
@@ -43,9 +57,61 @@
           "format": "uint64",
           "minimum": 1,
           "type": "integer"
+        },
+        "versions": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/DocVersions"
+            }
+          ],
+          "default": "all",
+          "description": "Which versions to document. Default `\"all\"`: every release, every\ndev build and the unreleased working state. A table trims the list:\n`{ last = 5 }` keeps the newest five, `{ since = \"0.3.0\" }` keeps that\nversion and newer, `{ releases_only = true }` keeps releases alone\n(no dev builds, no unreleased state); they combine. `--version`\ndocuments one version instead."
         }
       },
       "type": "object"
+    },
+    "DocVersionSelect": {
+      "additionalProperties": false,
+      "description": "`[doc] versions` as a table: each key trims the list, and they combine\n(`releases_only` first, then `since`, then `last`).",
+      "properties": {
+        "last": {
+          "description": "Keep the newest N (the unreleased state counts as one).",
+          "format": "uint",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "releases_only": {
+          "default": false,
+          "description": "Keep releases only: no dev builds and no unreleased state.",
+          "type": "boolean"
+        },
+        "since": {
+          "description": "Keep this built version (a version string) and every newer one.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "DocVersions": {
+      "anyOf": [
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/AllVersions"
+            }
+          ],
+          "description": "`\"all\"`: every release, dev build and the unreleased state."
+        },
+        {
+          "allOf": [
+            {
+              "$ref": "#/definitions/DocVersionSelect"
+            }
+          ],
+          "description": "A trimmed list."
+        }
+      ],
+      "description": "`[doc] versions`: every version, or a trimmed list."
     },
     "EncodingEntry": {
       "anyOf": [

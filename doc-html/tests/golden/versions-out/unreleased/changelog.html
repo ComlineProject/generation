@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog · shop</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="changelog.html" data-version="unreleased" data-root="">
+<header class="top">
+<a class="brand" href="index.html">shop</a>
+<form class="picker" id="version-form">
+<label for="version-picker">Version</label>
+<select id="version-picker"><option value="unreleased" selected>unreleased</option></select>
+<button type="submit">Go</button>
+<a href="../compare.html">Compare</a>
+</form>
+<div class="search" role="search">
+<input id="search" type="search" placeholder="Search (press /)" aria-label="Search the documentation" autocomplete="off" spellcheck="false">
+<ul id="results" class="results" hidden></ul>
+</div>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Modules">
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><details><summary><a href="api.html"><code>api</code></a></summary>
+<ul>
+<li><a href="api.html#outofstock"><span class="kind">error</span> OutOfStock</a></li>
+<li><a href="api.html#order"><span class="kind">struct</span> Order</a></li>
+<li><a href="api.html#orders"><span class="kind">protocol</span> Orders</a></li>
+</ul></details></li>
+<li><details><summary><a href="types.html"><code>types</code></a></summary>
+<ul>
+<li><a href="types.html#customer"><span class="kind">struct</span> Customer</a></li>
+<li><a href="types.html#payment"><span class="kind">enum</span> Payment</a></li>
+<li><a href="types.html#max_name"><span class="kind">const</span> MAX_NAME</a></li>
+<li><a href="types.html#customerid"><span class="kind">type</span> CustomerId</a></li>
+</ul></details></li>
+<li><a href="changelog.html" aria-current="page">Changelog</a></li>
+</ul>
+</nav>
+<main>
+<h1>Changelog: shop</h1>
+<h2>0.2.0 to working tree</h2>
+<h3>Added</h3>
+<ul>
+<li>Added function: function name: <code>cancel</code>, protocol name: <code>Orders</code></li>
+</ul>
+</main>
+</div>
+<script src="../versions.js"></script>
+<script src="search.js" data-root=""></script>
+</body>
+</html>

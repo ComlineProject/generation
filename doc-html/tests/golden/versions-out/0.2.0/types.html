@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>types · shop 0.2.0</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="types.html" data-version="0.2.0" data-root="">
+<header class="top">
+<a class="brand" href="index.html">shop 0.2.0</a>
+<form class="picker" id="version-form">
+<label for="version-picker">Version</label>
+<select id="version-picker"><option value="0.2.0" selected>0.2.0</option></select>
+<button type="submit">Go</button>
+<a href="../compare.html">Compare</a>
+</form>
+<div class="search" role="search">
+<input id="search" type="search" placeholder="Search (press /)" aria-label="Search the documentation" autocomplete="off" spellcheck="false">
+<ul id="results" class="results" hidden></ul>
+</div>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Modules">
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><details><summary><a href="api.html"><code>api</code></a></summary>
+<ul>
+<li><a href="api.html#outofstock"><span class="kind">error</span> OutOfStock</a></li>
+<li><a href="api.html#order"><span class="kind">struct</span> Order</a></li>
+<li><a href="api.html#orders"><span class="kind">protocol</span> Orders</a></li>
+</ul></details></li>
+<li><details open><summary><a href="types.html" aria-current="page"><code>types</code></a></summary>
+<ul>
+<li><a href="types.html#customer"><span class="kind">struct</span> Customer</a></li>
+<li><a href="types.html#payment"><span class="kind">enum</span> Payment</a></li>
+<li><a href="types.html#max_name"><span class="kind">const</span> MAX_NAME</a></li>
+<li><a href="types.html#customerid"><span class="kind">type</span> CustomerId</a></li>
+</ul></details></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul>
+</nav>
+<main>
+<p class="note" role="note">Built versions don&#39;t record their wire tables yet (core#153).</p>
+<h1><code>types</code></h1>
+<p>Shared types.</p>
+<div class="table"><table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td>struct <a href="#customer"><code>Customer</code></a></td><td>Who buys.</td></tr>
+<tr><td>enum <a href="#payment"><code>Payment</code></a></td><td>How an order is paid.</td></tr>
+<tr><td>const <a href="#max_name"><code>MAX_NAME</code></a></td><td>The longest name.</td></tr>
+<tr><td>type <a href="#customerid"><code>CustomerId</code></a></td><td></td></tr>
+</tbody>
+</table></div>
+<section class="unit" id="customer">
+<h2><a class="self" href="#customer">struct <code>Customer</code></a></h2>
+<p>Who buys.</p>
+<div class="table"><table>
+<thead><tr><th>Field</th><th>Type</th><th></th></tr></thead>
+<tbody>
+<tr><td><code>id</code></td><td><code>u64</code></td><td>The customer's id.</td></tr>
+<tr><td><code>name</code></td><td><code>string</code></td><td><code>@deprecated = &quot;use email&quot;</code></td></tr>
+<tr><td><code>email</code></td><td><code>string</code> (optional)</td><td></td></tr>
+<tr><td><code>phone</code></td><td><code>string</code> (optional)</td><td></td></tr>
+</tbody>
+</table></div>
+</section>
+<section class="unit" id="payment">
+<h2><a class="self" href="#payment">enum <code>Payment</code></a></h2>
+<p>How an order is paid.</p>
+<p>Variants:</p>
+<ul>
+<li><code>Card</code></li>
+</ul>
+</section>
+<section class="unit" id="max_name">
+<h2><a class="self" href="#max_name">const <code>MAX_NAME</code></a></h2>
+<p>The longest name.</p>
+<p>Type: <code>u32</code>. Value: <code>64</code></p>
+</section>
+<section class="unit" id="customerid">
+<h2><a class="self" href="#customerid">type <code>CustomerId</code></a></h2>
+<p>Alias of <code>u64</code></p>
+</section>
+</main>
+</div>
+<script src="../versions.js"></script>
+<script src="search.js" data-root=""></script>
+</body>
+</html>
