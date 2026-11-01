@@ -23,6 +23,18 @@ pub struct DocModel {
     pub package: Package,
     pub modules: Vec<Module>,
     pub changelog: Vec<Changelog>,
+    /// What the package reaches of each dependency (and `std`), apart from
+    /// its own modules.
+    pub dependencies: Vec<Dependency>,
+}
+
+/// A dependency, as far as the documented package reaches it: its modules
+/// hold only the units reached.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct Dependency {
+    pub package: String,
+    pub modules: Vec<Module>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -275,11 +287,92 @@ pub struct Acceptance {
 pub struct Changelog {
     pub from: String,
     pub to: String,
+    /// `step` (also when absent), `release` or `since_release`: see
+    /// [`Changelog::is_step`].
+    pub span: String,
     /// Each change as `comline_core::schema::ir::diff` serializes it: a
     /// `kind` and that kind's fields.
     pub breaking: Vec<Value>,
     pub features: Vec<Value>,
     pub modifications: Vec<Value>,
+}
+
+impl Changelog {
+    /// From the version just before `to`. A comparison composes these.
+    pub fn is_step(&self) -> bool {
+        self.span.is_empty() || self.span == "step"
+    }
+
+    /// A release's changes since the previous release.
+    pub fn is_release(&self) -> bool {
+        self.span == "release"
+    }
+
+    /// A dev build's changes since the last release.
+    pub fn is_since_release(&self) -> bool {
+        self.span == "since_release"
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.breaking.is_empty() && self.features.is_empty() && self.modifications.is_empty()
+    }
+}
+
+impl DocModel {
+    /// The changelogs a version's changelog page shows in full: a release's
+    /// changes since the previous release when it has them, else the step
+    /// from the version before it. Spans a renderer doesn't know are left
+    /// out.
+    pub fn shown_changelogs(&self) -> Vec<&Changelog> {
+        let release: Vec<&Changelog> = self.changelog.iter().filter(|l| l.is_release()).collect();
+        if !release.is_empty() {
+            return release;
+        }
+        self.changelog.iter().filter(|l| l.is_step()).collect()
+    }
+
+    /// A dev build's changes since the last release, which its changelog
+    /// page links to below the step.
+    pub fn since_release(&self) -> Vec<&Changelog> {
+        self.changelog.iter().filter(|l| l.is_since_release()).collect()
+    }
+
+    /// The steps, which a comparison across versions composes.
+    pub fn steps(&self) -> impl Iterator<Item = &Changelog> {
+        self.changelog.iter().filter(|l| l.is_step())
+    }
+}
+
+/// Where `std`'s published documentation is, when `[doc] links` names no
+/// other: the hosted docs, a module at `<base>/<module>/` and a unit at
+/// its lowercase anchor (`std/http/#httpmethod`).
+pub const STD_DOCS: &str = "https://comlineproject.github.io/docs/std/";
+
+/// The base URL of `package`'s published documentation: `[doc] links`'
+/// entry for it, else [`STD_DOCS`] for `std`. A dependency without one is
+/// documented on the site itself ([`dependency_page`]).
+pub fn dependency_link<'a>(links: &'a BTreeMap<String, String>, package: &str) -> Option<&'a str> {
+    match links.get(package) {
+        Some(base) => Some(base.as_str()),
+        None if package == "std" => Some(STD_DOCS),
+        None => None,
+    }
+}
+
+/// A published page: `<base>/<module>/`, with `#<anchor>` for `name`.
+pub fn external_url(base: &str, module: &str, name: Option<&str>) -> String {
+    let mut url = format!("{}/{}/", base.trim_end_matches('/'), module.replace("::", "/"));
+    if let Some(name) = name {
+        url.push('#');
+        url.push_str(&anchor(name));
+    }
+    url
+}
+
+/// An unlinked dependency's module page on the site, from its root:
+/// `deps/<package>/<module>.<ext>`.
+pub fn dependency_page(package: &str, module: &str, ext: &str) -> String {
+    format!("deps/{package}/{}", page_of(module, ext))
 }
 
 impl Unit {

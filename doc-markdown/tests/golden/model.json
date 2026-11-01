@@ -114,6 +114,22 @@
               },
               "optional": false,
               "default": null
+            },
+            {
+              "name": "greeting",
+              "docs": null,
+              "annotations": [],
+              "type": {
+                "kind": "named",
+                "name": "Greeting",
+                "target": {
+                  "package": "localdeps",
+                  "schema": "greeting",
+                  "name": "Greeting"
+                }
+              },
+              "optional": true,
+              "default": null
             }
           ]
         },
@@ -364,7 +380,7 @@
           "kind": "changed_function_signature",
           "protocol_name": "Orders",
           "function_name": "place",
-          "details": "(order: Order) -> u64 → (order: Order, rush: bool) -> u64",
+          "details": "(order: Order) -> u64 \u2192 (order: Order, rush: bool) -> u64",
           "old": "function place(order: Order) -> u64 ! OutOfStock;",
           "new": "function place(order: Order, rush: bool) -> u64 ! OutOfStock;"
         }
@@ -391,6 +407,66 @@
         {
           "kind": "docstring_changed",
           "name": "Order"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "package": "localdeps",
+      "modules": [
+        {
+          "path": "greeting",
+          "docs": null,
+          "units": [
+            {
+              "kind": "struct",
+              "name": "Greeting",
+              "docs": {
+                "text": "A greeting.",
+                "params": []
+              },
+              "annotations": [],
+              "fields": [
+                {
+                  "name": "text",
+                  "docs": null,
+                  "annotations": [],
+                  "type": {
+                    "kind": "primitive",
+                    "name": "string"
+                  },
+                  "optional": false,
+                  "default": null
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "package": "std",
+      "modules": [
+        {
+          "path": "http",
+          "docs": null,
+          "units": [
+            {
+              "kind": "enum",
+              "name": "HttpMethod",
+              "docs": {
+                "text": "An HTTP request method.",
+                "params": []
+              },
+              "variants": [
+                "GET",
+                "POST",
+                "PUT",
+                "DELETE"
+              ]
+            }
+          ]
         }
       ]
     }
