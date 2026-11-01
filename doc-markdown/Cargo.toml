@@ -7,9 +7,6 @@ description = "The official Comline documentation renderer: a documentation mode
 
 [dependencies]
 comline-codegen = { path = "../codegen" }
-# The IR only, as `comline-codegen` takes it: guarantee names and their
-# prose. Same rev as `comline-codegen`'s.
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "076cae0c3a0639b0c083b61a94f9d4913e853b3f", default-features = false }
 eyre = "0.6.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

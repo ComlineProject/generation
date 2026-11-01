@@ -17,18 +17,15 @@
 //! dependency a base URL, the directory-URL form mkdocs and zensical publish
 //! pages at; otherwise it's plain text.
 
-mod model;
-
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use comline_codegen::protocol::{RenderOptions, RenderRequest};
 use comline_codegen::{GeneratedFile, Registry, Renderer};
-use comline_core::schema::ir::frozen::unit::Guarantee;
 use eyre::{eyre, Result};
 
-use model::*;
+use comline_codegen::doc_model::*;
 
 /// The documentation model versions this renderer reads.
 pub const MODEL_VERSIONS: &[u32] = &[1];
@@ -63,59 +60,12 @@ struct Pages<'a> {
 /// A module's page, relative to the output root: `types::user` is
 /// `types/user.md`.
 fn page_of(module: &str) -> String {
-    format!("{}.md", module.replace("::", "/"))
-}
-
-fn anchor(name: &str) -> String {
-    name.to_lowercase()
-}
-
-/// `to` (a page path) relative to the page `from`.
-fn relative(from: &str, to: &str) -> String {
-    let from: Vec<&str> = from.split('/').collect();
-    let to: Vec<&str> = to.split('/').collect();
-    let from_dir = &from[..from.len() - 1];
-    let common = from_dir.iter().zip(&to).take_while(|(a, b)| a == b).count();
-    let mut parts: Vec<&str> = vec![".."; from_dir.len() - common];
-    parts.extend(&to[common..]);
-    parts.join("/")
+    comline_codegen::doc_model::page_of(module, "md")
 }
 
 /// Text for one table cell: no `|` or line break of its own.
 fn cell(text: &str) -> String {
     text.trim().replace('|', "\\|").replace('\n', "<br>")
-}
-
-fn unit_name(unit: &Unit) -> Option<&str> {
-    match unit {
-        Unit::Struct { name, .. }
-        | Unit::Enum { name, .. }
-        | Unit::Protocol { name, .. }
-        | Unit::Error { name, .. }
-        | Unit::Validator { name, .. }
-        | Unit::Constant { name, .. }
-        | Unit::TypeAlias { name, .. } => Some(name),
-        Unit::Settings { name, .. } => Some(name.as_deref().unwrap_or("settings")),
-        Unit::Unknown => None,
-    }
-}
-
-fn kind_of(unit: &Unit) -> &'static str {
-    match unit {
-        Unit::Struct { .. } => "struct",
-        Unit::Enum { .. } => "enum",
-        Unit::Protocol { .. } => "protocol",
-        Unit::Error { .. } => "error",
-        Unit::Validator { .. } => "validator",
-        Unit::Constant { .. } => "const",
-        Unit::TypeAlias { .. } => "type",
-        Unit::Settings { .. } => "settings",
-        Unit::Unknown => "",
-    }
-}
-
-fn summary(docs: &str) -> &str {
-    docs.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("")
 }
 
 fn annotation(a: &Annotation) -> String {
@@ -183,13 +133,13 @@ impl Pages<'_> {
         if let Some(docs) = &module.docs {
             out.push_str(&format!("{}\n\n", docs.trim()));
         }
-        let units: Vec<&Unit> = module.units.iter().filter(|u| unit_name(u).is_some()).collect();
+        let units: Vec<&Unit> = module.units.iter().filter(|u| u.name().is_some()).collect();
         if !units.is_empty() {
             out.push_str("| | |\n|---|---|\n");
             for unit in &units {
-                let name = unit_name(unit).unwrap_or_default();
-                let text = docs_of(unit).map(|d| summary(&d.text)).unwrap_or("");
-                out.push_str(&format!("| {} [`{name}`](#{}) | {} |\n", kind_of(unit), anchor(name), cell(text)));
+                let name = unit.name().unwrap_or_default();
+                let text = unit.docs().map(|d| summary(&d.text)).unwrap_or("");
+                out.push_str(&format!("| {} [`{name}`](#{}) | {} |\n", unit.kind(), anchor(name), cell(text)));
             }
             out.push('\n');
         }
@@ -200,22 +150,15 @@ impl Pages<'_> {
     }
 
     fn unit(&self, out: &mut String, page: &str, unit: &Unit) {
-        let name = unit_name(unit).unwrap_or_default();
-        let _ = write!(out, "<a id=\"{}\"></a>\n\n## {} `{name}`\n\n", anchor(name), kind_of(unit));
-        let docs = docs_of(unit);
+        let name = unit.name().unwrap_or_default();
+        let _ = write!(out, "<a id=\"{}\"></a>\n\n## {} `{name}`\n\n", anchor(name), unit.kind());
+        let docs = unit.docs();
         if let Some(docs) = docs {
             if !docs.text.trim().is_empty() {
                 let _ = write!(out, "{}\n\n", docs.text.trim());
             }
         }
-        let annotations = match unit {
-            Unit::Struct { annotations, .. }
-            | Unit::Protocol { annotations, .. }
-            | Unit::Error { annotations, .. }
-            | Unit::Validator { annotations, .. }
-            | Unit::TypeAlias { annotations, .. } => annotations.as_slice(),
-            _ => &[],
-        };
+        let annotations = unit.annotations();
         if !annotations.is_empty() {
             let list: Vec<String> = annotations.iter().map(annotation).collect();
             let _ = write!(out, "Annotations: {}\n\n", list.join(", "));
@@ -398,67 +341,38 @@ impl Pages<'_> {
     }
 }
 
-/// The docs of a field or argument: its own, else its parent's `@name:` line.
-fn param_doc(own: Option<&Doc>, parent: Option<&Doc>, name: &str) -> String {
-    if let Some(own) = own {
-        if !own.text.trim().is_empty() {
-            return own.text.trim().to_string();
-        }
-    }
-    parent
-        .and_then(|p| p.params.iter().find(|d| d.name == name))
-        .map(|d| d.text.trim().to_string())
-        .unwrap_or_default()
-}
-
-fn docs_of(unit: &Unit) -> Option<&Doc> {
-    match unit {
-        Unit::Struct { docs, .. }
-        | Unit::Enum { docs, .. }
-        | Unit::Protocol { docs, .. }
-        | Unit::Error { docs, .. }
-        | Unit::Validator { docs, .. }
-        | Unit::Constant { docs, .. }
-        | Unit::TypeAlias { docs, .. }
-        | Unit::Settings { docs, .. } => docs.as_ref(),
-        Unit::Unknown => None,
-    }
-}
-
 /// The protocol's wire summary: the same rows as the language server's hover
 /// (`protocol_summary.rs`) and `comline inspect`.
 fn wire_summary(out: &mut String, p: &ProtocolSummary) {
     out.push_str("**On the wire**\n\n| | | from |\n|---|---|---|\n");
-    for (key, choice) in [("format", &p.format), ("framing", &p.framing), ("handshake", &p.handshake)] {
-        let mut value = format!("`{}`", choice.value);
-        if !choice.params.is_empty() {
-            let params: Vec<String> = choice.params.iter().map(|(k, v)| format!("{k} = {v}")).collect();
+    for row in p.choices() {
+        let mut value = format!("`{}`", row.value);
+        if !row.params.is_empty() {
+            let params: Vec<String> = row.params.iter().map(|(k, v)| format!("{k} = {v}")).collect();
             let _ = write!(value, " ({})", params.join(", "));
         }
-        let from = match choice.source.as_str() {
-            "annotation" => format!("`@{key}`"),
-            "package_default" if key == "handshake" => "config.idp `handshake`".to_string(),
-            "package_default" => format!("config.idp `wire.{key}`"),
-            "core_default" => "core's default".to_string(),
-            "framing" => "JSON-RPC's format".to_string(),
-            other => other.to_string(),
+        let from = match &row.source {
+            ChoiceSource::Annotation(key) => format!("`@{key}`"),
+            ChoiceSource::PackageDefault(key) => format!("config.idp `{key}`"),
+            ChoiceSource::CoreDefault => "core's default".to_string(),
+            ChoiceSource::Framing => "JSON-RPC's format".to_string(),
+            ChoiceSource::Other(other) => other.clone(),
         };
-        let _ = writeln!(out, "| {key} | {} | {from} |", cell(&value));
+        let _ = writeln!(out, "| {} | {} | {from} |", row.key, cell(&value));
     }
 
     out.push_str("\n**Guarantees**\n\n| guarantee | | why | accepted |\n|---|---|---|---|\n");
-    for row in &p.guarantees {
+    for row in p.guarantee_rows() {
         let state = if row.held { "held" } else { "**given up**" };
-        let accepted = match row.acceptance.state.as_str() {
-            "unknown" => "by each consumer".to_string(),
-            "accepted" => format!("by {}", row.acceptance.by.as_deref().unwrap_or("")),
-            "not_accepted" => "**not accepted**".to_string(),
-            _ => String::new(),
+        let accepted = match row.accepted {
+            Accepted::ByEachConsumer => "by each consumer".to_string(),
+            Accepted::By(by) => format!("by {by}"),
+            Accepted::NotAccepted => "**not accepted**".to_string(),
+            Accepted::None => String::new(),
         };
-        let guarantee = Guarantee::from_name(&row.guarantee).map(|g| g.describe()).unwrap_or(&row.guarantee);
-        let _ = writeln!(out, "| {guarantee} | {state} | {} | {accepted} |", cell(&row.causes.join("; ")));
+        let _ = writeln!(out, "| {} | {state} | {} | {accepted} |", row.guarantee, cell(&row.causes));
     }
-    if let Some(reason) = p.guarantees.iter().find_map(|g| g.reason.as_deref()) {
+    if let Some(reason) = p.unverified_reason() {
         let _ = writeln!(out, "\n`@unverified`: \"{reason}\"");
     }
     out.push('\n');
@@ -466,23 +380,8 @@ fn wire_summary(out: &mut String, p: &ProtocolSummary) {
 
 /// One change, as a line: its kind in words, then its fields.
 fn change_line(change: &serde_json::Value) -> String {
-    let Some(object) = change.as_object() else { return format!("`{change}`") };
-    let kind = object.get("kind").and_then(|k| k.as_str()).unwrap_or("change");
-    let mut words = kind.replace('_', " ");
-    if let Some(first) = words.get(..1) {
-        words = first.to_uppercase() + &words[1..];
-    }
-    let details: Vec<String> = object
-        .iter()
-        .filter(|(k, _)| k.as_str() != "kind")
-        .map(|(k, v)| {
-            let v = match v {
-                serde_json::Value::String(s) => format!("`{s}`"),
-                other => format!("`{other}`"),
-            };
-            format!("{}: {v}", k.replace('_', " "))
-        })
-        .collect();
+    let Some((words, details)) = change_parts(change) else { return format!("`{change}`") };
+    let details: Vec<String> = details.iter().map(|(k, v)| format!("{k}: `{v}`")).collect();
     if details.is_empty() {
         words
     } else {
@@ -500,17 +399,4 @@ fn finish(mut out: String) -> String {
         out.pop();
     }
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn relative_paths() {
-        assert_eq!(relative("api.md", "types.md"), "types.md");
-        assert_eq!(relative("types/user.md", "api.md"), "../api.md");
-        assert_eq!(relative("types/user.md", "types/item.md"), "item.md");
-        assert_eq!(relative("api.md", "types/user.md"), "types/user.md");
-    }
 }
