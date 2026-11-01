@@ -10,6 +10,14 @@
 //! - `changelog.md` when the model carries a changelog;
 //! - `nav.yml`: a `nav` for mkdocs or zensical, listing the pages above.
 //!
+//! **Several versions.** `comline doc` renders each version into its own
+//! folder ([`RenderOptions::version`]), then asks for the site's index
+//! ([`RenderOptions::versions`]): an `index.md` listing every version, grouped
+//! by release, newest first. Switching versions on a published site is left
+//! to site tooling (mike, for mkdocs). A version's
+//! [`RenderOptions::notes`] (what an old version's documentation lacks) open
+//! its index and module pages as a quote.
+//!
 //! **Links.** Each unit has an anchor, its name in lowercase
 //! (`<a id="order"></a>`), and a type links to its unit's anchor, on the same
 //! page or another module's. A type from a dependency (or `std`) links to
@@ -21,7 +29,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
-use comline_codegen::protocol::{RenderOptions, RenderRequest};
+use comline_codegen::protocol::{RenderOptions, RenderRequest, SiteVersion, VersionKind};
 use comline_codegen::{GeneratedFile, Registry, Renderer};
 use eyre::{eyre, Result};
 
@@ -31,7 +39,8 @@ use comline_codegen::doc_model::*;
 pub const MODEL_VERSIONS: &[u32] = &[1];
 
 /// This renderer, as it registers.
-pub const RENDERER: Renderer = Renderer { id: "markdown", model_versions: MODEL_VERSIONS, render };
+pub const RENDERER: Renderer =
+    Renderer { id: "markdown", model_versions: MODEL_VERSIONS, version: concat!(env!("CARGO_PKG_VERSION"), "+", env!("COMLINE_RENDERER_HASH")), sites: true, render };
 
 /// Register the Markdown renderer.
 pub fn register(registry: &mut Registry) {
@@ -43,18 +52,66 @@ pub fn render(req: &RenderRequest) -> Result<Vec<GeneratedFile>> {
     if !MODEL_VERSIONS.contains(&req.model_version) {
         return Err(eyre!("documentation model {} isn't one this renderer reads ({MODEL_VERSIONS:?})", req.model_version));
     }
+    if !req.options.versions.is_empty() {
+        return Ok(vec![file("index.md", site_index(&req.options.versions)?)]);
+    }
     render_json(&req.model, &req.options)
+}
+
+/// A multi-version site's `index.md`: every version, newest first, dev
+/// builds under the release they lead to.
+fn site_index(versions: &[SiteVersion]) -> Result<String> {
+    let mut name = String::new();
+    let mut groups: Vec<(&str, Vec<&SiteVersion>)> = vec![];
+    for version in versions.iter().rev() {
+        if name.is_empty() {
+            let model: DocModel =
+                serde_json::from_str(&version.model).map_err(|e| eyre!("version `{}`'s model doesn't parse: {e}", version.id))?;
+            name = model.package.name;
+        }
+        match groups.iter_mut().find(|(release, _)| *release == version.release) {
+            Some((_, members)) => members.push(version),
+            None => groups.push((&version.release, vec![version])),
+        }
+    }
+    let latest = latest(versions).map(|v| v.id.as_str()).unwrap_or("");
+    let mut out = format!("# {name}: versions\n\n");
+    if !latest.is_empty() {
+        out.push_str(&format!("The latest is [{latest}]({latest}/index.md).\n\n"));
+    }
+    for (release, members) in groups {
+        out.push_str(&format!("## {release}\n\n"));
+        for version in members {
+            let what = match version.kind {
+                VersionKind::Release => "release",
+                VersionKind::Dev => "dev build",
+                VersionKind::Unreleased => "the working tree's changes since the last build",
+            };
+            out.push_str(&format!("- [{}]({}/index.md): {what}\n", version.id, version.id));
+        }
+        out.push('\n');
+    }
+    Ok(finish(out))
+}
+
+/// The version a site's index points at: the newest release, else the
+/// newest dev build, else the unreleased state.
+pub fn latest(versions: &[SiteVersion]) -> Option<&SiteVersion> {
+    [VersionKind::Release, VersionKind::Dev, VersionKind::Unreleased]
+        .into_iter()
+        .find_map(|kind| versions.iter().rev().find(|v| v.kind == kind))
 }
 
 /// The pages for the model `json`.
 pub fn render_json(json: &str, options: &RenderOptions) -> Result<Vec<GeneratedFile>> {
     let model: DocModel = serde_json::from_str(json).map_err(|e| eyre!("the documentation model doesn't parse: {e}"))?;
-    Ok(Pages { model: &model, links: &options.links }.all())
+    Ok(Pages { model: &model, links: &options.links, notes: &options.notes }.all())
 }
 
 struct Pages<'a> {
     model: &'a DocModel,
     links: &'a BTreeMap<String, String>,
+    notes: &'a [String],
 }
 
 /// A module's page, relative to the output root: `types::user` is
@@ -88,6 +145,19 @@ impl Pages<'_> {
         files
     }
 
+    /// This version's notes, as a quote; empty without any.
+    fn notes(&self) -> String {
+        let mut out = String::new();
+        for note in self.notes {
+            out.push_str(&format!("> **Note:** {}\n>\n", note.trim()));
+        }
+        if !out.is_empty() {
+            out.truncate(out.len() - 2);
+            out.push('\n');
+        }
+        out
+    }
+
     fn title(&self) -> String {
         match &self.model.package.version {
             Some(version) => format!("{} {version}", self.model.package.name),
@@ -97,6 +167,7 @@ impl Pages<'_> {
 
     fn index(&self) -> String {
         let mut out = format!("# {}\n\n", self.title());
+        out.push_str(&self.notes());
         if let Some(docs) = &self.model.package.docs {
             out.push_str(&format!("{}\n\n", docs.trim()));
         }
@@ -130,6 +201,7 @@ impl Pages<'_> {
     fn module(&self, module: &Module) -> String {
         let page = page_of(&module.path);
         let mut out = format!("# `{}`\n\n", module.path);
+        out.push_str(&self.notes());
         if let Some(docs) = &module.docs {
             out.push_str(&format!("{}\n\n", docs.trim()));
         }

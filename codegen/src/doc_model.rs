@@ -495,6 +495,128 @@ pub fn change_parts(change: &Value) -> Option<(String, Vec<(String, String)>)> {
     Some((words, details))
 }
 
+/// A type as text: `Order[]`, `union(u8 string)`.
+pub fn type_text(ty: &Type) -> String {
+    match ty {
+        Type::Primitive { name } | Type::Named { name, .. } => name.clone(),
+        Type::Unit => "()".to_string(),
+        Type::Array { element, length: Some(n) } => format!("{}[{n}]", type_text(element)),
+        Type::Array { element, length: None } => format!("{}[]", type_text(element)),
+        Type::Union { members } => {
+            let members: Vec<String> = members.iter().map(type_text).collect();
+            format!("union({})", members.join(" "))
+        }
+    }
+}
+
+/// A function's signature as text: `place(order: Order) -> bool ! OutOfStock`.
+pub fn signature_text(f: &Function) -> String {
+    let args: Vec<String> = f.arguments.iter().map(|a| format!("{}: {}", a.name, type_text(&a.ty))).collect();
+    let mut out = format!("{}({})", f.name, args.join(", "));
+    if let Some(returns) = &f.returns {
+        out.push_str(&format!(" -> {}", type_text(returns)));
+    }
+    if !f.throws.is_empty() {
+        let throws: Vec<String> = f.throws.iter().map(type_text).collect();
+        out.push_str(&format!(" ! {}", throws.join(", ")));
+    }
+    out
+}
+
+/// A version's structure, for comparing versions side by side: one row per
+/// unit (`api::Order`, its kind) and per member (`api::Order.total`, its
+/// type; `api::Orders.place`, its signature). Structural only: whether a
+/// difference is breaking comes from the changelog, never from here.
+pub fn structure(model: &DocModel) -> BTreeMap<String, String> {
+    let mut rows = BTreeMap::new();
+    for module in &model.modules {
+        for unit in &module.units {
+            let Some(name) = unit.name() else { continue };
+            let key = format!("{}::{name}", module.path);
+            let mut member = |m: &str, cell: String| {
+                rows.insert(format!("{key}.{m}"), cell);
+            };
+            let fields = |fields: &[Field], member: &mut dyn FnMut(&str, String)| {
+                for f in fields {
+                    let mut cell = type_text(&f.ty);
+                    if f.optional {
+                        cell = format!("optional {cell}");
+                    }
+                    if let Some(default) = &f.default {
+                        cell.push_str(&format!(" = {default}"));
+                    }
+                    member(&f.name, cell);
+                }
+            };
+            let head = match unit {
+                Unit::Struct { fields: fs, .. } => {
+                    fields(fs, &mut member);
+                    "struct".to_string()
+                }
+                Unit::Enum { variants, .. } => {
+                    for v in variants {
+                        member(v, "variant".to_string());
+                    }
+                    "enum".to_string()
+                }
+                Unit::Error { ordinal, fields: fs, .. } => {
+                    fields(fs, &mut member);
+                    format!("error #{ordinal}")
+                }
+                Unit::Protocol { functions, .. } => {
+                    for f in functions {
+                        member(&f.name, signature_text(f));
+                    }
+                    "protocol".to_string()
+                }
+                Unit::Validator { targets, params, .. } => {
+                    fields(params, &mut member);
+                    let targets: Vec<String> = targets.iter().map(type_text).collect();
+                    format!("validator for {}", targets.join(", "))
+                }
+                Unit::Constant { ty, value, .. } => match value {
+                    Some(value) => format!("const {} = {value}", type_text(ty)),
+                    None => format!("const {}", type_text(ty)),
+                },
+                Unit::TypeAlias { target, .. } => format!("alias of {}", type_text(target)),
+                Unit::Settings { values, .. } => {
+                    for v in values {
+                        member(&v.key, v.value.clone());
+                    }
+                    "settings".to_string()
+                }
+                Unit::Unknown => continue,
+            };
+            rows.insert(key, head);
+        }
+    }
+    rows
+}
+
+/// How much a changelog entry moves the version, by the list core put it
+/// in: `breaking` is `major`, `features` is `minor`, `modifications` is
+/// `patch`.
+pub const SEVERITIES: [&str; 3] = ["major", "minor", "patch"];
+
+/// The unit a changelog entry is about, as the declaration names it
+/// (unqualified); empty when the entry names none.
+pub fn change_unit(change: &Value) -> String {
+    const KEYS: [&str; 6] = ["type_name", "enum_name", "protocol_name", "name", "old_name", "new_name"];
+    let Some(object) = change.as_object() else { return String::new() };
+    KEYS.iter().find_map(|k| object.get(*k).and_then(|v| v.as_str())).unwrap_or_default().to_string()
+}
+
+/// One changelog entry as plain text: its kind in words, then its fields.
+pub fn change_text(change: &Value) -> String {
+    let Some((words, details)) = change_parts(change) else { return change.to_string() };
+    let details: Vec<String> = details.iter().map(|(k, v)| format!("{k}: {v}")).collect();
+    if details.is_empty() {
+        words
+    } else {
+        format!("{words}: {}", details.join(", "))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

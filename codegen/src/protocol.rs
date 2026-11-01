@@ -13,6 +13,17 @@
 //! renderer's options, and the answer is files, like [`GenerateRequest`]'s.
 //! [`Description::renderers`] lists the renderers a program offers.
 //!
+//! **Several versions.** `comline doc` documents every version of a package
+//! (generation#101) with one `Render` call per version, then one for the
+//! site's index. A per-version call sets [`RenderOptions::version`], the
+//! folder it lands in, so its pages can reach the site's shared files at
+//! `../`; it carries that one version's model, exactly like a single-version
+//! render, so a renderer that ignores the option still works. The index call
+//! sets [`RenderOptions::versions`] (every version, each with its model, and
+//! the changelog from the one before it) and is only sent to a renderer whose
+//! [`RendererInfo::sites`] is true. Both are additive: the protocol version
+//! stays.
+//!
 //! A [`Request`] states the protocol version and the IR format it was built
 //! with; a generator refuses either one it doesn't accept, and says so in a
 //! [`Response::Error`] naming both sides. Both start their header fields
@@ -115,6 +126,59 @@ pub struct RenderOptions {
     /// plain text.
     #[serde(default)]
     pub links: BTreeMap<String, String>,
+    /// Set when this render is one version of a multi-version site: the
+    /// version's folder name (`0.2.0`, `0.3.0-dev.2`, `unreleased`). The
+    /// output lands in `<site>/<version>/`, so the site's shared files are
+    /// at `../` (for the HTML renderer, `../versions.js` feeds the version
+    /// picker). Unset, the render is a site of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    /// Set for a site's index render: every documented version, oldest
+    /// first. The output lands at the site's root, next to the version
+    /// folders. The request's own `model` is the newest version's.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub versions: Vec<SiteVersion>,
+    /// Plain-text notes for every page of this version: what its
+    /// documentation lacks (a version built before headers were frozen has
+    /// none, and built versions have no wire tables yet).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<String>,
+}
+
+/// One version of a multi-version site, for its index render.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SiteVersion {
+    /// Its folder name: the full version (`0.2.0`, `0.3.0-dev.2`), or
+    /// `unreleased` for the working tree's changes since the last build.
+    pub id: String,
+    /// The release it belongs to: itself for a release, the release a dev
+    /// build leads to (`0.3.0` for `0.3.0-dev.2`), `unreleased` for the
+    /// working tree. A picker groups by it.
+    pub release: String,
+    pub kind: VersionKind,
+    /// Its documentation model as JSON, like [`RenderRequest::model`]. Its
+    /// `changelog` holds what changed since the version before it in the
+    /// list (none for the first), computed by core's rules.
+    pub model: String,
+}
+
+/// What kind of version a [`SiteVersion`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VersionKind {
+    Release,
+    Dev,
+    Unreleased,
+}
+
+impl VersionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            VersionKind::Release => "release",
+            VersionKind::Dev => "dev",
+            VersionKind::Unreleased => "unreleased",
+        }
+    }
 }
 
 /// The language and version a target declared: `rust#1.85.0` is
@@ -236,11 +300,24 @@ pub struct RendererInfo {
     pub id: String,
     /// The documentation model versions it reads.
     pub model_versions: Vec<u32>,
+    /// Its version, part of `comline doc`'s cache key; empty when the
+    /// program doesn't say.
+    #[serde(default)]
+    pub version: String,
+    /// Whether it renders a multi-version site's index
+    /// ([`RenderOptions::versions`]).
+    #[serde(default)]
+    pub sites: bool,
 }
 
 impl From<&Renderer> for RendererInfo {
     fn from(r: &Renderer) -> Self {
-        RendererInfo { id: r.id.to_string(), model_versions: r.model_versions.to_vec() }
+        RendererInfo {
+            id: r.id.to_string(),
+            model_versions: r.model_versions.to_vec(),
+            version: r.version.to_string(),
+            sites: r.sites,
+        }
     }
 }
 
@@ -560,7 +637,7 @@ mod tests {
             support: TOY_SUPPORT,
             versions: Versions { floor: "2.0", changes: &[], verified_up_to: "2.0", forward_compatible: true },
         });
-        registry.register_renderer(Renderer { id: "toydoc", model_versions: &[1], render: toydoc });
+        registry.register_renderer(Renderer { id: "toydoc", model_versions: &[1], version: "1", sites: false, render: toydoc });
         registry
     }
 
@@ -576,7 +653,10 @@ mod tests {
             renderer: "toydoc".into(),
             model_version: 1,
             model: model.into(),
-            options: RenderOptions { links: BTreeMap::from([("std".into(), "https://x/std".into())]) },
+            options: RenderOptions {
+                links: BTreeMap::from([("std".into(), "https://x/std".into())]),
+                ..Default::default()
+            },
         }
     }
 
@@ -728,7 +808,7 @@ mod tests {
         assert_eq!(d.languages[0].versions.floor, "2.0");
         assert_eq!(d.languages[0].support[0].feature, "structs");
         assert_eq!(d.languages[0].support[0].state, "supported");
-        assert_eq!(d.renderers, [RendererInfo { id: "toydoc".into(), model_versions: vec![1] }]);
+        assert_eq!(d.renderers, [RendererInfo { id: "toydoc".into(), model_versions: vec![1], version: "1".into(), sites: false }]);
     }
 
     #[test]

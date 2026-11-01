@@ -131,8 +131,8 @@ pub struct ComlineToml {
 
 /// Default output root for `comline doc`, relative to `comline.toml`.
 pub const DEFAULT_DOC_OUT: &str = "docs/api";
-/// Default `comline doc` format.
-pub const DEFAULT_DOC_FORMAT: &str = "markdown";
+/// Default `comline doc` formats.
+pub const DEFAULT_DOC_FORMATS: &[&str] = &["markdown"];
 
 /// The `[doc]` table: `comline doc`'s settings. Each key has a flag that
 /// overrides it.
@@ -143,13 +143,21 @@ pub struct Doc {
     /// `--out` overrides it.
     #[schemars(extend("default" = DEFAULT_DOC_OUT))]
     pub out: Option<String>,
-    /// What to write: `markdown` (pages, from the official renderer or
-    /// `renderer`), `html` (a static site, from the official HTML renderer or
-    /// `renderer`), `json` (the documentation model itself, `model.json`), or
-    /// another renderer id `renderer` offers. Default `markdown`. `--format`
-    /// overrides it.
-    #[schemars(extend("default" = DEFAULT_DOC_FORMAT, "examples" = ["markdown", "html", "json"]))]
-    pub format: Option<String>,
+    /// What to write, each into `<out>/<format>/` in one run: `markdown`
+    /// (pages, from the official renderer or `renderer`), `html` (a static
+    /// site, from the official HTML renderer or `renderer`), `json` (the
+    /// documentation model itself, `model.json`), or another renderer id
+    /// `renderer` offers. Default `["markdown"]`. `--format` overrides it.
+    #[schemars(extend("default" = DEFAULT_DOC_FORMATS, "examples" = [["html", "markdown", "json"]]))]
+    pub formats: Option<Vec<String>>,
+    /// Which versions to document. Default `"all"`: every release, every
+    /// dev build and the unreleased working state. A table trims the list:
+    /// `{ last = 5 }` keeps the newest five, `{ since = "0.3.0" }` keeps that
+    /// version and newer, `{ releases_only = true }` keeps releases alone
+    /// (no dev builds, no unreleased state); they combine. `--version`
+    /// documents one version instead.
+    #[schemars(extend("default" = "all"))]
+    pub versions: Option<DocVersions>,
     /// A renderer outside this binary: a path to a `.wasm` (run sandboxed
     /// under wasmtime) or to an executable, relative to `comline.toml`'s
     /// directory, run exactly like an external `generator`. Unset, the
@@ -167,6 +175,37 @@ pub struct Doc {
     /// Add a changelog from this built version (a version or commit hash) to
     /// the documented one. `--changelog-from` overrides it.
     pub changelog_from: Option<String>,
+}
+
+/// `[doc] versions`: every version, or a trimmed list.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum DocVersions {
+    /// `"all"`: every release, dev build and the unreleased state.
+    All(AllVersions),
+    /// A trimmed list.
+    Select(DocVersionSelect),
+}
+
+/// The keyword `"all"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
+pub enum AllVersions {
+    #[serde(rename = "all")]
+    All,
+}
+
+/// `[doc] versions` as a table: each key trims the list, and they combine
+/// (`releases_only` first, then `since`, then `last`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct DocVersionSelect {
+    /// Keep the newest N (the unreleased state counts as one).
+    #[schemars(range(min = 1))]
+    pub last: Option<usize>,
+    /// Keep this built version (a version string) and every newer one.
+    pub since: Option<String>,
+    /// Keep releases only: no dev builds and no unreleased state.
+    pub releases_only: bool,
 }
 
 /// The `[generate]` table.
@@ -982,11 +1021,24 @@ mod tests {
     #[test]
     fn the_doc_section_parses_and_refuses_unknown_keys() {
         let cfg = parse(
-            "[doc]\nout = \"site/api\"\nformat = \"json\"\nrenderer = \"r.wasm\"\ntimeout = 5\n\
-             changelog_from = \"0.1.0\"\nlinks = { std = \"https://x/std\" }\n",
+            "[doc]\nout = \"site/api\"\nformats = [\"json\", \"html\"]\nrenderer = \"r.wasm\"\ntimeout = 5\n\
+             changelog_from = \"0.1.0\"\nlinks = { std = \"https://x/std\" }\nversions = { last = 3 }\n",
         );
         assert_eq!(cfg.doc.out.as_deref(), Some("site/api"));
-        assert_eq!(cfg.doc.format.as_deref(), Some("json"));
+        assert_eq!(cfg.doc.formats, Some(vec!["json".to_string(), "html".to_string()]));
+        assert_eq!(cfg.doc.versions, Some(DocVersions::Select(DocVersionSelect { last: Some(3), ..Default::default() })));
+        assert_eq!(parse("[doc]\nversions = \"all\"\n").doc.versions, Some(DocVersions::All(AllVersions::All)));
+        assert_eq!(
+            parse("[doc]\nversions = { since = \"0.3.0\", releases_only = true }\n").doc.versions,
+            Some(DocVersions::Select(DocVersionSelect {
+                since: Some("0.3.0".into()),
+                releases_only: true,
+                ..Default::default()
+            }))
+        );
+        assert!(toml::from_str::<ComlineToml>("[doc]\nversions = \"some\"\n").is_err());
+        assert!(toml::from_str::<ComlineToml>("[doc]\nversions = { first = 2 }\n").is_err());
+        assert!(toml::from_str::<ComlineToml>("[doc]\nformat = \"json\"\n").is_err());
         assert_eq!(cfg.doc.renderer.as_deref(), Some("r.wasm"));
         assert_eq!(cfg.doc.timeout, Some(5));
         assert_eq!(cfg.doc.changelog_from.as_deref(), Some("0.1.0"));

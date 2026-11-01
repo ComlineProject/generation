@@ -16,6 +16,20 @@
 //! Nothing loads from the network, and every link is relative, so
 //! `index.html` opens straight from disk or from any static host.
 //!
+//! **Several versions** (generation#101). With [`RenderOptions::version`]
+//! set, the pages are one version's folder of a site: the header carries a
+//! version picker and a link to the site's comparison page, both fed by
+//! `../versions.js`, so a version's pages don't change when versions are
+//! added and `comline doc` can keep them. [`RenderOptions::notes`] open every
+//! page. The site's index render ([`RenderOptions::versions`]) writes the
+//! root: `index.html` (pointing at the latest version), `versions.js` (the
+//! version list, each version's pages and anchors, and the picker's script),
+//! and `compare.html` with `compare.js`: choose two versions for what changed
+//! between them, more for a grid of every unit and member per version. The
+//! change labels come from each version's changelog, computed by core from
+//! the version before it; the page only collects the steps between the two
+//! chosen versions and never judges a change itself.
+//!
 //! **Links.** Each unit's section has an anchor, its name in lowercase
 //! (`id="order"`), and a type links to its unit's anchor, on the same page or
 //! another module's. A type from a dependency (or `std`) links to
@@ -30,7 +44,7 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use comline_codegen::doc_model::*;
-use comline_codegen::protocol::{RenderOptions, RenderRequest};
+use comline_codegen::protocol::{RenderOptions, RenderRequest, SiteVersion, VersionKind};
 use comline_codegen::{GeneratedFile, Registry, Renderer};
 use eyre::{eyre, Result};
 
@@ -38,10 +52,13 @@ use eyre::{eyre, Result};
 pub const MODEL_VERSIONS: &[u32] = &[1];
 
 /// This renderer, as it registers.
-pub const RENDERER: Renderer = Renderer { id: "html", model_versions: MODEL_VERSIONS, render };
+pub const RENDERER: Renderer =
+    Renderer { id: "html", model_versions: MODEL_VERSIONS, version: concat!(env!("CARGO_PKG_VERSION"), "+", env!("COMLINE_RENDERER_HASH")), sites: true, render };
 
 const STYLE: &str = include_str!("../assets/style.css");
 const SEARCH: &str = include_str!("../assets/search.js");
+const PICKER: &str = include_str!("../assets/picker.js");
+const COMPARE: &str = include_str!("../assets/compare.js");
 
 /// Register the HTML renderer.
 pub fn register(registry: &mut Registry) {
@@ -53,18 +70,24 @@ pub fn render(req: &RenderRequest) -> Result<Vec<GeneratedFile>> {
     if !MODEL_VERSIONS.contains(&req.model_version) {
         return Err(eyre!("documentation model {} isn't one this renderer reads ({MODEL_VERSIONS:?})", req.model_version));
     }
+    if !req.options.versions.is_empty() {
+        return site_index(&req.options.versions);
+    }
     render_json(&req.model, &req.options)
 }
 
 /// The site for the model `json`.
 pub fn render_json(json: &str, options: &RenderOptions) -> Result<Vec<GeneratedFile>> {
     let model: DocModel = serde_json::from_str(json).map_err(|e| eyre!("the documentation model doesn't parse: {e}"))?;
-    Ok(Site { model: &model, links: &options.links }.all())
+    Ok(Site { model: &model, links: &options.links, version: options.version.as_deref(), notes: &options.notes }.all())
 }
 
 struct Site<'a> {
     model: &'a DocModel,
     links: &'a BTreeMap<String, String>,
+    /// The version folder this site is, in a multi-version site.
+    version: Option<&'a str>,
+    notes: &'a [String],
 }
 
 fn page_of(module: &str) -> String {
@@ -170,12 +193,25 @@ impl Site<'_> {
         let root = relative(page, "x");
         let root = &root[..root.len() - 1];
         let mut out = String::new();
+        let body_attrs = match self.version {
+            Some(version) => format!(" data-page=\"{}\" data-version=\"{}\" data-root=\"{root}\"", esc(page), esc(version)),
+            None => String::new(),
+        };
+        let picker = match self.version {
+            Some(version) => format!(
+                "<form class=\"picker\" id=\"version-form\">\n<label for=\"version-picker\">Version</label>\n\
+                 <select id=\"version-picker\"><option value=\"{v}\" selected>{v}</option></select>\n\
+                 <button type=\"submit\">Go</button>\n<a href=\"{root}../compare.html\">Compare</a>\n</form>\n",
+                v = esc(version)
+            ),
+            None => String::new(),
+        };
         let _ = write!(
             out,
             "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
              <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
-             <title>{}</title>\n<link rel=\"stylesheet\" href=\"{root}style.css\">\n</head>\n<body>\n\
-             <header class=\"top\">\n<a class=\"brand\" href=\"{root}index.html\">{}</a>\n\
+             <title>{}</title>\n<link rel=\"stylesheet\" href=\"{root}style.css\">\n</head>\n<body{body_attrs}>\n\
+             <header class=\"top\">\n<a class=\"brand\" href=\"{root}index.html\">{}</a>\n{picker}\
              <div class=\"search\" role=\"search\">\n<input id=\"search\" type=\"search\" placeholder=\"Search (press /)\" \
              aria-label=\"Search the documentation\" autocomplete=\"off\" spellcheck=\"false\">\n\
              <ul id=\"results\" class=\"results\" hidden></ul>\n</div>\n</header>\n<div class=\"layout\">\n",
@@ -183,9 +219,20 @@ impl Site<'_> {
             esc(&self.title()),
         );
         self.sidebar(&mut out, page, current);
+        let mut notes = String::new();
+        for note in self.notes {
+            let _ = writeln!(notes, "<p class=\"note\" role=\"note\">{}</p>", esc(note.trim()));
+        }
+        if self.version.is_some() && page == "index.html" {
+            notes.push_str("<p class=\"note\" id=\"version-note\" role=\"status\" hidden></p>\n");
+        }
+        let versions = match self.version {
+            Some(_) => format!("<script src=\"{root}../versions.js\"></script>\n"),
+            None => String::new(),
+        };
         let _ = write!(
             out,
-            "<main>\n{body}</main>\n</div>\n<script src=\"{root}search.js\" data-root=\"{root}\"></script>\n</body>\n</html>\n"
+            "<main>\n{notes}{body}</main>\n</div>\n{versions}<script src=\"{root}search.js\" data-root=\"{root}\"></script>\n</body>\n</html>\n"
         );
         out
     }
@@ -503,6 +550,152 @@ impl Site<'_> {
         out.push_str(SEARCH);
         out
     }
+}
+
+/// The latest version, which a site's `index.html` points at: the newest
+/// release, else the newest dev build, else the unreleased state.
+pub fn latest(versions: &[SiteVersion]) -> Option<&SiteVersion> {
+    [VersionKind::Release, VersionKind::Dev, VersionKind::Unreleased]
+        .into_iter()
+        .find_map(|kind| versions.iter().rev().find(|v| v.kind == kind))
+}
+
+/// A multi-version site's root: `index.html`, `versions.js`, `compare.html`,
+/// `compare.js` and the shared `style.css`.
+pub fn site_index(versions: &[SiteVersion]) -> Result<Vec<GeneratedFile>> {
+    let mut models = vec![];
+    for version in versions {
+        let model: DocModel = serde_json::from_str(&version.model)
+            .map_err(|e| eyre!("version `{}`'s model doesn't parse: {e}", version.id))?;
+        models.push(model);
+    }
+    let name = models.last().map(|m| m.package.name.clone()).unwrap_or_default();
+    let latest = latest(versions).map(|v| v.id.clone()).unwrap_or_default();
+
+    // `versions.js`: each version's pages and the anchors on them, so the
+    // picker knows whether the page it's on exists in another version.
+    let mut list = vec![];
+    for (version, model) in versions.iter().zip(&models) {
+        let mut pages = serde_json::Map::new();
+        pages.insert("index.html".into(), serde_json::json!([]));
+        for module in &model.modules {
+            let mut anchors = vec![];
+            for unit in Site::units(module) {
+                let name = unit.name().unwrap_or_default();
+                anchors.push(anchor(name));
+                if let Unit::Protocol { functions, .. } = unit {
+                    for f in functions {
+                        anchors.push(format!("{}-{}", anchor(name), anchor(&f.name)));
+                    }
+                }
+            }
+            pages.insert(page_of(&module.path), serde_json::json!(anchors));
+        }
+        if !model.changelog.is_empty() {
+            pages.insert("changelog.html".into(), serde_json::json!([]));
+        }
+        list.push(serde_json::json!({
+            "id": version.id, "release": version.release, "kind": version.kind.as_str(), "pages": pages,
+        }));
+    }
+    let mut versions_js = String::from("/* The site's versions: generated by comline-doc-html. */\nvar VERSIONS = [\n");
+    for (i, entry) in list.iter().enumerate() {
+        let sep = if i + 1 == list.len() { "" } else { "," };
+        let _ = writeln!(versions_js, "  {entry}{sep}");
+    }
+    let _ = writeln!(versions_js, "];\nvar LATEST = {};", serde_json::json!(latest));
+    versions_js.push_str(PICKER);
+
+    // `compare.js`: per version, its structure and the changes since the
+    // version before it, labelled by the changelog list core put them in.
+    let mut compare = vec![];
+    for (version, model) in versions.iter().zip(&models) {
+        let mut changes = vec![];
+        for log in &model.changelog {
+            for (severity, list) in SEVERITIES.iter().zip([&log.breaking, &log.features, &log.modifications]) {
+                for change in list {
+                    changes.push(serde_json::json!({
+                        "unit": change_unit(change), "severity": severity, "text": change_text(change),
+                    }));
+                }
+            }
+        }
+        compare.push(serde_json::json!({
+            "id": version.id, "release": version.release, "kind": version.kind.as_str(),
+            "rows": structure(model), "changes": changes,
+        }));
+    }
+    let mut compare_js = String::from("/* Each version's structure and changes: generated by comline-doc-html. */\nvar COMPARE = [\n");
+    for (i, entry) in compare.iter().enumerate() {
+        let sep = if i + 1 == compare.len() { "" } else { "," };
+        let _ = writeln!(compare_js, "  {entry}{sep}");
+    }
+    compare_js.push_str("];\n");
+    compare_js.push_str(COMPARE);
+
+    let head = |title: &str, extra: &str| {
+        format!(
+            "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
+             <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n{extra}\
+             <title>{}</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n\
+             <header class=\"top\">\n<a class=\"brand\" href=\"index.html\">{}</a>\n\
+             <nav class=\"site-links\" aria-label=\"Site\"><a href=\"compare.html\">Compare versions</a></nav>\n</header>\n",
+            esc(title),
+            esc(&name)
+        )
+    };
+
+    let mut index = head(
+        &format!("{name}: versions"),
+        &if latest.is_empty() {
+            String::new()
+        } else {
+            format!("<meta http-equiv=\"refresh\" content=\"0; url={}/index.html\">\n", esc(&latest))
+        },
+    );
+    index.push_str("<main class=\"wide\">\n");
+    let _ = writeln!(index, "<h1>{}: versions</h1>", esc(&name));
+    if !latest.is_empty() {
+        let _ = writeln!(index, "<p>The latest is <a href=\"{0}/index.html\">{0}</a>.</p>", esc(&latest));
+    }
+    let mut groups: Vec<(&str, Vec<&SiteVersion>)> = vec![];
+    for version in versions.iter().rev() {
+        match groups.iter_mut().find(|(release, _)| *release == version.release) {
+            Some((_, members)) => members.push(version),
+            None => groups.push((&version.release, vec![version])),
+        }
+    }
+    for (release, members) in groups {
+        let _ = write!(index, "<h2>{}</h2>\n<ul>\n", esc(release));
+        for version in members {
+            let what = match version.kind {
+                VersionKind::Release => "release",
+                VersionKind::Dev => "dev build",
+                VersionKind::Unreleased => "the working tree&#39;s changes since the last build",
+            };
+            let _ = writeln!(index, "<li><a href=\"{0}/index.html\">{0}</a>: {what}</li>", esc(&version.id));
+        }
+        index.push_str("</ul>\n");
+    }
+    index.push_str("</main>\n</body>\n</html>\n");
+
+    let mut compare_html = head(&format!("Compare versions · {name}"), "");
+    compare_html.push_str(
+        "<main class=\"wide\">\n<h1>Compare versions</h1>\n\
+         <p>Choose two versions to see what changed between them, or more for every unit and member side by side. \
+         The labels are the changelogs core computed between each version and the one before it.</p>\n\
+         <fieldset class=\"choose\">\n<legend>Versions</legend>\n<div id=\"choices\"></div>\n</fieldset>\n\
+         <div id=\"comparison\" aria-live=\"polite\"><p>This page needs JavaScript.</p></div>\n</main>\n\
+         <script src=\"compare.js\"></script>\n</body>\n</html>\n",
+    );
+
+    Ok(vec![
+        file("index.html", index),
+        file("compare.html", compare_html),
+        file("versions.js", versions_js),
+        file("compare.js", compare_js),
+        file("style.css", STYLE.to_string()),
+    ])
 }
 
 /// The protocol's wire summary: the same rows as the Markdown renderer, the

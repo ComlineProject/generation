@@ -1,0 +1,5 @@
+# The pages, as an mkdocs / zensical `nav`.
+nav:
+  - "shop": index.md
+  - "api": api.md
+  - "types": types.md
