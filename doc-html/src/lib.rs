@@ -53,7 +53,7 @@ pub const MODEL_VERSIONS: &[u32] = &[1];
 
 /// This renderer, as it registers.
 pub const RENDERER: Renderer =
-    Renderer { id: "html", model_versions: MODEL_VERSIONS, version: env!("CARGO_PKG_VERSION"), sites: true, render };
+    Renderer { id: "html", model_versions: MODEL_VERSIONS, version: concat!(env!("CARGO_PKG_VERSION"), "+", env!("COMLINE_RENDERER_HASH")), sites: true, render };
 
 const STYLE: &str = include_str!("../assets/style.css");
 const SEARCH: &str = include_str!("../assets/search.js");

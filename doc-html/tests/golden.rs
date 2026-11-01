@@ -175,3 +175,14 @@ fn a_multi_version_site_loads_nothing_from_the_network() {
     assert!(compare.contains(r#""severity":"major","text":"Removed enum variant: enum name: Payment, variant: Cash","unit":"Payment""#), "{compare}");
     assert!(compare.contains(r#""api::Orders.cancel":"cancel(order: Order) -> bool""#), "{compare}");
 }
+
+/// The version in `comline doc`'s cache key carries a content hash of the
+/// renderer's sources and assets, so it moves whenever the output can.
+#[test]
+fn the_version_carries_a_content_hash() {
+    let version = comline_doc_html::RENDERER.version;
+    let (crate_version, hash) = version.split_once('+').expect("crate version + hash");
+    assert_eq!(crate_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(hash.len(), 16, "{version}");
+    assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "{version}");
+}

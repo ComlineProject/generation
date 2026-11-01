@@ -131,3 +131,14 @@ fn renders_every_version_and_the_site_index() {
         }
     }
 }
+
+/// The version in `comline doc`'s cache key carries a content hash of the
+/// renderer's sources and assets, so it moves whenever the output can.
+#[test]
+fn the_version_carries_a_content_hash() {
+    let version = comline_doc_markdown::RENDERER.version;
+    let (crate_version, hash) = version.split_once('+').expect("crate version + hash");
+    assert_eq!(crate_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(hash.len(), 16, "{version}");
+    assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "{version}");
+}
