@@ -4,7 +4,7 @@
 
 The shop's API.
 
-| | |
+| Item | Summary |
 |---|---|
 | error [`OutOfStock`](#outofstock) | Not in stock. |
 | struct [`Order`](#order) | One order. |
@@ -34,6 +34,7 @@ One order.
 | `payments` | [`Payment`](types.md#payment)`[]` |  |
 | `method` | [`HttpMethod`](https://comlineproject.github.io/docs/std/http/#httpmethod) |  |
 | `lines` | union(`u32` `string`) |  |
+| `greeting` | [`Greeting`](deps/localdeps/greeting.md#greeting) (optional) |  |
 
 <a id="orders"></a>
 
