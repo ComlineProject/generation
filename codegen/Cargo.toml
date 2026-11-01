@@ -12,7 +12,7 @@ license = "GPL-3.0-only"
 # The IR only (`default-features = false`): a generator reads frozen IR and
 # never parses, and without core's parser (tree-sitter) a generator binary
 # can be built for `wasm32-wasip1`.
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "2be483f5adc303bd39c76e11f930ec2340eee57a", default-features = false }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "525939352b79538ce5e9b41ae6713ee6bd26a25e", default-features = false }
 
 eyre = "0.6.8"
 serde_json = "1.0"
@@ -30,4 +30,4 @@ schemars = "=1.2.3"
 jsonschema = { version = "=0.58.6", default-features = false }
 toml = "0.8"
 # The tests compile schemas, so they need core's compiler.
-comline-core = { git = "https://github.com/ComlineProject/core", rev = "2be483f5adc303bd39c76e11f930ec2340eee57a" }
+comline-core = { git = "https://github.com/ComlineProject/core", rev = "525939352b79538ce5e9b41ae6713ee6bd26a25e" }
