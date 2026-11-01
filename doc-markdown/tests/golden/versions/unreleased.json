@@ -385,7 +385,9 @@
         {
           "kind": "added_function",
           "protocol_name": "Orders",
-          "function_name": "cancel"
+          "function_name": "cancel",
+          "signature": "(order: Order) -> bool",
+          "new": "function cancel(order: Order) -> bool;"
         }
       ],
       "modifications": []

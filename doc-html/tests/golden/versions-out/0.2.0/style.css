@@ -1,4 +1,5 @@
-/* comline-doc-html: fixed styling, light and dark from the OS setting. */
+/* comline-doc-html: fixed styling. Light and dark follow the OS setting
+   unless the header's toggle picks one (`data-theme` on <html>). */
 :root {
   --bg: #ffffff;
   --fg: #1f2328;
@@ -8,10 +9,21 @@
   --accent: #0b5cad;
   --warn: #9a3412;
   --code: #eff2f5;
-  color-scheme: light dark;
+  --hl-keyword: #8b2fc9;
+  --hl-type: #0b6e4f;
+  --hl-name: #1f2328;
+  --hl-punct: #59636e;
+  --hl-literal: #a3410a;
+  --hl-annotation: #0b5cad;
+  --hl-comment: #6e7781;
+  --add-bg: #e6f6ea;
+  --add-sign: #1a7f37;
+  --del-bg: #fdecec;
+  --del-sign: #cf222e;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f1419;
     --fg: #e6edf3;
     --muted: #9198a1;
@@ -20,7 +32,41 @@
     --accent: #6cb6ff;
     --warn: #fb923c;
     --code: #1c232c;
+    --hl-keyword: #d2a8ff;
+    --hl-type: #7ee2b8;
+    --hl-name: #e6edf3;
+    --hl-punct: #9198a1;
+    --hl-literal: #ffa657;
+    --hl-annotation: #6cb6ff;
+    --hl-comment: #8b949e;
+    --add-bg: #12301d;
+    --add-sign: #56d364;
+    --del-bg: #3a1618;
+    --del-sign: #f85149;
+    color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1419;
+  --fg: #e6edf3;
+  --muted: #9198a1;
+  --line: #2f3742;
+  --soft: #161b22;
+  --accent: #6cb6ff;
+  --warn: #fb923c;
+  --code: #1c232c;
+  --hl-keyword: #d2a8ff;
+  --hl-type: #7ee2b8;
+  --hl-name: #e6edf3;
+  --hl-punct: #9198a1;
+  --hl-literal: #ffa657;
+  --hl-annotation: #6cb6ff;
+  --hl-comment: #8b949e;
+  --add-bg: #12301d;
+  --add-sign: #56d364;
+  --del-bg: #3a1618;
+  --del-sign: #f85149;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -113,6 +159,33 @@ main.wide { max-width: 80em; margin: 0 auto; }
 .changes small, .absent { color: var(--muted); }
 .grid td.moved { background: var(--soft); font-weight: 600; }
 .grid tr.unit-row td { border-top: 2px solid var(--line); }
+/* The theme toggle. */
+.theme {
+  font: inherit; font-size: 0.9em; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 0.25em 0.6em; cursor: pointer;
+  white-space: nowrap;
+}
+.top > .theme { margin-left: auto; }
+.site-links + .theme { margin-left: 0; }
+/* Changelog entries: a heading line, then old and new IDL lines. */
+.entries { list-style: none; padding-left: 0; }
+.entries > li { margin: 0.8em 0; }
+.entry-head { margin: 0 0 0.3em; }
+.entry-text { margin: 0.2em 0 0; color: var(--muted); }
+pre.change { margin: 0.3em 0 0; padding: 0.4em 0; }
+pre.change .add, pre.change .del { display: block; padding: 0 1em 0 0.6em; }
+pre.change .add { background: var(--add-bg); }
+pre.change .del { background: var(--del-bg); }
+pre.change .sign { display: inline-block; width: 1em; font-weight: 700; user-select: none; }
+pre.change .add .sign { color: var(--add-sign); }
+pre.change .del .sign { color: var(--del-sign); }
+.idl .k { color: var(--hl-keyword); font-weight: 600; }
+.idl .t { color: var(--hl-type); }
+.idl .n { color: var(--hl-name); }
+.idl .p { color: var(--hl-punct); }
+.idl .l { color: var(--hl-literal); }
+.idl .a { color: var(--hl-annotation); }
+.idl .c { color: var(--hl-comment); font-style: italic; }
 @media (max-width: 760px) {
   .layout { display: block; }
   .sidebar {

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Changelog · shop</title>
+<script>try{var t=localStorage.getItem("comline-doc-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body data-page="changelog.html" data-version="unreleased" data-root="">
@@ -19,6 +20,7 @@
 <input id="search" type="search" placeholder="Search (press /)" aria-label="Search the documentation" autocomplete="off" spellcheck="false">
 <ul id="results" class="results" hidden></ul>
 </div>
+<button type="button" class="theme" id="theme-toggle" aria-label="Theme: auto. Switch to light" hidden>◐ Auto</button>
 </header>
 <div class="layout">
 <nav class="sidebar" aria-label="Modules">
@@ -41,15 +43,52 @@
 </ul>
 </nav>
 <main>
-<h1>Changelog: shop</h1>
+<h1>Changelog</h1>
 <h2>0.2.0 to working tree</h2>
 <h3>Added</h3>
-<ul>
-<li>Added function: function name: <code>cancel</code>, protocol name: <code>Orders</code></li>
+<ul class="entries">
+<li><div class="entry">
+<p class="entry-head"><span class="badge minor">minor</span> <a href="api.html#orders-cancel"><code>Orders.cancel</code></a>: function added</p>
+<pre class="idl change"><code><span class="add"><span class="sign" aria-label="after">+</span> <span class="k">function</span> <span class="n">cancel</span><span class="p">(</span><span class="n">order</span><span class="p">:</span> <span class="t">Order</span><span class="p">)</span> <span class="p">-&gt;</span> <span class="t">bool</span><span class="p">;</span></span></code></pre>
+</div></li>
 </ul>
 </main>
 </div>
 <script src="../versions.js"></script>
 <script src="search.js" data-root=""></script>
+<script>
+/* The theme toggle: auto (the system's setting), light, dark. The choice is
+   kept in localStorage when the browser allows it; the inline script in
+   <head> applies it before the page paints. */
+(function () {
+  var KEY = "comline-doc-theme";
+  var ORDER = ["auto", "light", "dark"];
+  var ICON = { auto: "◐", light: "☀", dark: "☾" };
+  var root = document.documentElement;
+  var button = document.getElementById("theme-toggle");
+  if (!button) return;
+  function apply(theme) {
+    if (theme === "auto") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", theme);
+    var next = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
+    var name = theme.charAt(0).toUpperCase() + theme.slice(1);
+    button.textContent = ICON[theme] + " " + name;
+    button.setAttribute("aria-label", "Theme: " + theme + ". Switch to " + next);
+    button.title = "Theme: " + theme + " (switch to " + next + ")";
+    button.setAttribute("data-theme-choice", theme);
+  }
+  button.addEventListener("click", function () {
+    var now = button.getAttribute("data-theme-choice") || "auto";
+    var next = ORDER[(ORDER.indexOf(now) + 1) % ORDER.length];
+    try {
+      if (next === "auto") localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, next);
+    } catch (e) {}
+    apply(next);
+  });
+  apply(root.getAttribute("data-theme") || "auto");
+  button.hidden = false;
+})();
+</script>
 </body>
 </html>

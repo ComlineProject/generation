@@ -470,31 +470,6 @@ impl ProtocolSummary {
     }
 }
 
-/// One changelog entry, as `comline_core::schema::ir::diff` serializes it,
-/// split for display: its kind in words (`Field added`) and its other fields
-/// as `(name in words, value)`, a string value bare and any other as JSON.
-/// `None` when the entry isn't an object.
-pub fn change_parts(change: &Value) -> Option<(String, Vec<(String, String)>)> {
-    let object = change.as_object()?;
-    let kind = object.get("kind").and_then(|k| k.as_str()).unwrap_or("change");
-    let mut words = kind.replace('_', " ");
-    if let Some(first) = words.get(..1) {
-        words = first.to_uppercase() + &words[1..];
-    }
-    let details = object
-        .iter()
-        .filter(|(k, _)| k.as_str() != "kind")
-        .map(|(k, v)| {
-            let v = match v {
-                Value::String(s) => s.clone(),
-                other => other.to_string(),
-            };
-            (k.replace('_', " "), v)
-        })
-        .collect();
-    Some((words, details))
-}
-
 /// A type as text: `Order[]`, `union(u8 string)`.
 pub fn type_text(ty: &Type) -> String {
     match ty {
@@ -593,33 +568,341 @@ pub fn structure(model: &DocModel) -> BTreeMap<String, String> {
     rows
 }
 
+/// One changelog entry, ready to show: how much it moves the version, a
+/// short title, the unit (and member) it's about, and either its old and
+/// new IDL lines (core's `old` / `new`) or, for a kind with nothing to show
+/// as IDL, a sentence. The renderers agree on all of it; they only differ in
+/// markup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Entry {
+    /// `major`, `minor` or `patch`: the list core put the entry in.
+    pub severity: &'static str,
+    /// The unit it's about, as the declaration names it (unqualified);
+    /// empty when it names none (a namespace rename).
+    pub unit: String,
+    /// The member within the unit, when it's about one: a field, a
+    /// variant or a function.
+    pub member: Option<String>,
+    /// `Greeter.greet` and what happened to it: `signature changed`.
+    pub subject: String,
+    pub what: String,
+    pub old: Option<String>,
+    pub new: Option<String>,
+    /// Said in words, for an entry with no IDL lines.
+    pub sentence: Option<String>,
+}
+
+impl Entry {
+    /// `Greeter.greet: signature changed`, as plain text.
+    pub fn title(&self) -> String {
+        if self.subject.is_empty() {
+            capitalize(&self.what)
+        } else {
+            format!("{}: {}", self.subject, self.what)
+        }
+    }
+}
+
 /// How much a changelog entry moves the version, by the list core put it
 /// in: `breaking` is `major`, `features` is `minor`, `modifications` is
 /// `patch`.
 pub const SEVERITIES: [&str; 3] = ["major", "minor", "patch"];
 
-/// The unit a changelog entry is about, as the declaration names it
-/// (unqualified); empty when the entry names none.
-pub fn change_unit(change: &Value) -> String {
-    const KEYS: [&str; 6] = ["type_name", "enum_name", "protocol_name", "name", "old_name", "new_name"];
-    let Some(object) = change.as_object() else { return String::new() };
-    KEYS.iter().find_map(|k| object.get(*k).and_then(|v| v.as_str())).unwrap_or_default().to_string()
+/// A changelog's entries, each with the severity of the list it's in.
+pub fn entries(log: &Changelog) -> Vec<Entry> {
+    SEVERITIES
+        .iter()
+        .zip([&log.breaking, &log.features, &log.modifications])
+        .flat_map(|(severity, list)| list.iter().map(|change| entry(change, severity)))
+        .collect()
 }
 
-/// One changelog entry as plain text: its kind in words, then its fields.
-pub fn change_text(change: &Value) -> String {
-    let Some((words, details)) = change_parts(change) else { return change.to_string() };
-    let details: Vec<String> = details.iter().map(|(k, v)| format!("{k}: {v}")).collect();
-    if details.is_empty() {
-        words
-    } else {
-        format!("{words}: {}", details.join(", "))
+fn capitalize(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
     }
+}
+
+/// One entry as `comline_core::schema::ir::diff` serializes it (a `kind`
+/// and that kind's fields, plus core's `old` / `new` lines), ready to show.
+pub fn entry(change: &Value, severity: &'static str) -> Entry {
+    let get = |k: &str| change.get(k).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    let opt = |k: &str| change.get(k).and_then(|v| v.as_str()).map(str::to_string);
+    let kind = get("kind");
+    let line = |k: &str| opt(k).filter(|l| !l.trim().is_empty());
+    let (old, new) = (line("old"), line("new"));
+
+    // The unit and member it's about.
+    let (unit, member) = if let Some(target) = opt("target") {
+        match target.split_once('.') {
+            Some((u, m)) => (u.to_string(), Some(m.to_string())),
+            None => (target, None),
+        }
+    } else if let Some(t) = opt("type_name") {
+        (t, opt("field_name"))
+    } else if let Some(e) = opt("enum_name") {
+        let variant = if kind == "renamed_enum_variant" { None } else { opt("variant") };
+        (e, variant)
+    } else if let Some(p) = opt("protocol_name") {
+        (p, opt("function_name"))
+    } else if kind == "renamed_protocol" {
+        (get("new_name"), None)
+    } else if let Some(n) = opt("name").filter(|_| kind != "renamed_namespace") {
+        match n.split_once('.') {
+            Some((u, m)) => (u.to_string(), Some(m.to_string())),
+            None => (n, None),
+        }
+    } else {
+        (String::new(), None)
+    };
+    let subject = match (&member, unit.is_empty()) {
+        (_, true) => String::new(),
+        (Some(m), false) => format!("{unit}.{m}"),
+        (None, false) => unit.clone(),
+    };
+
+    let words = |k: &str| k.replace('_', " ");
+    let what = match kind.as_str() {
+        "changed_function_signature" => "signature changed".to_string(),
+        "changed_field_type" | "changed_constant_type" => "type changed".to_string(),
+        "changed_field_optionality" => {
+            if change.get("now_optional").and_then(|v| v.as_bool()) == Some(true) {
+                "made optional".to_string()
+            } else {
+                "made required".to_string()
+            }
+        }
+        "renamed_enum_variant" => format!("variant {} renamed to {}", get("old_name"), get("new_name")),
+        "renamed_protocol" => format!("renamed from {}", get("old_name")),
+        "renamed_namespace" => format!("namespace {} renamed to {}", get("old_name"), get("new_name")),
+        "added_thrown_error" => format!("now throws {}", get("error")),
+        "removed_thrown_error" => format!("no longer throws {}", get("error")),
+        "changed_error_ordinal" => "ordinal changed".to_string(),
+        "changed_type_alias_target" => "target changed".to_string(),
+        "changed_validator" => "validator changed".to_string(),
+        "changed_constant_value" => "value changed".to_string(),
+        "changed_field_default" => "default changed".to_string(),
+        "changed_error_message" => "message changed".to_string(),
+        "changed_wire_annotation" | "changed_annotation" => format!("@{} changed", get("key")),
+        "gave_up_guarantees" => "gives up guarantees".to_string(),
+        "restored_guarantees" => "keeps its guarantees again".to_string(),
+        "docstring_changed" | "doc_changed" => "documentation changed".to_string(),
+        "type_respelled" => "type respelled".to_string(),
+        "deprecated" => "deprecated".to_string(),
+        "validation_tightened" => "validation tightened".to_string(),
+        "validation_loosened" => "validation loosened".to_string(),
+        k if k.starts_with("reordered_") => format!("{} reordered", words(&k["reordered_".len()..])),
+        k if k.starts_with("added_") => format!("{} added", words(&k["added_".len()..])),
+        k if k.starts_with("removed_") => format!("{} removed", words(&k["removed_".len()..])),
+        "" => "changed".to_string(),
+        k => words(k),
+    };
+
+    let sentence = if old.is_some() || new.is_some() {
+        None
+    } else {
+        let list = |k: &str| {
+            change
+                .get(k)
+                .and_then(|v| v.as_array())
+                .map(|a| a.iter().filter_map(|g| g.as_str()).collect::<Vec<_>>().join(", "))
+                .unwrap_or_default()
+        };
+        let from_to = |a: &str, b: &str| match (opt(a), opt(b)) {
+            (Some(a), Some(b)) => Some(format!("From {a} to {b}.")),
+            _ => None,
+        };
+        match kind.as_str() {
+            "docstring_changed" | "doc_changed" => Some("Its documentation changed; nothing on the wire did.".to_string()),
+            "changed_error_ordinal" => {
+                let n = |k: &str| change.get(k).map(|v| v.to_string()).unwrap_or_default();
+                Some(format!("Its ordinal, which travels on the wire, moved from {} to {}.", n("old_ordinal"), n("new_ordinal")))
+            }
+            "gave_up_guarantees" => Some(format!("It gives up: {}.", list("guarantees"))),
+            "restored_guarantees" => Some(format!("It keeps again: {}.", list("guarantees"))),
+            "reordered_functions" => Some("Its functions moved, and its framing calls them by position.".to_string()),
+            "reordered_fields" => Some("Its fields moved, and a format in play keys them by position.".to_string()),
+            "reordered_enum_variants" => {
+                Some("Its variants moved, and a format in play encodes them by position.".to_string())
+            }
+            "renamed_namespace" => Some("Paths that name it need the new name.".to_string()),
+            "changed_field_type" | "type_respelled" => from_to("old_type", "new_type"),
+            "changed_constant_type" => from_to("old_type", "new_type"),
+            "changed_type_alias_target" => from_to("old_target", "new_target"),
+            "changed_constant_value" | "changed_wire_annotation" | "changed_annotation" => {
+                from_to("old_value", "new_value")
+            }
+            _ => None,
+        }
+    };
+
+    Entry { severity, unit, member, subject, what, old, new, sentence }
+}
+
+/// Where the unit (or function) an entry is about is documented in
+/// `model`, from the site's root: `api.html#greeter-greet` for `ext` `html`.
+/// `None` when the version doesn't have it (a removal).
+pub fn unit_target(model: &DocModel, e: &Entry, ext: &str) -> Option<String> {
+    model.modules.iter().find_map(|module| {
+        let unit = module.units.iter().find(|u| u.name() == Some(e.unit.as_str()))?;
+        let mut id = anchor(&e.unit);
+        if let (Unit::Protocol { functions, .. }, Some(member)) = (unit, &e.member) {
+            if functions.iter().any(|f| &f.name == member) {
+                id = format!("{id}-{}", anchor(member));
+            }
+        }
+        Some(format!("{}#{id}", page_of(&module.path, ext)))
+    })
+}
+
+/// What a piece of an IDL line is, for highlighting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Token {
+    Keyword,
+    /// A type: a primitive, or a capitalized name.
+    Type,
+    Name,
+    Punct,
+    /// A string, f-string, number, `true` or `false`.
+    Literal,
+    /// `@key`.
+    Annotation,
+    Comment,
+    Space,
+}
+
+impl Token {
+    /// The CSS class a renderer marks it with.
+    pub fn class(self) -> Option<&'static str> {
+        Some(match self {
+            Token::Keyword => "k",
+            Token::Type => "t",
+            Token::Name => "n",
+            Token::Punct => "p",
+            Token::Literal => "l",
+            Token::Annotation => "a",
+            Token::Comment => "c",
+            Token::Space => return None,
+        })
+    }
+}
+
+const KEYWORDS: &[&str] =
+    &["struct", "enum", "protocol", "function", "error", "const", "type", "validator", "for", "optional", "message", "union", "use", "as"];
+const PRIMITIVES: &[&str] = &[
+    "u8", "u16", "u32", "u64", "u128", "s8", "s16", "s32", "s64", "s128", "i8", "i16", "i32", "i64", "f32", "f64",
+    "bool", "string", "bytes", "char",
+];
+
+/// An IDL line split into highlighted pieces. Lexical only: a lowercase
+/// name is a name, a capitalized one or a primitive a type.
+pub fn tokens(line: &str) -> Vec<(Token, &str)> {
+    let mut out = vec![];
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    while i < line.len() {
+        let rest = &line[i..];
+        let c = rest.chars().next().unwrap();
+        let len = if c.is_whitespace() {
+            let n = rest.find(|ch: char| !ch.is_whitespace()).unwrap_or(rest.len());
+            out.push((Token::Space, &rest[..n]));
+            n
+        } else if rest.starts_with("/*") {
+            let n = rest.find("*/").map(|n| n + 2).unwrap_or(rest.len());
+            out.push((Token::Comment, &rest[..n]));
+            n
+        } else if c == '"' || (c == 'f' && rest[1..].starts_with('"')) {
+            let start = if c == 'f' { 2 } else { 1 };
+            let mut n = start;
+            let mut escaped = false;
+            for ch in rest[start..].chars() {
+                n += ch.len_utf8();
+                if escaped {
+                    escaped = false;
+                } else if ch == '\\' {
+                    escaped = true;
+                } else if ch == '"' {
+                    break;
+                }
+            }
+            out.push((Token::Literal, &rest[..n]));
+            n
+        } else if c == '@' {
+            let n = 1 + rest[1..].find(|ch: char| !(ch.is_alphanumeric() || ch == '_')).unwrap_or(rest.len() - 1);
+            out.push((Token::Annotation, &rest[..n]));
+            n
+        } else if c.is_ascii_digit() || (c == '-' && bytes.get(i + 1).is_some_and(u8::is_ascii_digit)) {
+            let n = 1 + rest[1..].find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '.' || ch == '_')).unwrap_or(rest.len() - 1);
+            out.push((Token::Literal, &rest[..n]));
+            n
+        } else if c.is_alphabetic() || c == '_' {
+            let n = rest.find(|ch: char| !(ch.is_alphanumeric() || ch == '_')).unwrap_or(rest.len());
+            let word = &rest[..n];
+            let token = if KEYWORDS.contains(&word) {
+                Token::Keyword
+            } else if word == "true" || word == "false" {
+                Token::Literal
+            } else if PRIMITIVES.contains(&word) || word.starts_with(char::is_uppercase) {
+                Token::Type
+            } else {
+                Token::Name
+            };
+            out.push((token, word));
+            n
+        } else if rest.starts_with("->") || rest.starts_with("::") {
+            out.push((Token::Punct, &rest[..2]));
+            2
+        } else {
+            out.push((Token::Punct, &rest[..c.len_utf8()]));
+            c.len_utf8()
+        };
+        i += len;
+    }
+    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_changed_signature_entry() {
+        let change = serde_json::json!({
+            "kind": "changed_function_signature", "protocol_name": "Greeter", "function_name": "greet",
+            "details": "(name: string) -> Greeting → (name: string, formal: bool) -> Greeting",
+            "old": "function greet(name: string) -> Greeting;",
+            "new": "function greet(name: string, formal: bool) -> Greeting;",
+        });
+        let e = entry(&change, "major");
+        assert_eq!(e.title(), "Greeter.greet: signature changed");
+        assert_eq!((e.unit.as_str(), e.member.as_deref()), ("Greeter", Some("greet")));
+        assert_eq!(e.sentence, None);
+        let docs = entry(&serde_json::json!({"kind": "docstring_changed", "name": "Order.total"}), "patch");
+        assert_eq!(docs.title(), "Order.total: documentation changed");
+        assert!(docs.sentence.is_some());
+    }
+
+    #[test]
+    fn highlights_an_idl_line() {
+        let classes: Vec<(Option<&str>, &str)> = tokens("function greet(name: string) -> Greeting ! Rude;")
+            .into_iter()
+            .filter(|(t, _)| *t != Token::Space)
+            .map(|(t, s)| (t.class(), s))
+            .collect();
+        assert_eq!(
+            classes,
+            [
+                (Some("k"), "function"), (Some("n"), "greet"), (Some("p"), "("), (Some("n"), "name"), (Some("p"), ":"),
+                (Some("t"), "string"), (Some("p"), ")"), (Some("p"), "->"), (Some("t"), "Greeting"), (Some("p"), "!"),
+                (Some("t"), "Rude"), (Some("p"), ";"),
+            ]
+        );
+        let lit: Vec<&str> =
+            tokens("@deprecated = \"use \\\"x\\\"\" f\"{a}\" 42").into_iter().filter(|(t, _)| *t == Token::Literal).map(|(_, s)| s).collect();
+        assert_eq!(lit, ["\"use \\\"x\\\"\"", "f\"{a}\"", "42"]);
+    }
 
     #[test]
     fn relative_paths() {

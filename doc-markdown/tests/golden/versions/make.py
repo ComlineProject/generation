@@ -32,13 +32,14 @@ dev["package"]["version"] = "0.2.0-dev.1"
 for m in dev["modules"]:
     for u in m["units"]:
         u.pop("wire", None)
-dev["changelog"] = [dict(base["changelog"][0], to="0.2.0-dev.1")]
+dev["changelog"] = [log("0.1.0", "0.2.0-dev.1",
+    breaking=[b for b in base["changelog"][0]["breaking"] if b["kind"] == "removed_enum_variant"],
+    features=base["changelog"][0]["features"])]
 
 rel = copy.deepcopy(dev)
 rel["package"]["version"] = "0.2.0"
 rel["changelog"] = [log("0.2.0-dev.1", "0.2.0", modifications=[
-    {"kind": "doc_changed", "type_name": "Order", "field_name": None}])]
-rel["changelog"][0]["modifications"][0].pop("field_name")
+    {"kind": "docstring_changed", "name": "Order"}])]
 
 now = copy.deepcopy(base)
 now["package"]["version"] = None
@@ -47,7 +48,8 @@ cancel = copy.deepcopy(orders["functions"][0])
 cancel.update(name="cancel", docs={"text": "Cancel an order.", "params": []}, returns={"kind": "primitive", "name": "bool"}, throws=[])
 orders["functions"].append(cancel)
 now["changelog"] = [log("0.2.0", "working tree", features=[
-    {"kind": "added_function", "protocol_name": "Orders", "function_name": "cancel"}])]
+    {"kind": "added_function", "protocol_name": "Orders", "function_name": "cancel",
+     "signature": "(order: Order) -> bool", "new": "function cancel(order: Order) -> bool;"}])]
 
 for name, model in [("0.1.0", v1), ("0.2.0-dev.1", dev), ("0.2.0", rel), ("unreleased", now)]:
     (here / f"{name}.json").write_text(json.dumps(model, indent=2) + "\n")

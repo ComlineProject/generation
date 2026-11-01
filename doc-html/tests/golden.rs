@@ -172,7 +172,17 @@ fn a_multi_version_site_loads_nothing_from_the_network() {
     assert!(get("0.1.0/index.html").contains("Built before headers were frozen"));
     assert!(!get("unreleased/api.html").contains("class=\"note\" role=\"note\""));
     let compare = get("compare.js");
-    assert!(compare.contains(r#""severity":"major","text":"Removed enum variant: enum name: Payment, variant: Cash","unit":"Payment""#), "{compare}");
+    assert!(compare.contains(r#""severity":"major","title":"Payment.Cash: enum variant removed","unit":"Payment""#), "{compare}");
+    // Each entry comes rendered, its old and new lines highlighted.
+    assert!(compare.contains(r#"<span class=\"del\"><span class=\"sign\" aria-label=\"before\">−</span> <span class=\"t\">Cash</span></span>"#), "{compare}");
+    // Every page has the theme toggle, applied before first paint.
+    for (path, contents) in &files {
+        if path.ends_with(".html") {
+            assert!(contents.contains("id=\"theme-toggle\""), "{path}");
+            let head = contents.split("</head>").next().unwrap();
+            assert!(head.contains("localStorage.getItem(\"comline-doc-theme\")"), "{path}");
+        }
+    }
     assert!(compare.contains(r#""api::Orders.cancel":"cancel(order: Order) -> bool""#), "{compare}");
 }
 

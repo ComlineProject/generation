@@ -297,7 +297,8 @@
         {
           "kind": "removed_enum_variant",
           "enum_name": "Payment",
-          "variant": "Cash"
+          "variant": "Cash",
+          "old": "Cash"
         }
       ],
       "features": [
@@ -306,7 +307,8 @@
           "type_name": "Customer",
           "field_name": "phone",
           "field_type": "string",
-          "optional": true
+          "optional": true,
+          "new": "optional phone: string"
         }
       ],
       "modifications": []
