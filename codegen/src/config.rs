@@ -144,10 +144,11 @@ pub struct Doc {
     #[schemars(extend("default" = DEFAULT_DOC_OUT))]
     pub out: Option<String>,
     /// What to write: `markdown` (pages, from the official renderer or
+    /// `renderer`), `html` (a static site, from the official HTML renderer or
     /// `renderer`), `json` (the documentation model itself, `model.json`), or
     /// another renderer id `renderer` offers. Default `markdown`. `--format`
     /// overrides it.
-    #[schemars(extend("default" = DEFAULT_DOC_FORMAT, "examples" = ["markdown", "json"]))]
+    #[schemars(extend("default" = DEFAULT_DOC_FORMAT, "examples" = ["markdown", "html", "json"]))]
     pub format: Option<String>,
     /// A renderer outside this binary: a path to a `.wasm` (run sandboxed
     /// under wasmtime) or to an executable, relative to `comline.toml`'s

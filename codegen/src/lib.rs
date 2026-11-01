@@ -9,6 +9,7 @@ pub mod builder;
 pub mod collisions;
 pub mod config;
 pub mod connections;
+pub mod doc_model;
 pub mod encodings;
 pub mod features;
 pub mod modules;

@@ -31,3 +31,5 @@ jobs:
       # The Markdown renderer as a WASI module, which the CLI can run under
       # wasmtime like a generator.
       - run: cargo build --verbose -p comline-doc-markdown --bin comline-doc-markdown --target wasm32-wasip1
+      # The HTML renderer, the same way.
+      - run: cargo build --verbose -p comline-doc-html --bin comline-doc-html --target wasm32-wasip1

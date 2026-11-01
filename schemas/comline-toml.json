@@ -13,9 +13,10 @@
         },
         "format": {
           "default": "markdown",
-          "description": "What to write: `markdown` (pages, from the official renderer or\n`renderer`), `json` (the documentation model itself, `model.json`), or\nanother renderer id `renderer` offers. Default `markdown`. `--format`\noverrides it.",
+          "description": "What to write: `markdown` (pages, from the official renderer or\n`renderer`), `html` (a static site, from the official HTML renderer or\n`renderer`), `json` (the documentation model itself, `model.json`), or\nanother renderer id `renderer` offers. Default `markdown`. `--format`\noverrides it.",
           "examples": [
             "markdown",
+            "html",
             "json"
           ],
           "type": "string"

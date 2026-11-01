@@ -4,6 +4,7 @@ members = [
     "codegen",      # comline-codegen — the language-neutral contract + Registry
     "conformance",  # comline-conformance — the codegen conformance corpus
     "doc-markdown", # comline-doc-markdown — the official Markdown documentation renderer
+    "doc-html",     # comline-doc-html — the official HTML documentation renderer
 ]
 # The per-language generators graduated to their own repos (rollout steps 4–5):
 # `codegen-typescript` → ComlineProject/comline-typescript,
