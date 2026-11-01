@@ -1,7 +1,11 @@
-# Changelog: shop
+# Changelog
 
 ## 0.2.0 to working tree
 
 ### Added
 
-- Added function: function name: `cancel`, protocol name: `Orders`
+#### MINOR · [`Orders.cancel`](api.md#orders-cancel): function added
+
+```diff
++function cancel(order: Order) -> bool;
+```

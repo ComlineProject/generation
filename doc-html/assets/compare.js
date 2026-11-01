@@ -51,7 +51,7 @@
     for (var i = a + 1; i <= b; i++) {
       for (var j = 0; j < COMPARE[i].changes.length; j++) {
         var c = COMPARE[i].changes[j];
-        all.push({ unit: c.unit, severity: c.severity, text: c.text, step: COMPARE[i - 1].id + " to " + COMPARE[i].id });
+        all.push({ unit: c.unit, severity: c.severity, title: c.title, html: c.html, step: COMPARE[i - 1].id + " to " + COMPARE[i].id });
       }
     }
     return all;
@@ -80,11 +80,11 @@
       h.appendChild(document.createTextNode(" "));
       h.appendChild(badge(worst(byUnit[unit])));
       out.appendChild(h);
-      var ul = el("ul", null, "changes");
+      var ul = el("ul", null, "changes entries");
       byUnit[unit].forEach(function (c) {
+        // The entry is rendered by comline-doc-html, already escaped.
         var li = el("li", null);
-        li.appendChild(badge(c.severity));
-        li.appendChild(document.createTextNode(" " + c.text + " "));
+        li.innerHTML = c.html;
         li.appendChild(el("small", "(" + c.step + ")"));
         ul.appendChild(li);
       });
@@ -94,10 +94,11 @@
 
   function grid(chosen) {
     var first = chosen[0], last = chosen[chosen.length - 1];
-    var bySeverity = {};
+    var bySeverity = {}, titles = {};
     steps(first, last).forEach(function (c) {
       var s = bySeverity[c.unit];
       if (!s || RANK[c.severity] < RANK[s]) bySeverity[c.unit] = c.severity;
+      (titles[c.unit] = titles[c.unit] || []).push(c.severity + ": " + c.title + " (" + c.step + ")");
     });
     var keys = {}, list = [];
     chosen.forEach(function (i) {
@@ -122,7 +123,10 @@
       row.appendChild(name);
       var unit = key.split("::").pop().split(".")[0];
       var sev = el("td", null);
-      if (key.indexOf(".") < 0 && bySeverity[unit]) sev.appendChild(badge(bySeverity[unit]));
+      if (key.indexOf(".") < 0 && bySeverity[unit]) {
+        sev.appendChild(badge(bySeverity[unit]));
+        sev.title = titles[unit].join("\n");
+      }
       row.appendChild(sev);
       var previous;
       chosen.forEach(function (i, n) {

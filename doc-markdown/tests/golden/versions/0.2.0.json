@@ -297,8 +297,8 @@
       "features": [],
       "modifications": [
         {
-          "kind": "doc_changed",
-          "type_name": "Order"
+          "kind": "docstring_changed",
+          "name": "Order"
         }
       ]
     }

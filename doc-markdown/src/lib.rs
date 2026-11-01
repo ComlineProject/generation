@@ -389,24 +389,23 @@ impl Pages<'_> {
     }
 
     fn changelog(&self) -> String {
-        let mut out = format!("# Changelog: {}\n\n", self.model.package.name);
+        let mut out = String::from("# Changelog\n\n");
         for log in &self.model.changelog {
             let _ = write!(out, "## {} to {}\n\n", log.from, log.to);
             if log.breaking.is_empty() && log.features.is_empty() && log.modifications.is_empty() {
                 out.push_str("No changes.\n\n");
                 continue;
             }
-            for (title, changes) in
-                [("Breaking", &log.breaking), ("Added", &log.features), ("Changed", &log.modifications)]
-            {
-                if changes.is_empty() {
+            let entries = entries(log);
+            for (title, severity) in [("Breaking", "major"), ("Added", "minor"), ("Changed", "patch")] {
+                let list: Vec<&Entry> = entries.iter().filter(|e| e.severity == severity).collect();
+                if list.is_empty() {
                     continue;
                 }
                 let _ = write!(out, "### {title}\n\n");
-                for change in changes {
-                    let _ = writeln!(out, "- {}", change_line(change));
+                for e in list {
+                    entry(&mut out, e, unit_target(self.model, e, "md").as_deref());
                 }
-                out.push('\n');
             }
         }
         finish(out)
@@ -450,14 +449,36 @@ fn wire_summary(out: &mut String, p: &ProtocolSummary) {
     out.push('\n');
 }
 
-/// One change, as a line: its kind in words, then its fields.
-fn change_line(change: &serde_json::Value) -> String {
-    let Some((words, details)) = change_parts(change) else { return format!("`{change}`") };
-    let details: Vec<String> = details.iter().map(|(k, v)| format!("{k}: `{v}`")).collect();
-    if details.is_empty() {
-        words
+/// One changelog entry: a heading line with its severity and title (the
+/// subject linked to `href`), then its old and new IDL lines as a `diff`
+/// block, or a sentence.
+fn entry(out: &mut String, e: &Entry, href: Option<&str>) {
+    let _ = write!(out, "#### {} · ", e.severity.to_uppercase());
+    if e.subject.is_empty() {
+        out.push_str(&e.title());
     } else {
-        format!("{words}: {}", details.join(", "))
+        match href {
+            Some(href) => {
+                let _ = write!(out, "[`{}`]({href})", e.subject);
+            }
+            None => {
+                let _ = write!(out, "`{}`", e.subject);
+            }
+        }
+        let _ = write!(out, ": {}", e.what);
+    }
+    out.push_str("\n\n");
+    if e.old.is_some() || e.new.is_some() {
+        out.push_str("```diff\n");
+        if let Some(old) = &e.old {
+            let _ = writeln!(out, "-{old}");
+        }
+        if let Some(new) = &e.new {
+            let _ = writeln!(out, "+{new}");
+        }
+        out.push_str("```\n\n");
+    } else if let Some(sentence) = &e.sentence {
+        let _ = write!(out, "{sentence}\n\n");
     }
 }
 

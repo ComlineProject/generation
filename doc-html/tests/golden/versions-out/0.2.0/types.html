@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>types · shop 0.2.0</title>
+<script>try{var t=localStorage.getItem("comline-doc-theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body data-page="types.html" data-version="0.2.0" data-root="">
@@ -19,6 +20,7 @@
 <input id="search" type="search" placeholder="Search (press /)" aria-label="Search the documentation" autocomplete="off" spellcheck="false">
 <ul id="results" class="results" hidden></ul>
 </div>
+<button type="button" class="theme" id="theme-toggle" aria-label="Theme: auto. Switch to light" hidden>◐ Auto</button>
 </header>
 <div class="layout">
 <nav class="sidebar" aria-label="Modules">
@@ -87,5 +89,39 @@
 </div>
 <script src="../versions.js"></script>
 <script src="search.js" data-root=""></script>
+<script>
+/* The theme toggle: auto (the system's setting), light, dark. The choice is
+   kept in localStorage when the browser allows it; the inline script in
+   <head> applies it before the page paints. */
+(function () {
+  var KEY = "comline-doc-theme";
+  var ORDER = ["auto", "light", "dark"];
+  var ICON = { auto: "◐", light: "☀", dark: "☾" };
+  var root = document.documentElement;
+  var button = document.getElementById("theme-toggle");
+  if (!button) return;
+  function apply(theme) {
+    if (theme === "auto") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", theme);
+    var next = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
+    var name = theme.charAt(0).toUpperCase() + theme.slice(1);
+    button.textContent = ICON[theme] + " " + name;
+    button.setAttribute("aria-label", "Theme: " + theme + ". Switch to " + next);
+    button.title = "Theme: " + theme + " (switch to " + next + ")";
+    button.setAttribute("data-theme-choice", theme);
+  }
+  button.addEventListener("click", function () {
+    var now = button.getAttribute("data-theme-choice") || "auto";
+    var next = ORDER[(ORDER.indexOf(now) + 1) % ORDER.length];
+    try {
+      if (next === "auto") localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, next);
+    } catch (e) {}
+    apply(next);
+  });
+  apply(root.getAttribute("data-theme") || "auto");
+  button.hidden = false;
+})();
+</script>
 </body>
 </html>

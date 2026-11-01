@@ -9,7 +9,9 @@
 //!   every unit in it: docs, fields, arguments, function signatures, and each
 //!   protocol's wire summary (the rows the language server's hover shows);
 //! - `changelog.html` when the model carries a changelog;
-//! - `style.css`: the fixed theme, light and dark from `prefers-color-scheme`;
+//! - `style.css`: the fixed theme, light and dark from `prefers-color-scheme`
+//!   unless the header's toggle picks one (kept in `localStorage`, applied
+//!   before first paint by an inline script in `<head>`);
 //! - `search.js`: the search index, inlined as data, and the search box's
 //!   script. Inlined because a browser blocks `fetch` under `file://`.
 //!
@@ -59,6 +61,21 @@ const STYLE: &str = include_str!("../assets/style.css");
 const SEARCH: &str = include_str!("../assets/search.js");
 const PICKER: &str = include_str!("../assets/picker.js");
 const COMPARE: &str = include_str!("../assets/compare.js");
+const THEME: &str = include_str!("../assets/theme.js");
+
+/// In `<head>`: the stored theme choice, applied before the page paints.
+/// Storage may be blocked (`file://`, private windows), so it's tried.
+const THEME_EARLY: &str = "<script>try{var t=localStorage.getItem(\"comline-doc-theme\");\
+if(t===\"light\"||t===\"dark\")document.documentElement.setAttribute(\"data-theme\",t)}catch(e){}</script>\n";
+
+/// The header's theme button: hidden until its script runs.
+const THEME_BUTTON: &str = "<button type=\"button\" class=\"theme\" id=\"theme-toggle\" \
+aria-label=\"Theme: auto. Switch to light\" hidden>\u{25D0} Auto</button>\n";
+
+/// The theme button's script, inline at the end of `<body>`.
+fn theme_script() -> String {
+    format!("<script>\n{THEME}</script>\n")
+}
 
 /// Register the HTML renderer.
 pub fn register(registry: &mut Registry) {
@@ -210,11 +227,11 @@ impl Site<'_> {
             out,
             "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
              <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
-             <title>{}</title>\n<link rel=\"stylesheet\" href=\"{root}style.css\">\n</head>\n<body{body_attrs}>\n\
+             <title>{}</title>\n{THEME_EARLY}<link rel=\"stylesheet\" href=\"{root}style.css\">\n</head>\n<body{body_attrs}>\n\
              <header class=\"top\">\n<a class=\"brand\" href=\"{root}index.html\">{}</a>\n{picker}\
              <div class=\"search\" role=\"search\">\n<input id=\"search\" type=\"search\" placeholder=\"Search (press /)\" \
              aria-label=\"Search the documentation\" autocomplete=\"off\" spellcheck=\"false\">\n\
-             <ul id=\"results\" class=\"results\" hidden></ul>\n</div>\n</header>\n<div class=\"layout\">\n",
+             <ul id=\"results\" class=\"results\" hidden></ul>\n</div>\n{THEME_BUTTON}</header>\n<div class=\"layout\">\n",
             esc(title),
             esc(&self.title()),
         );
@@ -232,7 +249,8 @@ impl Site<'_> {
         };
         let _ = write!(
             out,
-            "<main>\n{notes}{body}</main>\n</div>\n{versions}<script src=\"{root}search.js\" data-root=\"{root}\"></script>\n</body>\n</html>\n"
+            "<main>\n{notes}{body}</main>\n</div>\n{versions}<script src=\"{root}search.js\" data-root=\"{root}\"></script>\n{}</body>\n</html>\n",
+            theme_script()
         );
         out
     }
@@ -502,22 +520,23 @@ impl Site<'_> {
     }
 
     fn changelog(&self) -> String {
-        let mut body = format!("<h1>Changelog: {}</h1>\n", esc(&self.model.package.name));
+        let mut body = String::from("<h1>Changelog</h1>\n");
         for log in &self.model.changelog {
             let _ = writeln!(body, "<h2>{} to {}</h2>", esc(&log.from), esc(&log.to));
             if log.breaking.is_empty() && log.features.is_empty() && log.modifications.is_empty() {
                 body.push_str("<p>No changes.</p>\n");
                 continue;
             }
-            for (title, changes) in
-                [("Breaking", &log.breaking), ("Added", &log.features), ("Changed", &log.modifications)]
-            {
-                if changes.is_empty() {
+            let entries = entries(log);
+            for (title, severity) in [("Breaking", "major"), ("Added", "minor"), ("Changed", "patch")] {
+                let list: Vec<&Entry> = entries.iter().filter(|e| e.severity == severity).collect();
+                if list.is_empty() {
                     continue;
                 }
-                let _ = write!(body, "<h3>{title}</h3>\n<ul>\n");
-                for change in changes {
-                    let _ = writeln!(body, "<li>{}</li>", change_line(change));
+                let _ = write!(body, "<h3>{title}</h3>\n<ul class=\"entries\">\n");
+                for e in list {
+                    let href = unit_target(self.model, e, "html");
+                    let _ = write!(body, "<li>{}</li>\n", entry_html(e, href.as_deref()));
                 }
                 body.push_str("</ul>\n");
             }
@@ -612,12 +631,12 @@ pub fn site_index(versions: &[SiteVersion]) -> Result<Vec<GeneratedFile>> {
     for (version, model) in versions.iter().zip(&models) {
         let mut changes = vec![];
         for log in &model.changelog {
-            for (severity, list) in SEVERITIES.iter().zip([&log.breaking, &log.features, &log.modifications]) {
-                for change in list {
-                    changes.push(serde_json::json!({
-                        "unit": change_unit(change), "severity": severity, "text": change_text(change),
-                    }));
-                }
+            for e in entries(log) {
+                let href = unit_target(model, &e, "html").map(|to| format!("{}/{to}", version.id));
+                changes.push(serde_json::json!({
+                    "unit": e.unit, "severity": e.severity, "title": e.title(),
+                    "html": entry_html(&e, href.as_deref()),
+                }));
             }
         }
         compare.push(serde_json::json!({
@@ -637,9 +656,9 @@ pub fn site_index(versions: &[SiteVersion]) -> Result<Vec<GeneratedFile>> {
         format!(
             "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
              <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n{extra}\
-             <title>{}</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n\
+             <title>{}</title>\n{THEME_EARLY}<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n\
              <header class=\"top\">\n<a class=\"brand\" href=\"index.html\">{}</a>\n\
-             <nav class=\"site-links\" aria-label=\"Site\"><a href=\"compare.html\">Compare versions</a></nav>\n</header>\n",
+             <nav class=\"site-links\" aria-label=\"Site\"><a href=\"compare.html\">Compare versions</a></nav>\n{THEME_BUTTON}</header>\n",
             esc(title),
             esc(&name)
         )
@@ -677,7 +696,9 @@ pub fn site_index(versions: &[SiteVersion]) -> Result<Vec<GeneratedFile>> {
         }
         index.push_str("</ul>\n");
     }
-    index.push_str("</main>\n</body>\n</html>\n");
+    index.push_str("</main>\n");
+    index.push_str(&theme_script());
+    index.push_str("</body>\n</html>\n");
 
     let mut compare_html = head(&format!("Compare versions · {name}"), "");
     compare_html.push_str(
@@ -686,8 +707,10 @@ pub fn site_index(versions: &[SiteVersion]) -> Result<Vec<GeneratedFile>> {
          The labels are the changelogs core computed between each version and the one before it.</p>\n\
          <fieldset class=\"choose\">\n<legend>Versions</legend>\n<div id=\"choices\"></div>\n</fieldset>\n\
          <div id=\"comparison\" aria-live=\"polite\"><p>This page needs JavaScript.</p></div>\n</main>\n\
-         <script src=\"compare.js\"></script>\n</body>\n</html>\n",
+         <script src=\"compare.js\"></script>\n",
     );
+    compare_html.push_str(&theme_script());
+    compare_html.push_str("</body>\n</html>\n");
 
     Ok(vec![
         file("index.html", index),
@@ -744,15 +767,61 @@ fn wire_summary(out: &mut String, p: &ProtocolSummary) {
     }
 }
 
-/// One change, as a line: its kind in words, then its fields.
-fn change_line(change: &serde_json::Value) -> String {
-    let Some((words, details)) = change_parts(change) else { return code(&change.to_string()) };
-    let details: Vec<String> = details.iter().map(|(k, v)| format!("{}: {}", esc(k), code(v))).collect();
-    if details.is_empty() {
-        esc(&words)
-    } else {
-        format!("{}: {}", esc(&words), details.join(", "))
+/// An IDL line, highlighted: a span per piece, classed by
+/// [`Token::class`].
+fn idl(line: &str) -> String {
+    let mut out = String::new();
+    for (token, text) in tokens(line) {
+        match token.class() {
+            Some(class) => {
+                let _ = write!(out, "<span class=\"{class}\">{}</span>", esc(text));
+            }
+            None => out.push_str(&esc(text)),
+        }
     }
+    out
+}
+
+/// One changelog entry: its severity, its title (the subject linked to
+/// `href`), then its old and new IDL lines, or a sentence.
+fn entry_html(e: &Entry, href: Option<&str>) -> String {
+    let mut out = format!("<div class=\"entry\">\n<p class=\"entry-head\"><span class=\"badge {0}\">{0}</span> ", e.severity);
+    if e.subject.is_empty() {
+        out.push_str(&esc(&e.title()));
+    } else {
+        let subject = code(&e.subject);
+        match href {
+            Some(href) => {
+                let _ = write!(out, "<a href=\"{}\">{subject}</a>", esc(href));
+            }
+            None => out.push_str(&subject),
+        }
+        let _ = write!(out, ": {}", esc(&e.what));
+    }
+    out.push_str("</p>\n");
+    if e.old.is_some() || e.new.is_some() {
+        out.push_str("<pre class=\"idl change\"><code>");
+        let mut lines = vec![];
+        if let Some(old) = &e.old {
+            lines.push(format!(
+                "<span class=\"del\"><span class=\"sign\" aria-label=\"before\">\u{2212}</span> {}</span>",
+                idl(old)
+            ));
+        }
+        if let Some(new) = &e.new {
+            lines.push(format!(
+                "<span class=\"add\"><span class=\"sign\" aria-label=\"after\">+</span> {}</span>",
+                idl(new)
+            ));
+        }
+        // Each line is its own block, so no newline between them.
+        out.push_str(&lines.concat());
+        out.push_str("</code></pre>\n");
+    } else if let Some(sentence) = &e.sentence {
+        let _ = writeln!(out, "<p class=\"entry-text\">{}</p>", esc(sentence));
+    }
+    out.push_str("</div>");
+    out
 }
 
 fn file(path: &str, contents: String) -> GeneratedFile {

@@ -357,7 +357,16 @@
         {
           "kind": "removed_enum_variant",
           "enum_name": "Payment",
-          "variant": "Cash"
+          "variant": "Cash",
+          "old": "Cash"
+        },
+        {
+          "kind": "changed_function_signature",
+          "protocol_name": "Orders",
+          "function_name": "place",
+          "details": "(order: Order) -> u64 → (order: Order, rush: bool) -> u64",
+          "old": "function place(order: Order) -> u64 ! OutOfStock;",
+          "new": "function place(order: Order, rush: bool) -> u64 ! OutOfStock;"
         }
       ],
       "features": [
@@ -366,10 +375,24 @@
           "type_name": "Customer",
           "field_name": "phone",
           "field_type": "string",
-          "optional": true
+          "optional": true,
+          "new": "optional phone: string"
         }
       ],
-      "modifications": []
+      "modifications": [
+        {
+          "kind": "changed_annotation",
+          "target": "Customer.name",
+          "key": "deprecated",
+          "old_value": null,
+          "new_value": "use email",
+          "new": "@deprecated = \"use email\""
+        },
+        {
+          "kind": "docstring_changed",
+          "name": "Order"
+        }
+      ]
     }
   ]
 }
