@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>api · shop 0.2.0</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+<a class="brand" href="index.html">shop 0.2.0</a>
+<div class="search" role="search">
+<input id="search" type="search" placeholder="Search (press /)" aria-label="Search the documentation" autocomplete="off" spellcheck="false">
+<ul id="results" class="results" hidden></ul>
+</div>
+</header>
+<div class="layout">
+<nav class="sidebar" aria-label="Modules">
+<ul>
+<li><a href="index.html">Overview</a></li>
+<li><details open><summary><a href="api.html" aria-current="page"><code>api</code></a></summary>
+<ul>
+<li><a href="api.html#outofstock"><span class="kind">error</span> OutOfStock</a></li>
+<li><a href="api.html#order"><span class="kind">struct</span> Order</a></li>
+<li><a href="api.html#orders"><span class="kind">protocol</span> Orders</a></li>
+</ul></details></li>
+<li><details><summary><a href="types.html"><code>types</code></a></summary>
+<ul>
+<li><a href="types.html#customer"><span class="kind">struct</span> Customer</a></li>
+<li><a href="types.html#payment"><span class="kind">enum</span> Payment</a></li>
+<li><a href="types.html#max_name"><span class="kind">const</span> MAX_NAME</a></li>
+<li><a href="types.html#customerid"><span class="kind">type</span> CustomerId</a></li>
+</ul></details></li>
+<li><a href="changelog.html">Changelog</a></li>
+</ul>
+</nav>
+<main>
+<h1><code>api</code></h1>
+<p>The shop's API.</p>
+<div class="table"><table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td>error <a href="#outofstock"><code>OutOfStock</code></a></td><td>Not in stock.</td></tr>
+<tr><td>struct <a href="#order"><code>Order</code></a></td><td>One order.</td></tr>
+<tr><td>protocol <a href="#orders"><code>Orders</code></a></td><td>Orders things.</td></tr>
+</tbody>
+</table></div>
+<section class="unit" id="outofstock">
+<h2><a class="self" href="#outofstock">error <code>OutOfStock</code></a></h2>
+<p>Not in stock.</p>
+<p>Ordinal <code>0</code>. Message: <code>{item} is out of stock</code></p>
+<div class="table"><table>
+<thead><tr><th>Field</th><th>Type</th><th></th></tr></thead>
+<tbody>
+<tr><td><code>item</code></td><td><code>string</code></td><td></td></tr>
+</tbody>
+</table></div>
+</section>
+<section class="unit" id="order">
+<h2><a class="self" href="#order">struct <code>Order</code></a></h2>
+<p>One order.</p>
+<div class="table"><table>
+<thead><tr><th>Field</th><th>Type</th><th></th></tr></thead>
+<tbody>
+<tr><td><code>customer</code></td><td><a href="types.html#customer"><code>Customer</code></a></td><td></td></tr>
+<tr><td><code>payments</code></td><td><a href="types.html#payment"><code>Payment</code></a><code>[]</code></td><td></td></tr>
+<tr><td><code>method</code></td><td><a href="https://comlineproject.github.io/docs/std/http/#httpmethod"><code>HttpMethod</code></a></td><td></td></tr>
+<tr><td><code>lines</code></td><td>union(<code>u32</code> <code>string</code>)</td><td></td></tr>
+</tbody>
+</table></div>
+</section>
+<section class="unit" id="orders">
+<h2><a class="self" href="#orders">protocol <code>Orders</code></a></h2>
+<p>Orders things.</p>
+<div class="function" id="orders-place">
+<h3><a class="self" href="#orders-place"><code>place</code></a></h3>
+<p class="signature"><code>place</code>(order: <a href="#order"><code>Order</code></a>) -&gt; <code>u64</code> ! <a href="#outofstock"><code>OutOfStock</code></a></p>
+<p>Place an order.</p>
+<div class="table"><table>
+<thead><tr><th>Argument</th><th>Type</th><th></th></tr></thead>
+<tbody>
+<tr><td><code>order</code></td><td><a href="#order"><code>Order</code></a></td><td>what to place</td></tr>
+</tbody>
+</table></div>
+</div>
+<div class="function" id="orders-ping">
+<h3><a class="self" href="#orders-ping"><code>ping</code></a></h3>
+<p class="signature"><code>ping</code>()</p>
+</div>
+<h3>On the wire</h3>
+<div class="table"><table>
+<thead><tr><th></th><th></th><th>from</th></tr></thead>
+<tbody>
+<tr><td>format</td><td><code>packed@1</code></td><td>core&#39;s default</td></tr>
+<tr><td>framing</td><td><code>datagram@2</code></td><td>core&#39;s default</td></tr>
+<tr><td>handshake</td><td><code>comline@1</code></td><td>core&#39;s default</td></tr>
+</tbody>
+</table></div>
+<h3>Guarantees</h3>
+<div class="table"><table>
+<thead><tr><th>guarantee</th><th></th><th>why</th><th>accepted</th></tr></thead>
+<tbody>
+<tr><td>schema agreement</td><td>held</td><td></td><td></td></tr>
+<tr><td>encoding agreement</td><td>held</td><td></td><td></td></tr>
+<tr><td>encoding conformance</td><td>held</td><td></td><td></td></tr>
+<tr><td>version honesty</td><td>held</td><td></td><td></td></tr>
+</tbody>
+</table></div>
+</section>
+</main>
+</div>
+<script src="search.js" data-root=""></script>
+</body>
+</html>
