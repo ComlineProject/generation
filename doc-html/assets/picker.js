@@ -39,6 +39,7 @@
     if (!v || id === current) return;
     var base = root + "../" + encodeURIComponent(id) + "/";
     var anchor = decodeURIComponent(location.hash.slice(1));
+    if (anchor.indexOf("missing=") === 0) anchor = "";
     var anchors = v.pages[page];
     if (anchors && (!anchor || anchors.indexOf(anchor) >= 0)) {
       location.href = base + page + (anchor ? "#" + encodeURIComponent(anchor) : "");
