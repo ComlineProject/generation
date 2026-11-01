@@ -28,3 +28,6 @@ jobs:
       - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
       - run: cargo build --verbose -p comline-codegen --target wasm32-wasip1
       - run: cargo build --verbose -p comline-codegen --target wasm32-unknown-unknown
+      # The Markdown renderer as a WASI module, which the CLI can run under
+      # wasmtime like a generator.
+      - run: cargo build --verbose -p comline-doc-markdown --bin comline-doc-markdown --target wasm32-wasip1

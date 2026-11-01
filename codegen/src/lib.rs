@@ -70,6 +70,21 @@ pub struct Generator {
     pub versions: Versions,
 }
 
+/// A documentation renderer: a documentation model in, files out
+/// ([`protocol::RenderRequest`]).
+pub type RendererFn = fn(&protocol::RenderRequest) -> Result<Vec<GeneratedFile>>;
+
+/// One documentation renderer, as it registers.
+#[derive(Debug, Clone, Copy)]
+pub struct Renderer {
+    /// What `comline doc --format` names it by: `markdown`.
+    pub id: &'static str,
+    /// The documentation model versions (`comline_core::doc::DOC_MODEL_VERSION`)
+    /// it reads.
+    pub model_versions: &'static [u32],
+    pub render: RendererFn,
+}
+
 /// Maps a declared `(language, version)` to a generator. The CLI builds one
 /// at startup from the generator crates it was compiled with.
 ///
@@ -79,6 +94,8 @@ pub struct Generator {
 pub struct Registry {
     /// Per language, by floor.
     langs: BTreeMap<&'static str, Vec<Generator>>,
+    /// Documentation renderers, by id.
+    renderers: BTreeMap<&'static str, Renderer>,
 }
 
 /// A declared target, matched to its generator.
@@ -138,6 +155,21 @@ impl std::error::Error for Unresolved {}
 impl Registry {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Register a documentation renderer. One with the same id is replaced.
+    pub fn register_renderer(&mut self, renderer: Renderer) {
+        self.renderers.insert(renderer.id, renderer);
+    }
+
+    /// The renderer `id`, if registered.
+    pub fn renderer(&self, id: &str) -> Option<&Renderer> {
+        self.renderers.get(id)
+    }
+
+    /// Every registered renderer, by id.
+    pub fn renderers(&self) -> impl Iterator<Item = &Renderer> {
+        self.renderers.values()
     }
 
     /// Register `generator` at its floor. One at the same floor is replaced.

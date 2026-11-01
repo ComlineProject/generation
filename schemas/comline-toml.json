@@ -3,6 +3,49 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "additionalProperties": false,
   "definitions": {
+    "Doc": {
+      "additionalProperties": false,
+      "description": "The `[doc]` table: `comline doc`'s settings. Each key has a flag that\noverrides it.",
+      "properties": {
+        "changelog_from": {
+          "description": "Add a changelog from this built version (a version or commit hash) to\nthe documented one. `--changelog-from` overrides it.",
+          "type": "string"
+        },
+        "format": {
+          "default": "markdown",
+          "description": "What to write: `markdown` (pages, from the official renderer or\n`renderer`), `json` (the documentation model itself, `model.json`), or\nanother renderer id `renderer` offers. Default `markdown`. `--format`\noverrides it.",
+          "examples": [
+            "markdown",
+            "json"
+          ],
+          "type": "string"
+        },
+        "links": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Where each dependency's documentation lives, by the name the package\ngives the dependency (or `std`): `links = { std = \"https://...\" }`. A\ntype from a dependency listed here links into its docs; one that\nisn't is plain text.",
+          "type": "object"
+        },
+        "out": {
+          "default": "docs/api",
+          "description": "Output directory, relative to `comline.toml`. Default `docs/api`.\n`--out` overrides it.",
+          "type": "string"
+        },
+        "renderer": {
+          "description": "A renderer outside this binary: a path to a `.wasm` (run sandboxed\nunder wasmtime) or to an executable, relative to `comline.toml`'s\ndirectory, run exactly like an external `generator`. Unset, the\nbuilt-in renderer for `format` is used.",
+          "type": "string"
+        },
+        "timeout": {
+          "description": "The wall-time limit for each call to `renderer`, in seconds.\nDefault 60.",
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "EncodingEntry": {
       "anyOf": [
         {
@@ -217,6 +260,14 @@
   },
   "description": "`comline.toml`: where `comline generate` writes code, and how. Which\nlanguages are generated comes from `config.idp`'s\n`code_generation.languages`; this file says where each one lands.",
   "properties": {
+    "doc": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/Doc"
+        }
+      ],
+      "description": "Documentation settings: where `comline doc` writes, in what format,\nwith which renderer."
+    },
     "generate": {
       "allOf": [
         {

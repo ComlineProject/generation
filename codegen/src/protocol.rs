@@ -8,6 +8,11 @@
 //! [`FrozenUnit`]s in a request are exactly what a build froze. A Rust
 //! generator binary is [`serve_stdio`] over its [`Registry`].
 //!
+//! The same programs can render documentation: a [`RenderRequest`] carries
+//! a package's documentation model (`comline_core::doc`, as JSON) and the
+//! renderer's options, and the answer is files, like [`GenerateRequest`]'s.
+//! [`Description::renderers`] lists the renderers a program offers.
+//!
 //! A [`Request`] states the protocol version and the IR format it was built
 //! with; a generator refuses either one it doesn't accept, and says so in a
 //! [`Response::Error`] naming both sides. Both start their header fields
@@ -30,10 +35,14 @@ use serde::{Deserialize, Serialize};
 use crate::features::{Support, SupportTable};
 use crate::validation::ValidateOnDecode;
 use crate::versions::{LangVersion, Versions};
-use crate::{GeneratedFile, Generator, Mode, PackageMeta, Registry};
+use crate::{GeneratedFile, Generator, Mode, PackageMeta, Registry, Renderer};
 
 /// This protocol's version. `0` while Comline is in its early days: until
 /// 1.0 it may change incompatibly, and the number moves when it does.
+///
+/// An additive change keeps it: a new field with a default, or a new request
+/// a program is only sent once its [`Description`] says it handles it
+/// (`Render`, which only goes to a program listing renderers).
 pub const PROTOCOL_VERSION: u32 = 0;
 
 /// The IR format this build of `comline-core` freezes and reads: the
@@ -63,6 +72,10 @@ impl Request {
     pub fn generate(request: GenerateRequest) -> Self {
         Self::new(RequestBody::Generate(request))
     }
+
+    pub fn render(request: RenderRequest) -> Self {
+        Self::new(RequestBody::Render(request))
+    }
 }
 
 /// What a [`Request`] asks for.
@@ -73,6 +86,35 @@ pub enum RequestBody {
     Describe,
     /// Generate one target: [`Response::Generate`].
     Generate(GenerateRequest),
+    /// Render a package's documentation: [`Response::Render`]. Only sent to
+    /// a program whose [`Description::renderers`] lists the renderer.
+    Render(RenderRequest),
+}
+
+/// Render a package's documentation with one renderer.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RenderRequest {
+    /// The renderer's id, from [`Description::renderers`]: `markdown`.
+    pub renderer: String,
+    /// The model's version (`comline_core::doc::DOC_MODEL_VERSION`), readable
+    /// without parsing `model`: a renderer refuses one it doesn't list.
+    pub model_version: u32,
+    /// The documentation model as JSON text, in the shape of its JSON
+    /// Schema (`schemas/doc-model.json` in core).
+    pub model: String,
+    pub options: RenderOptions,
+}
+
+/// What a renderer is told besides the model. Every renderer accepts every
+/// option and ignores the ones it has no use for.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderOptions {
+    /// Where each dependency's documentation lives: a dependency's name (as
+    /// the package names it, or `std`) to the base URL of its rendered docs.
+    /// A type from a dependency listed here links to it; one that isn't is
+    /// plain text.
+    #[serde(default)]
+    pub links: BTreeMap<String, String>,
 }
 
 /// The language and version a target declared: `rust#1.85.0` is
@@ -166,6 +208,8 @@ pub struct EncodingMapping {
 pub enum Response {
     Describe(Description),
     Generate(Generated),
+    /// The rendered documentation, as files.
+    Render(Generated),
     /// The request was refused or generation failed.
     Error { message: String },
 }
@@ -179,6 +223,25 @@ pub struct Description {
     pub protocols: (u32, u32),
     /// The IR formats it accepts.
     pub ir_formats: Vec<u32>,
+    /// The documentation renderers it offers; empty for a program that only
+    /// generates code (and for one that predates renderers).
+    #[serde(default)]
+    pub renderers: Vec<RendererInfo>,
+}
+
+/// One documentation renderer, as [`Description`] lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RendererInfo {
+    /// Its id: `markdown`.
+    pub id: String,
+    /// The documentation model versions it reads.
+    pub model_versions: Vec<u32>,
+}
+
+impl From<&Renderer> for RendererInfo {
+    fn from(r: &Renderer) -> Self {
+        RendererInfo { id: r.id.to_string(), model_versions: r.model_versions.to_vec() }
+    }
 }
 
 /// One generator, as [`Description`] lists it.
@@ -309,6 +372,7 @@ pub fn describe(registry: &Registry) -> Description {
         languages: registry.generators().map(LanguageInfo::from).collect(),
         protocols: (PROTOCOL_VERSION, PROTOCOL_VERSION),
         ir_formats: vec![IR_FORMAT],
+        renderers: registry.renderers().map(RendererInfo::from).collect(),
     }
 }
 
@@ -339,7 +403,40 @@ pub fn respond(registry: &Registry, request: &[u8]) -> Response {
     match request.body {
         RequestBody::Describe => Response::Describe(describe(registry)),
         RequestBody::Generate(req) => generate(registry, &req),
+        RequestBody::Render(req) => render(registry, &req),
     }
+}
+
+fn render(registry: &Registry, req: &RenderRequest) -> Response {
+    let Some(renderer) = registry.renderer(&req.renderer) else {
+        let offered: Vec<&str> = registry.renderers().map(|r| r.id).collect();
+        return error(format!(
+            "no renderer `{}` here (offered: {})",
+            req.renderer,
+            if offered.is_empty() { "none".to_string() } else { offered.join(", ") }
+        ));
+    };
+    if !renderer.model_versions.contains(&req.model_version) {
+        return error(format!(
+            "the request carries documentation model {}, and the `{}` renderer reads {:?}",
+            req.model_version, renderer.id, renderer.model_versions
+        ));
+    }
+    match catch_unwind(AssertUnwindSafe(|| (renderer.render)(req))) {
+        Ok(Ok(files)) => {
+            Response::Render(Generated { files: files.into_iter().map(FileOut::from).collect(), diagnostics: vec![] })
+        }
+        Ok(Err(e)) => error(format!("{e:#}")),
+        Err(panic) => error(format!("the `{}` renderer panicked: {}", renderer.id, panic_message(&*panic))),
+    }
+}
+
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|s| s.to_string())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "no message".to_string())
 }
 
 fn generate(registry: &Registry, req: &GenerateRequest) -> Response {
@@ -352,14 +449,7 @@ fn generate(registry: &Registry, req: &GenerateRequest) -> Response {
             Response::Generate(Generated { files: files.into_iter().map(FileOut::from).collect(), diagnostics: vec![] })
         }
         Ok(Err(e)) => error(format!("{e:#}")),
-        Err(panic) => {
-            let why = panic
-                .downcast_ref::<&str>()
-                .map(|s| s.to_string())
-                .or_else(|| panic.downcast_ref::<String>().cloned())
-                .unwrap_or_else(|| "no message".to_string());
-            error(format!("the {} generator panicked: {why}", req.target.language))
-        }
+        Err(panic) => error(format!("the {} generator panicked: {}", req.target.language, panic_message(&*panic))),
     }
 }
 
@@ -470,7 +560,55 @@ mod tests {
             support: TOY_SUPPORT,
             versions: Versions { floor: "2.0", changes: &[], verified_up_to: "2.0", forward_compatible: true },
         });
+        registry.register_renderer(Renderer { id: "toydoc", model_versions: &[1], render: toydoc });
         registry
+    }
+
+    fn toydoc(req: &RenderRequest) -> Result<Vec<GeneratedFile>> {
+        if req.model == "panic" {
+            panic!("toydoc panicked");
+        }
+        Ok(vec![GeneratedFile { path: "index.md".into(), contents: format!("{} {:?}", req.model, req.options.links) }])
+    }
+
+    fn render_request(model: &str) -> RenderRequest {
+        RenderRequest {
+            renderer: "toydoc".into(),
+            model_version: 1,
+            model: model.into(),
+            options: RenderOptions { links: BTreeMap::from([("std".into(), "https://x/std".into())]) },
+        }
+    }
+
+    #[test]
+    fn render_answers_with_files() {
+        round_trip(Request::render(render_request("{}")));
+        round_trip(Response::Render(Generated { files: vec![], diagnostics: vec![] }));
+        let Response::Render(out) = answer(&Request::render(render_request("{}"))) else { panic!() };
+        assert_eq!(out.files, [FileOut { path: "index.md".into(), contents: b"{} {\"std\": \"https://x/std\"}".to_vec() }]);
+    }
+
+    #[test]
+    fn render_refusals_are_errors() {
+        let mut unknown = render_request("{}");
+        unknown.renderer = "html".into();
+        assert!(message(answer(&Request::render(unknown))).contains("no renderer `html` here (offered: toydoc)"));
+        let mut newer = render_request("{}");
+        newer.model_version = 9;
+        assert!(message(answer(&Request::render(newer))).contains("documentation model 9"));
+        assert!(message(answer(&Request::render(render_request("panic")))).contains("toydoc panicked"));
+    }
+
+    #[test]
+    fn an_older_description_has_no_renderers() {
+        #[derive(Serialize)]
+        struct Old {
+            languages: Vec<LanguageInfo>,
+            protocols: (u32, u32),
+            ir_formats: Vec<u32>,
+        }
+        let bytes = encode(&Old { languages: vec![], protocols: (0, 0), ir_formats: vec![3] }).unwrap();
+        assert_eq!(decode::<Description>(&bytes).unwrap().renderers, vec![]);
     }
 
     fn round_trip<T: Serialize + DeserializeOwned + PartialEq + std::fmt::Debug>(value: T) {
@@ -493,7 +631,7 @@ mod tests {
     #[test]
     fn responses_round_trip() {
         round_trip(Response::Describe(describe(&registry())));
-        round_trip(Response::Describe(Description { languages: vec![], protocols: (0, 3), ir_formats: vec![] }));
+        round_trip(Response::Describe(Description { languages: vec![], protocols: (0, 3), ir_formats: vec![], renderers: vec![] }));
         round_trip(Response::Generate(Generated {
             files: vec![FileOut { path: "a/b.rs".into(), contents: vec![0, 159, 255] }],
             diagnostics: vec!["careful".into()],
@@ -590,6 +728,7 @@ mod tests {
         assert_eq!(d.languages[0].versions.floor, "2.0");
         assert_eq!(d.languages[0].support[0].feature, "structs");
         assert_eq!(d.languages[0].support[0].state, "supported");
+        assert_eq!(d.renderers, [RendererInfo { id: "toydoc".into(), model_versions: vec![1] }]);
     }
 
     #[test]

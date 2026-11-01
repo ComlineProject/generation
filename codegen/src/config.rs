@@ -123,6 +123,49 @@ pub struct ComlineToml {
     /// `[[generate.target]]` blocks configuring one language each.
     #[serde(default)]
     pub generate: Generate,
+    /// Documentation settings: where `comline doc` writes, in what format,
+    /// with which renderer.
+    #[serde(default)]
+    pub doc: Doc,
+}
+
+/// Default output root for `comline doc`, relative to `comline.toml`.
+pub const DEFAULT_DOC_OUT: &str = "docs/api";
+/// Default `comline doc` format.
+pub const DEFAULT_DOC_FORMAT: &str = "markdown";
+
+/// The `[doc]` table: `comline doc`'s settings. Each key has a flag that
+/// overrides it.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Doc {
+    /// Output directory, relative to `comline.toml`. Default `docs/api`.
+    /// `--out` overrides it.
+    #[schemars(extend("default" = DEFAULT_DOC_OUT))]
+    pub out: Option<String>,
+    /// What to write: `markdown` (pages, from the official renderer or
+    /// `renderer`), `json` (the documentation model itself, `model.json`), or
+    /// another renderer id `renderer` offers. Default `markdown`. `--format`
+    /// overrides it.
+    #[schemars(extend("default" = DEFAULT_DOC_FORMAT, "examples" = ["markdown", "json"]))]
+    pub format: Option<String>,
+    /// A renderer outside this binary: a path to a `.wasm` (run sandboxed
+    /// under wasmtime) or to an executable, relative to `comline.toml`'s
+    /// directory, run exactly like an external `generator`. Unset, the
+    /// built-in renderer for `format` is used.
+    pub renderer: Option<String>,
+    /// The wall-time limit for each call to `renderer`, in seconds.
+    /// Default 60.
+    #[schemars(range(min = 1))]
+    pub timeout: Option<u64>,
+    /// Where each dependency's documentation lives, by the name the package
+    /// gives the dependency (or `std`): `links = { std = "https://..." }`. A
+    /// type from a dependency listed here links into its docs; one that
+    /// isn't is plain text.
+    pub links: std::collections::BTreeMap<String, String>,
+    /// Add a changelog from this built version (a version or commit hash) to
+    /// the documented one. `--changelog-from` overrides it.
+    pub changelog_from: Option<String>,
 }
 
 /// The `[generate]` table.
@@ -933,6 +976,22 @@ mod tests {
         let resolved = resolve(&cfg, &[], Path::new("/x"), &Overrides::default()).unwrap();
         assert_eq!(resolved.len(), 1);
         assert_eq!(resolved[0].language, "rust");
+    }
+
+    #[test]
+    fn the_doc_section_parses_and_refuses_unknown_keys() {
+        let cfg = parse(
+            "[doc]\nout = \"site/api\"\nformat = \"json\"\nrenderer = \"r.wasm\"\ntimeout = 5\n\
+             changelog_from = \"0.1.0\"\nlinks = { std = \"https://x/std\" }\n",
+        );
+        assert_eq!(cfg.doc.out.as_deref(), Some("site/api"));
+        assert_eq!(cfg.doc.format.as_deref(), Some("json"));
+        assert_eq!(cfg.doc.renderer.as_deref(), Some("r.wasm"));
+        assert_eq!(cfg.doc.timeout, Some(5));
+        assert_eq!(cfg.doc.changelog_from.as_deref(), Some("0.1.0"));
+        assert_eq!(cfg.doc.links["std"], "https://x/std");
+        assert!(parse("").doc.out.is_none());
+        assert!(toml::from_str::<ComlineToml>("[doc]\nouts = \"x\"\n").is_err());
     }
 
     #[test]
