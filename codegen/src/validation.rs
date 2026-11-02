@@ -243,7 +243,7 @@ impl<'a> Validation<'a> {
                 });
                 let value = match (given, default) {
                     (Some(value), _) => self.config_value(ns, value),
-                    (None, Some(default)) => self.literal(validator_ns, default),
+                    (None, Some(default)) => self.value(validator_ns, default),
                     (None, None) => Err(eyre!("no value given, and it has no default")),
                 }
                 .map_err(|e| eyre!("{at}: validator '{name}', property '{prop}': {e}"))?;
@@ -261,26 +261,38 @@ impl<'a> Validation<'a> {
             ConfigValue::Integer(i) => Ok(Value::Integer(i128::from(*i))),
             ConfigValue::Bool(b) => Ok(Value::Bool(*b)),
             ConfigValue::Str(s) => Ok(Value::String(s.clone())),
-            ConfigValue::Name(r) | ConfigValue::Path(r) => self.reference(ns, r),
+            ConfigValue::Name(r) | ConfigValue::Path(r) => self.reference(ns, r, 0),
             ConfigValue::FString(_) => Err(eyre!("an f-string isn't a validator argument")),
             ConfigValue::Marker => Err(eyre!("no value given")),
             ConfigValue::Dict(_) => Err(eyre!("a dictionary isn't a validator argument")),
         }
     }
 
-    /// A default as a validator declared it.
-    fn literal(&self, ns: &str, literal: &Literal) -> Result<Value> {
+    /// The value a literal written in schema `ns` stands for: itself, or for
+    /// a reference (`MAX`, `limits::MAX`, `u32::MAX`), the value it names,
+    /// followed through as many constants as it takes. A constant written
+    /// as another's name (`const B: u32 = A`, core#168) is emitted with this,
+    /// as is a validator property's default.
+    pub fn value(&self, ns: &str, literal: &Literal) -> Result<Value> {
+        self.literal(ns, literal, 0)
+    }
+
+    fn literal(&self, ns: &str, literal: &Literal, depth: usize) -> Result<Value> {
         match literal {
             Literal::Integer(i) => Ok(Value::Integer(i128::from(*i))),
             Literal::Bool(b) => Ok(Value::Bool(*b)),
             Literal::String(s) => Ok(Value::String(s.clone())),
-            Literal::Reference(r) => self.reference(ns, r),
+            Literal::Reference(r) => self.reference(ns, r, depth),
         }
     }
 
     /// A constant by name (`MAX`, `limits::MAX`), or a primitive's bound
-    /// (`u32::MAX`, `s8::MIN`).
-    fn reference(&self, ns: &str, reference: &str) -> Result<Value> {
+    /// (`u32::MAX`, `s8::MIN`). Core refuses constants that name each other
+    /// in a loop; the depth bound keeps IR that skipped it from hanging here.
+    fn reference(&self, ns: &str, reference: &str, depth: usize) -> Result<Value> {
+        if depth == MAX_DEPTH {
+            return Err(eyre!("`{reference}` names constants more than {MAX_DEPTH} deep"));
+        }
         if let Some((ty, bound)) = reference.split_once("::") {
             if let (Some(p), "MIN" | "MAX") = (PrimitiveType::from_name(ty), bound) {
                 let (min, max) =
@@ -290,7 +302,7 @@ impl<'a> Validation<'a> {
         }
         match self.resolve(ns, reference) {
             Some((const_ns, FrozenUnit::Constant { value: Some(value), .. })) => {
-                self.literal(const_ns, value)
+                self.literal(const_ns, value, depth + 1)
             }
             _ => Err(eyre!("`{reference}` isn't a constant in any schema being generated")),
         }
@@ -443,6 +455,33 @@ mod tests {
             plan.checks[0].param("max_chars"),
             Some(&Value::Integer(i128::from(u64::MAX)))
         );
+    }
+
+    #[test]
+    fn a_constant_naming_another_resolves_to_its_value() {
+        let schemas = vec![
+            ("limits".to_string(), IncrementalInterpreter::from_source("const BASE: u32 = 9\n")),
+            (
+                "app".to_string(),
+                IncrementalInterpreter::from_source(
+                    "use limits::BASE\nconst A: u32 = BASE\nconst B: u32 = A\nconst C: u64 = u64::MAX\n\
+                     const NAME: string = \"n\"\nconst D: string = NAME\nconst L: u32 = M\nconst M: u32 = L\n",
+                ),
+            ),
+        ];
+        let model = Validation::new(&schemas);
+        let value = |name: &str| {
+            let value = schemas[1].1.iter().find_map(|u| match u {
+                FrozenUnit::Constant { name: n, value: Some(value), .. } if n == name => Some(value),
+                _ => None,
+            });
+            model.value("app", value.expect("the constant"))
+        };
+        assert_eq!(value("B").unwrap(), Value::Integer(9));
+        assert_eq!(value("C").unwrap(), Value::Integer(i128::from(u64::MAX)));
+        assert_eq!(value("D").unwrap(), Value::String("n".to_string()));
+        // Core refuses a loop; resolving one anyway ends.
+        assert!(value("L").is_err());
     }
 
     #[test]
