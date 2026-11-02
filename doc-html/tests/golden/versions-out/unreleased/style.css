@@ -131,7 +131,7 @@ h1, h2, h3 { line-height: 1.25; }
 h1 { font-size: 1.8em; margin-top: 0.3em; }
 .unit { border-top: 1px solid var(--line); margin-top: 2em; padding-top: 0.5em; }
 .unit > h2 a.self, .function > h3 a.self { color: inherit; }
-.signature { background: var(--soft); border-left: 3px solid var(--accent); padding: 0.5em 0.75em; border-radius: 4px; }
+pre.signature { background: var(--soft); border-left: 3px solid var(--accent); padding: 0.5em 0.75em; border-radius: 4px; white-space: pre-wrap; }
 .table { overflow-x: auto; margin: 1em 0; }
 table { border-collapse: collapse; min-width: 50%; }
 th, td { border: 1px solid var(--line); padding: 0.35em 0.6em; text-align: left; vertical-align: top; }
@@ -190,6 +190,8 @@ pre.change .del .sign { color: var(--del-sign); }
 .idl .p { color: var(--hl-punct); }
 .idl .l { color: var(--hl-literal); }
 .idl .a { color: var(--hl-annotation); }
+.idl a:hover { text-decoration: none; }
+.idl a:hover .t { text-decoration: underline; }
 .idl .c { color: var(--hl-comment); font-style: italic; }
 @media (max-width: 760px) {
   .layout { display: block; }

@@ -17,7 +17,7 @@
 
 Who buys.
 
-| Field | Type | |
+| Field | Type | Description |
 |---|---|---|
 | `id` | `u64` | The customer's id. |
 | `name` | `string` | `@deprecated = "use email"` |

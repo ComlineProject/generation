@@ -145,6 +145,23 @@ fn annotation(a: &Annotation) -> String {
     }
 }
 
+/// A table whose "Description" column is dropped when no row has anything
+/// in it.
+fn described_table(out: &mut String, head: [&str; 2], rows: &[(String, String, String)]) {
+    if rows.iter().any(|r| !r.2.trim().is_empty()) {
+        let _ = write!(out, "| {} | {} | Description |\n|---|---|---|\n", head[0], head[1]);
+        for (a, b, c) in rows {
+            let _ = writeln!(out, "| {a} | {b} | {c} |");
+        }
+    } else {
+        let _ = write!(out, "| {} | {} |\n|---|---|\n", head[0], head[1]);
+        for (a, b, _) in rows {
+            let _ = writeln!(out, "| {a} | {b} |");
+        }
+    }
+    out.push('\n');
+}
+
 impl Pages<'_> {
     fn all(&self) -> Vec<GeneratedFile> {
         let mut files = vec![file("index.md", self.index())];
@@ -363,45 +380,40 @@ impl Pages<'_> {
         if fields.is_empty() {
             return;
         }
-        let _ = write!(out, "| {what} | Type | |\n|---|---|---|\n");
-        for f in fields {
-            let mut ty = self.ty(page, &f.ty);
-            if f.optional {
-                ty.push_str(" (optional)");
-            }
-            if let Some(default) = &f.default {
-                let _ = write!(ty, " = `{default}`");
-            }
-            let mut text = param_doc(f.docs.as_ref(), parent, &f.name);
-            for a in &f.annotations {
-                if !text.is_empty() {
-                    text.push(' ');
+        let rows: Vec<(String, String, String)> = fields
+            .iter()
+            .map(|f| {
+                let mut ty = self.ty(page, &f.ty);
+                if f.optional {
+                    ty.push_str(" (optional)");
                 }
-                text.push_str(&annotation(a));
-            }
-            let _ = writeln!(out, "| `{}` | {ty} | {} |", f.name, cell(&text));
-        }
-        out.push('\n');
+                if let Some(default) = &f.default {
+                    let _ = write!(ty, " = `{default}`");
+                }
+                let mut text = param_doc(f.docs.as_ref(), parent, &f.name);
+                for a in &f.annotations {
+                    if !text.is_empty() {
+                        text.push(' ');
+                    }
+                    text.push_str(&annotation(a));
+                }
+                (format!("`{}`", f.name), ty, cell(&text))
+            })
+            .collect();
+        described_table(out, [what, "Type"], &rows);
     }
 
     fn function(&self, out: &mut String, page: &str, protocol: &str, f: &Function) {
-        let args: Vec<String> = f.arguments.iter().map(|a| format!("{}: {}", a.name, self.ty(page, &a.ty))).collect();
         let _ = write!(
             out,
-            "<a id=\"{}-{}\"></a>\n\n### `{}`\n\n",
+            "<a id=\"{}-{}\"></a>\n\n### function `{}`\n\n",
             anchor(protocol),
             anchor(&f.name),
             f.name
         );
-        let mut signature = format!("`{}`({})", f.name, args.join(", "));
-        if let Some(returns) = &f.returns {
-            let _ = write!(signature, " -> {}", self.ty(page, returns));
-        }
-        if !f.throws.is_empty() {
-            let throws: Vec<String> = f.throws.iter().map(|t| self.ty(page, t)).collect();
-            let _ = write!(signature, " ! {}", throws.join(", "));
-        }
-        let _ = write!(out, "{signature}\n\n");
+        // The signature as the IDL line a schema would have. A code block
+        // can't link its types; the arguments' table below does.
+        let _ = write!(out, "```comline\nfunction {};\n```\n\n", signature_text(f));
         if let Some(docs) = &f.docs {
             if !docs.text.trim().is_empty() {
                 let _ = write!(out, "{}\n\n", docs.text.trim());
@@ -412,12 +424,15 @@ impl Pages<'_> {
             let _ = write!(out, "Annotations: {}\n\n", list.join(", "));
         }
         if !f.arguments.is_empty() {
-            out.push_str("| Argument | Type | |\n|---|---|---|\n");
-            for a in &f.arguments {
-                let text = param_doc(None, f.docs.as_ref(), &a.name);
-                let _ = writeln!(out, "| `{}` | {} | {} |", a.name, self.ty(page, &a.ty), cell(&text));
-            }
-            out.push('\n');
+            let rows: Vec<(String, String, String)> = f
+                .arguments
+                .iter()
+                .map(|a| {
+                    let text = param_doc(None, f.docs.as_ref(), &a.name);
+                    (format!("`{}`", a.name), self.ty(page, &a.ty), cell(&text))
+                })
+                .collect();
+            described_table(out, ["Argument", "Type"], &rows);
         }
     }
 
