@@ -20,7 +20,7 @@ export const IR_HASH = 0xeab4408b940579fbn;
 
 /** Digest of every schema in the package — what a connection's handshake
 *  checks, so both ends agree on each protocol's number. */
-export const CONNECTION_IR_HASH = 0x87c0a4abdc2a26bcn;
+export const CONNECTION_IR_HASH = 0xf9d255a977b3b030n;
 
 /** The package's wire format (`wire.format`): what this file's helpers
 *  encode with, and what the peer has to speak too. */

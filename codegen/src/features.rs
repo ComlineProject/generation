@@ -18,7 +18,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use comline_core::schema::ir::frozen::types::TypeRef;
+use comline_core::schema::ir::frozen::types::{PrimitiveType, TypeRef};
 use comline_core::schema::idl::annotations::{
     DEFAULT_FORMAT, FORMAT_JSON, FORMAT_MSGPACK, FORMAT_PACKED, FRAMING_JSONRPC, HANDSHAKE_NONE,
 };
@@ -62,6 +62,8 @@ pub enum Feature {
     FormatPacked,
     FormatJson,
     FormatMsgPack,
+    Bounds,
+    Chars,
 }
 
 impl Feature {
@@ -92,6 +94,8 @@ impl Feature {
         Feature::FormatPacked,
         Feature::FormatJson,
         Feature::FormatMsgPack,
+        Feature::Bounds,
+        Feature::Chars,
     ];
 
     /// The stable id: `unions`, `validate-on-decode`.
@@ -122,6 +126,8 @@ impl Feature {
             Feature::FormatPacked => "format-packed",
             Feature::FormatJson => "format-json",
             Feature::FormatMsgPack => "format-msgpack",
+            Feature::Bounds => "bounds",
+            Feature::Chars => "chars",
         }
     }
 
@@ -158,6 +164,8 @@ impl Feature {
             Feature::FormatPacked => "the `packed@1` format",
             Feature::FormatJson => "the `json@1` format",
             Feature::FormatMsgPack => "the `msgpack@1` format",
+            Feature::Bounds => "bounds",
+            Feature::Chars => "single characters",
         }
     }
 
@@ -195,6 +203,11 @@ impl Feature {
             Feature::FormatPacked => "`wire.format = \"packed@1\"`, the default: fixed-width fields, no tags",
             Feature::FormatJson => "`wire.format = \"json@1\"`",
             Feature::FormatMsgPack => "`wire.format = \"msgpack@1\"`",
+            Feature::Bounds => {
+                "a maximum or exact length on a string or list (`char[max 64]`, `char[8]`, `T[max N]`), \
+                 or a depth limit (`@max_depth`): checked while decoding and encoding"
+            }
+            Feature::Chars => "`char`: one Unicode scalar value",
         }
     }
 }
@@ -364,8 +377,11 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                 FrozenUnit::Import(path, _, span) => {
                     push(Feature::Imports, format!("use {path}"), Some(*span));
                 }
-                FrozenUnit::Struct { name, fields, span, .. } => {
+                FrozenUnit::Struct { name, fields, parameters, span, .. } => {
                     push(Feature::Structs, format!("struct '{name}'"), Some(*span));
+                    if has_property(parameters, "max_depth") {
+                        push(Feature::Bounds, format!("struct '{name}', `@max_depth`"), Some(*span));
+                    }
                     fields_of(&format!("struct '{name}'"), fields, &mut push, &mut validators);
                 }
                 FrozenUnit::Error { name, fields, span, .. } => {
@@ -495,7 +511,16 @@ fn types_of(
     push: &mut impl FnMut(Feature, String, Option<(usize, usize)>),
 ) {
     match ty {
-        TypeRef::Array { element, length } => {
+        // An array of `char` is a string: bounded, or of an exact length.
+        TypeRef::Array { element, length, max } if **element == TypeRef::Primitive(PrimitiveType::Char) => {
+            if length.is_some() || max.is_some() {
+                push(Feature::Bounds, owner.to_string(), span);
+            }
+        }
+        TypeRef::Array { element, length, max } => {
+            if max.is_some() {
+                push(Feature::Bounds, owner.to_string(), span);
+            }
             match length {
                 None => push(Feature::Arrays, owner.to_string(), span),
                 Some(n) => {
@@ -513,6 +538,7 @@ fn types_of(
                 types_of(owner, member, false, span, push);
             }
         }
+        TypeRef::Primitive(PrimitiveType::Char) => push(Feature::Chars, owner.to_string(), span),
         TypeRef::Primitive(_) | TypeRef::Named(_) | TypeRef::Unit => {}
     }
 }
@@ -531,6 +557,11 @@ fn validator_refs(
         }
     }
     any
+}
+
+/// Whether `parameters` set `@key`, whatever its value.
+fn has_property(parameters: &[FrozenUnit], key: &str) -> bool {
+    parameters.iter().any(|p| matches!(p, FrozenUnit::Property { name, .. } if name == key))
 }
 
 /// The text of a scalar `@key = value` annotation.
@@ -658,8 +689,58 @@ pub fn strip(
             Some((schemas.to_vec(), options))
         }
         Feature::Async => Some((schemas.to_vec(), Options { async_api: false, ..options.clone() })),
+        // Every maximum and exact string length dropped (`char[max 64]` and
+        // `char[8]` back to `string`), and every depth limit.
+        Feature::Bounds => {
+            let schemas = schemas
+                .iter()
+                .map(|(namespace, units)| (namespace.clone(), units.iter().map(without_bounds).collect()))
+                .collect();
+            Some((schemas, options.clone()))
+        }
         _ => None,
     }
+}
+
+/// `unit` with its types' bounds and its depth limit removed.
+fn without_bounds(unit: &FrozenUnit) -> FrozenUnit {
+    let mut unit = unit.clone();
+    let no_depth = |parameters: &mut Vec<FrozenUnit>| {
+        parameters.retain(|p| !matches!(p, FrozenUnit::Property { name, .. } if name == "max_depth"))
+    };
+    let fields = |fields: &mut Vec<FrozenUnit>| {
+        for field in fields {
+            if let FrozenUnit::Field { ty, .. } = field {
+                *ty = ty.without_bounds();
+            }
+        }
+    };
+    match &mut unit {
+        FrozenUnit::Struct { fields: f, parameters, .. } => {
+            fields(f);
+            no_depth(parameters);
+        }
+        FrozenUnit::Error { fields: f, .. } => fields(f),
+        FrozenUnit::TypeAlias { target, parameters, .. } => {
+            *target = target.without_bounds();
+            no_depth(parameters);
+        }
+        FrozenUnit::Constant { ty, .. } => *ty = ty.without_bounds(),
+        FrozenUnit::Protocol { functions, .. } => {
+            for function in functions {
+                if let FrozenUnit::Function { arguments, _return, .. } = function {
+                    for argument in arguments {
+                        argument.ty = argument.ty.without_bounds();
+                    }
+                    if let Some(ret) = _return {
+                        *ret = ret.without_bounds();
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    unit
 }
 
 /// One generator's column in a rendered matrix.
@@ -783,7 +864,37 @@ mod tests {
     }
 
     fn array(element: TypeRef, length: Option<u64>) -> TypeRef {
-        TypeRef::Array { element: Box::new(element), length }
+        TypeRef::Array { element: Box::new(element), length, max: None }
+    }
+
+    #[test]
+    fn bounds_and_chars_are_uses_and_bounds_strip() {
+        let char_ = TypeRef::Primitive(PrimitiveType::Char);
+        let bounded = |element: TypeRef, max: u64| TypeRef::Array { element: Box::new(element), length: None, max: Some(max) };
+        let schemas = vec![(
+            "api".to_string(),
+            vec![FrozenUnit::Struct {
+                docstring: None,
+                parameters: vec![FrozenUnit::Property { name: "max_depth".into(), value: ConfigValue::Integer(8) }],
+                name: "S".into(),
+                fields: vec![
+                    field("name", bounded(char_.clone(), 64), false),
+                    field("code", array(char_.clone(), Some(2)), false),
+                    field("tags", bounded(bounded(char_.clone(), 8), 4), false),
+                    field("initial", char_.clone(), false),
+                    field("plain", TypeRef::Primitive(PrimitiveType::String), false),
+                ],
+                span: (0, 100),
+            }],
+        )];
+        let uses = used(&schemas, &Options::default());
+        assert_eq!(ids(&uses), ["structs", "bounds", "arrays", "bounds", "chars"]);
+        assert!(uses.iter().any(|u| u.feature == Feature::Bounds && u.owner == "struct 'S', `@max_depth`"));
+        // A string isn't an array: neither `arrays` nor `fixed-arrays` for it.
+        assert!(!uses.iter().any(|u| u.owner.ends_with("'code'") && u.feature != Feature::Bounds));
+
+        let (stripped, _) = strip(Feature::Bounds, &schemas, &Options::default()).unwrap();
+        assert_eq!(ids(&used(&stripped, &Options::default())), ["structs", "arrays", "chars"]);
     }
 
     fn ids(uses: &[FeatureUse]) -> Vec<&'static str> {

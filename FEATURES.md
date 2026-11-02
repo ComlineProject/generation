@@ -6,14 +6,14 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 
 | Feature | rust ≥ 1.85.0 | typescript ≥ 5.0 |
 |---|---|---|
-| structs <br><sub>`structs`</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +11 more</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +12 more</sub> |
+| structs <br><sub>`structs`</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +12 more</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +13 more</sub> |
 | enums <br><sub>`enums`</sub> | ✅ supported <br><sub>proven by `enum_basic`</sub> | ✅ supported <br><sub>proven by `enum_basic`</sub> |
-| optional fields <br><sub>`optional-fields`</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +3 more</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +4 more</sub> |
-| arrays <br><sub>`arrays`</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +3 more</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +4 more</sub> |
+| optional fields <br><sub>`optional-fields`</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +4 more</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +5 more</sub> |
+| arrays <br><sub>`arrays`</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +4 more</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +5 more</sub> |
 | fixed-length arrays <br><sub>`fixed-arrays`</sub> | ✅ supported <br><sub>proven by `shapes`</sub> | 🟡 partial: rendered as `T[]`: the length isn't part of the type <br><sub>proven by `shapes`, `large_fixed_arrays_nested`</sub> |
 | fixed arrays over 32 elements, nested <br><sub>`large-fixed-arrays-nested`</sub> | ❌ unsupported: a fixed array over 32 elements renders only as a struct or error field's own, non-optional type (serde's derive stops at 32) <br><sub>proven by `large_fixed_arrays_nested`</sub> | 🟡 partial: rendered as `T[]`: the length isn't part of the type <br><sub>proven by `large_fixed_arrays_nested`</sub> |
 | unions <br><sub>`unions`</sub> | ❌ unsupported: Rust has no anonymous sum type to render one as <br><sub>proven by `unions`</sub> | ✅ supported <br><sub>proven by `unions`</sub> |
-| type aliases <br><sub>`type-aliases`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`, `unions`</sub> |
+| type aliases <br><sub>`type-aliases`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`, `bounds`</sub> | ✅ supported <br><sub>proven by `validators`, `validators_on_decode`, `unions` +1 more</sub> |
 | constants <br><sub>`constants`</sub> | ✅ supported <br><sub>proven by `constant`, `shapes`, `validators` +1 more</sub> | ✅ supported <br><sub>proven by `constant`, `shapes`, `validators` +1 more</sub> |
 | protocols <br><sub>`protocols`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +8 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +7 more</sub> |
 | errors <br><sub>`errors`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `format_json` +1 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `format_json`</sub> |
@@ -31,3 +31,5 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 | the `packed@1` format <br><sub>`format-packed`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +4 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +4 more</sub> |
 | the `json@1` format <br><sub>`format-json`</sub> | ✅ supported <br><sub>proven by `format_json`</sub> | ✅ supported <br><sub>proven by `format_json`</sub> |
 | the `msgpack@1` format <br><sub>`format-msgpack`</sub> | ✅ supported <br><sub>proven by `format_msgpack`</sub> | ❌ unsupported: `@comline/runtime` has no MessagePack codec yet <br><sub>proven by `format_msgpack`</sub> |
+| bounds <br><sub>`bounds`</sub> | ⚪ ignored: a bounded string is a `String` and a bounded list a `Vec`; nothing checks the maximum yet (core#98) <br><sub>proven by `bounds`</sub> | ⚪ ignored: a bounded string is a `string` and a bounded list an array; nothing checks the maximum yet (core#98) <br><sub>proven by `bounds`</sub> |
+| single characters <br><sub>`chars`</sub> | ❌ unsupported: no wire format carries a single `char` yet (core#98) <br><sub>proven by `chars`</sub> | ❌ unsupported: no wire format carries a single `char` yet (core#98) <br><sub>proven by `chars`</sub> |

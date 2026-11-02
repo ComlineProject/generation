@@ -708,12 +708,8 @@ impl Site<'_> {
                     None => name,
                 }
             }
-            Type::Array { element, length } => {
-                let suffix = match length {
-                    Some(n) => format!("[{n}]"),
-                    None => "[]".to_string(),
-                };
-                format!("{}{}", self.ty_idl(page, element), idl(&suffix))
+            Type::Array { element, length, max } => {
+                format!("{}{}", self.ty_idl(page, element), idl(&array_suffix(*length, *max)))
             }
             Type::Union { members } => {
                 let members: Vec<String> = members.iter().map(|m| self.ty_idl(page, m)).collect();
@@ -731,10 +727,9 @@ impl Site<'_> {
                 Some(url) => format!("<a href=\"{}\">{}</a>", esc(&url), code(name)),
                 None => code(name),
             },
-            Type::Array { element, length } => match length {
-                Some(n) => format!("{}{}", self.ty(page, element), code(&format!("[{n}]"))),
-                None => format!("{}{}", self.ty(page, element), code("[]")),
-            },
+            Type::Array { element, length, max } => {
+                format!("{}{}", self.ty(page, element), code(&array_suffix(*length, *max)))
+            }
             Type::Union { members } => {
                 let members: Vec<String> = members.iter().map(|m| self.ty(page, m)).collect();
                 format!("union({})", members.join(" "))

@@ -480,10 +480,9 @@ impl Pages<'_> {
                 Some(url) => format!("[`{name}`]({url})"),
                 None => format!("`{name}`"),
             },
-            Type::Array { element, length } => match length {
-                Some(n) => format!("{}`[{n}]`", self.ty(page, element)),
-                None => format!("{}`[]`", self.ty(page, element)),
-            },
+            Type::Array { element, length, max } => {
+                format!("{}`{}`", self.ty(page, element), array_suffix(*length, *max))
+            }
             Type::Union { members } => {
                 let members: Vec<String> = members.iter().map(|m| self.ty(page, m)).collect();
                 format!("union({})", members.join(" "))

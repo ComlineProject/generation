@@ -124,6 +124,16 @@
       "description": "`wire.format = \"msgpack@1\"`",
       "id": "format-msgpack",
       "title": "the `msgpack@1` format"
+    },
+    {
+      "description": "a maximum or exact length on a string or list (`char[max 64]`, `char[8]`, `T[max N]`), or a depth limit (`@max_depth`): checked while decoding and encoding",
+      "id": "bounds",
+      "title": "bounds"
+    },
+    {
+      "description": "`char`: one Unicode scalar value",
+      "id": "chars",
+      "title": "single characters"
     }
   ],
   "generators": [
@@ -138,7 +148,8 @@
             "shapes",
             "cross_schema",
             "validators",
-            "validators_on_decode"
+            "validators_on_decode",
+            "bounds"
           ],
           "since": null,
           "state": "supported",
@@ -152,6 +163,24 @@
           "since": null,
           "state": "supported",
           "tracking": null
+        },
+        "bounds": {
+          "note": "a bounded string is a `String` and a bounded list a `Vec`; nothing checks the maximum yet",
+          "proven_by": [
+            "bounds"
+          ],
+          "since": null,
+          "state": "ignored",
+          "tracking": "core#98"
+        },
+        "chars": {
+          "note": "no wire format carries a single `char` yet",
+          "proven_by": [
+            "chars"
+          ],
+          "since": null,
+          "state": "unsupported",
+          "tracking": "core#98"
         },
         "connections": {
           "note": null,
@@ -328,7 +357,8 @@
             "shapes",
             "cross_schema",
             "validators",
-            "validators_on_decode"
+            "validators_on_decode",
+            "bounds"
           ],
           "since": null,
           "state": "supported",
@@ -369,7 +399,8 @@
             "validators",
             "validators_on_decode",
             "format_json",
-            "format_msgpack"
+            "format_msgpack",
+            "bounds"
           ],
           "since": null,
           "state": "supported",
@@ -391,7 +422,8 @@
           "note": null,
           "proven_by": [
             "validators",
-            "validators_on_decode"
+            "validators_on_decode",
+            "bounds"
           ],
           "since": null,
           "state": "supported",
@@ -446,7 +478,8 @@
             "cross_schema",
             "validators",
             "validators_on_decode",
-            "large_fixed_arrays_nested"
+            "large_fixed_arrays_nested",
+            "bounds"
           ],
           "since": null,
           "state": "supported",
@@ -460,6 +493,24 @@
           "since": null,
           "state": "ignored",
           "tracking": null
+        },
+        "bounds": {
+          "note": "a bounded string is a `string` and a bounded list an array; nothing checks the maximum yet",
+          "proven_by": [
+            "bounds"
+          ],
+          "since": null,
+          "state": "ignored",
+          "tracking": "core#98"
+        },
+        "chars": {
+          "note": "no wire format carries a single `char` yet",
+          "proven_by": [
+            "chars"
+          ],
+          "since": null,
+          "state": "unsupported",
+          "tracking": "core#98"
         },
         "connections": {
           "note": null,
@@ -636,7 +687,8 @@
             "cross_schema",
             "validators",
             "validators_on_decode",
-            "large_fixed_arrays_nested"
+            "large_fixed_arrays_nested",
+            "bounds"
           ],
           "since": null,
           "state": "supported",
@@ -677,7 +729,8 @@
             "validators_on_decode",
             "unions",
             "large_fixed_arrays_nested",
-            "format_json"
+            "format_json",
+            "bounds"
           ],
           "since": null,
           "state": "supported",
@@ -699,7 +752,8 @@
           "proven_by": [
             "validators",
             "validators_on_decode",
-            "unions"
+            "unions",
+            "bounds"
           ],
           "since": null,
           "state": "supported",
