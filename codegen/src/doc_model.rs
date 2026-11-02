@@ -226,6 +226,9 @@ pub enum Type {
         element: Box<Type>,
         #[serde(default)]
         length: Option<u64>,
+        /// `T[max N]`; absent from a model written before bounds.
+        #[serde(default)]
+        max: Option<u64>,
     },
     Union {
         #[serde(default)]
@@ -568,12 +571,20 @@ pub fn type_text(ty: &Type) -> String {
     match ty {
         Type::Primitive { name } | Type::Named { name, .. } => name.clone(),
         Type::Unit => "()".to_string(),
-        Type::Array { element, length: Some(n) } => format!("{}[{n}]", type_text(element)),
-        Type::Array { element, length: None } => format!("{}[]", type_text(element)),
+        Type::Array { element, length, max } => format!("{}{}", type_text(element), array_suffix(*length, *max)),
         Type::Union { members } => {
             let members: Vec<String> = members.iter().map(type_text).collect();
             format!("union({})", members.join(" "))
         }
+    }
+}
+
+/// An array's suffix as written: `[]`, `[N]` or `[max N]`.
+pub fn array_suffix(length: Option<u64>, max: Option<u64>) -> String {
+    match (length, max) {
+        (Some(n), _) => format!("[{n}]"),
+        (None, Some(n)) => format!("[max {n}]"),
+        (None, None) => "[]".to_string(),
     }
 }
 
@@ -933,7 +944,9 @@ pub fn tokens(line: &str) -> Vec<(Token, &str)> {
         } else if c.is_alphabetic() || c == '_' {
             let n = rest.find(|ch: char| !(ch.is_alphanumeric() || ch == '_')).unwrap_or(rest.len());
             let word = &rest[..n];
-            let token = if KEYWORDS.contains(&word) {
+            // `max` is a keyword only right after `[`, as in the IDL.
+            let after_bracket = out.iter().rev().find(|(t, _)| *t != Token::Space).is_some_and(|(_, s)| *s == "[");
+            let token = if KEYWORDS.contains(&word) || (word == "max" && after_bracket) {
                 Token::Keyword
             } else if word == "true" || word == "false" {
                 Token::Literal
@@ -1004,4 +1017,16 @@ mod tests {
         assert_eq!(relative("types/user.md", "types/item.md"), "item.md");
         assert_eq!(relative("api.md", "types/user.md"), "types/user.md");
     }
+
+    #[test]
+    fn max_is_a_keyword_right_after_a_bracket_only() {
+        let kinds: Vec<(Token, &str)> =
+            tokens("names: char[max 64]").into_iter().filter(|(t, _)| *t != Token::Space).collect();
+        assert!(kinds.contains(&(Token::Keyword, "max")), "{kinds:?}");
+        assert!(tokens("max: u32").contains(&(Token::Name, "max")));
+        assert_eq!(array_suffix(None, Some(64)), "[max 64]");
+        assert_eq!(array_suffix(Some(2), None), "[2]");
+        assert_eq!(array_suffix(None, None), "[]");
+    }
+
 }
