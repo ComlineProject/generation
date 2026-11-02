@@ -123,20 +123,68 @@ pub fn corpus() -> Vec<Fixture> {
         connections_jsonrpc(),
         format_json(),
         format_msgpack(),
+        bounds(),
+        chars(),
     ]
+}
+
+/// Maximums and exact lengths: on a string, a list, a list of strings, an
+/// alias, and a depth limit on a type that contains itself.
+fn bounds() -> Fixture {
+    Fixture::one(
+        "bounds",
+        "conformance",
+        vec![
+            FrozenUnit::TypeAlias {
+                docstring: None,
+                parameters: vec![],
+                name: "Name".to_string(),
+                target: type_of("char[max 32]"),
+                span: (0, 0),
+            },
+            structure(
+                "Customer",
+                vec![
+                    field("name", "Name", false),
+                    field("country", "char[2]", false),
+                    field("email", "char[max 254]", true),
+                    field("tags", "char[max 16][max 8]", false),
+                    field("scores", "u32[max 10]", false),
+                ],
+            ),
+            FrozenUnit::Struct {
+                docstring: None,
+                parameters: vec![FrozenUnit::Property { name: "max_depth".to_string(), value: ConfigValue::Integer(16) }],
+                name: "Node".to_string(),
+                fields: vec![field("label", "char[max 64]", false), field("children", "Node[max 4]", false)],
+                span: (0, 0),
+            },
+        ],
+    )
+}
+
+/// A single `char`.
+fn chars() -> Fixture {
+    Fixture::one("chars", "conformance", vec![structure("Grade", vec![field("letter", "char", false)])])
 }
 
 // ── builders ────────────────────────────────────────────────────────────────
 
 /// The type a schema spells `written`: a primitive name, a named type, or
-/// either followed by `[]` / `[N]`.
+/// either followed by `[]`, `[N]` or `[max N]`. `char[]` is `string`, as
+/// core stores it.
 fn type_of(written: &str) -> TypeRef {
     if let Some(rest) = written.strip_suffix(']') {
-        let (element, length) = rest.rsplit_once('[').expect("an array type");
-        return TypeRef::Array {
-            element: Box::new(type_of(element)),
-            length: (!length.is_empty()).then(|| length.parse().expect("an array length")),
+        let (element, size) = rest.rsplit_once('[').expect("an array type");
+        let element = type_of(element);
+        let (length, max) = match size.strip_prefix("max ") {
+            Some(max) => (None, Some(max.parse().expect("an array maximum"))),
+            None => ((!size.is_empty()).then(|| size.parse().expect("an array length")), None),
         };
+        if element == TypeRef::Primitive(PrimitiveType::Char) && length.is_none() && max.is_none() {
+            return TypeRef::Primitive(PrimitiveType::String);
+        }
+        return TypeRef::Array { element: Box::new(element), length, max };
     }
     match PrimitiveType::from_name(written) {
         Some(p) => TypeRef::Primitive(p),
