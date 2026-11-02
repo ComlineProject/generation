@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>types · shop 0.1.0</title>
+<title>types - package shop - Comline</title>
 <script>(function(){var K="comline-doc-theme",t=null,v=function(x){return x==="auto"||x==="light"||x==="dark"?x:null};try{var u=new URL(location.href);t=v(u.searchParams.get("theme"));if(u.searchParams.has("theme")){u.searchParams.delete("theme");history.replaceState(history.state,"",u.pathname+u.search+u.hash)}}catch(e){}if(!t)try{var m=new RegExp("(?:^|;)"+K+"=(auto|light|dark)(?=;|$)").exec(window.name);t=m&&m[1]}catch(e){}if(!t)try{t=v(localStorage.getItem(K))}catch(e){}try{if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);else document.documentElement.removeAttribute("data-theme")}catch(e){}if(t){try{window.name=window.name.split(";").filter(function(p){return p&&p.indexOf(K+"=")!==0}).concat(K+"="+t).join(";")}catch(e){}try{if(t==="auto")localStorage.removeItem(K);else localStorage.setItem(K,t)}catch(e){}}})()</script>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -63,12 +63,12 @@
 <p class="note" role="note">Built versions don&#39;t record their wire tables yet (core#153).</p>
 <h1><code>types</code></h1>
 <div class="table"><table>
-<thead><tr><th>Item</th><th>Summary</th><th>Value</th></tr></thead>
+<thead><tr><th>Item</th><th>Summary</th><th>Type</th><th>Value</th></tr></thead>
 <tbody>
-<tr><td>struct <a href="#customer"><code>Customer</code></a></td><td>Who buys.</td><td></td></tr>
-<tr><td>enum <a href="#payment"><code>Payment</code></a></td><td>How an order is paid.</td><td></td></tr>
-<tr><td>const <a href="#max_name"><code>MAX_NAME</code></a></td><td>The longest name.</td><td><code class="idl"><span class="t">u32</span> <span class="p">=</span> <span class="l">64</span></code></td></tr>
-<tr><td>type <a href="#customerid"><code>CustomerId</code></a></td><td></td><td><code class="idl"><span class="t">u64</span></code></td></tr>
+<tr><td>struct <a href="#customer"><code>Customer</code></a></td><td>Who buys.</td><td></td><td></td></tr>
+<tr><td>enum <a href="#payment"><code>Payment</code></a></td><td>How an order is paid.</td><td></td><td></td></tr>
+<tr><td>const <a href="#max_name"><code>MAX_NAME</code></a></td><td>The longest name.</td><td><code class="idl"><span class="t">u32</span></code></td><td><code class="idl"><span class="l">64</span></code></td></tr>
+<tr><td>type <a href="#customerid"><code>CustomerId</code></a></td><td></td><td><code class="idl"><span class="t">u64</span></code></td><td></td></tr>
 </tbody>
 </table></div>
 <section class="unit" id="customer">

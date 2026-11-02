@@ -221,6 +221,16 @@ fn described_table(out: &mut String, head: &[&str], mut rows: Vec<Vec<String>>) 
     table(out, &head, &rows);
 }
 
+/// A page's `<title>`: `<page> - package <name> - Comline`, or
+/// `package <name> - Comline` for a package's overview; no version.
+fn page_title(page: &str, package: &str) -> String {
+    if page.is_empty() {
+        format!("package {package} - Comline")
+    } else {
+        format!("{page} - package {package} - Comline")
+    }
+}
+
 impl Site<'_> {
     fn all(&self) -> Vec<GeneratedFile> {
         let mut files = vec![file("index.html", self.index())];
@@ -231,7 +241,8 @@ impl Site<'_> {
             for module in &dependency.modules {
                 let page = dependency_page(&dependency.package, &module.path, "html");
                 let heading = format!("{}::{}", dependency.package, module.path);
-                files.push(file(&page, self.module_page(&page, &heading, module)));
+                let title = page_title(&module.path, &dependency.package);
+                files.push(file(&page, self.module_page(&page, &heading, &title, module)));
             }
         }
         if !self.model.changelog.is_empty() {
@@ -449,33 +460,39 @@ impl Site<'_> {
         if !self.model.changelog.is_empty() {
             body.push_str("<p>See the <a href=\"changelog.html\">changelog</a>.</p>\n");
         }
-        self.page("index.html", &self.title(), &body)
+        self.page("index.html", &page_title("", &self.model.package.name), &body)
     }
 
     fn module(&self, module: &Module) -> String {
         let page = page_of(&module.path);
-        self.module_page(&page, &module.path, module)
+        let title = page_title(&module.path, &self.model.package.name);
+        self.module_page(&page, &module.path, &title, module)
     }
 
     /// A module's page at `page`, headed `heading`: one of the package's,
     /// or an unlinked dependency's.
-    fn module_page(&self, page: &str, heading: &str, module: &Module) -> String {
+    fn module_page(&self, page: &str, heading: &str, title: &str, module: &Module) -> String {
         let mut body = format!("<h1>{}</h1>\n", code(heading));
         if let Some(docs) = &module.docs {
             body.push_str(&markdown(docs));
         }
-        // A "Value" column only when some unit has a value to show.
-        let values: Vec<Option<String>> = Self::units(module).map(|u| self.value_cell(page, u)).collect();
-        let valued = values.iter().any(Option::is_some);
+        // A "Type" and a "Value" column, each only when some unit has one.
+        let cells: Vec<(Option<String>, Option<String>)> =
+            Self::units(module).map(|u| (self.type_cell(page, u), self.value_cell(u))).collect();
+        let typed = cells.iter().any(|(t, _)| t.is_some());
+        let valued = cells.iter().any(|(_, v)| v.is_some());
         let rows: Vec<Vec<String>> = Self::units(module)
-            .zip(&values)
-            .map(|(unit, value)| {
+            .zip(&cells)
+            .map(|(unit, (ty, value))| {
                 let name = unit.name().unwrap_or_default();
                 let text = unit.docs().map(|d| summary(&d.text)).unwrap_or("");
                 let mut row = vec![
                     format!("{} <a href=\"#{}\">{}</a>", unit.kind(), esc(&anchor(name)), code(name)),
                     markdown_inline(text),
                 ];
+                if typed {
+                    row.push(ty.clone().unwrap_or_default());
+                }
                 if valued {
                     row.push(value.clone().unwrap_or_default());
                 }
@@ -483,13 +500,19 @@ impl Site<'_> {
             })
             .collect();
         if !rows.is_empty() {
-            let head: &[&str] = if valued { &["Item", "Summary", "Value"] } else { &["Item", "Summary"] };
-            table(&mut body, head, &rows);
+            let mut head = vec!["Item", "Summary"];
+            if typed {
+                head.push("Type");
+            }
+            if valued {
+                head.push("Value");
+            }
+            table(&mut body, &head, &rows);
         }
         for unit in Self::units(module) {
             self.unit(&mut body, page, unit);
         }
-        self.page(page, &format!("{heading} · {}", self.title()), &body)
+        self.page(page, title, &body)
     }
 
     fn unit(&self, out: &mut String, page: &str, unit: &Unit) {
@@ -569,21 +592,24 @@ impl Site<'_> {
         out
     }
 
-    /// What a unit holds, for the module table's "Value" column: a
-    /// constant's type and value (`u8 = 1`), an alias's target.
-    fn value_cell(&self, page: &str, unit: &Unit) -> Option<String> {
+    /// A unit's type, for the module table's "Type" column: a constant's
+    /// type, an alias's target; highlighted, linked where it can be.
+    fn type_cell(&self, page: &str, unit: &Unit) -> Option<String> {
         let line = match unit {
-            Unit::Constant { ty, value, .. } => {
-                let mut line = self.ty_idl(page, ty);
-                if let Some(value) = value {
-                    let _ = write!(line, "{}{}", idl(" = "), idl(value));
-                }
-                line
-            }
+            Unit::Constant { ty, .. } => self.ty_idl(page, ty),
             Unit::TypeAlias { target, .. } => self.ty_idl(page, target),
             _ => return None,
         };
         Some(format!("<code class=\"idl\">{line}</code>"))
+    }
+
+    /// A unit's value, for the module table's "Value" column: a constant's,
+    /// highlighted.
+    fn value_cell(&self, unit: &Unit) -> Option<String> {
+        match unit {
+            Unit::Constant { value: Some(value), .. } => Some(format!("<code class=\"idl\">{}</code>", idl(value))),
+            _ => None,
+        }
     }
 
     fn fields(&self, out: &mut String, page: &str, what: &str, fields: &[Field], parent: Option<&Doc>) {
@@ -768,7 +794,7 @@ impl Site<'_> {
             self.changes(&mut body, range, "h4");
             body.push_str("</details>\n");
         }
-        self.page("changelog.html", &format!("Changelog · {}", self.title()), &body)
+        self.page("changelog.html", &page_title("Changelog", &self.model.package.name), &body)
     }
 
     /// One changelog's entries, by severity under `heading`s.
@@ -920,7 +946,7 @@ pub fn site_index(versions: &[SiteVersion], links: &BTreeMap<String, String>) ->
     };
 
     let mut index = head(
-        &format!("{name}: versions"),
+        &page_title("", &name),
         &if latest.is_empty() {
             String::new()
         } else {
@@ -955,7 +981,7 @@ pub fn site_index(versions: &[SiteVersion], links: &BTreeMap<String, String>) ->
     index.push_str(&theme_script());
     index.push_str("</body>\n</html>\n");
 
-    let mut compare_html = head(&format!("Compare versions · {name}"), "");
+    let mut compare_html = head(&page_title("Compare", &name), "");
     compare_html.push_str(
         "<main class=\"wide\">\n<h1>Compare versions</h1>\n\
          <p>Choose two versions to see what changed between them, or more for every unit and member side by side. \
