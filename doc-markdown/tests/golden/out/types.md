@@ -2,12 +2,12 @@
 
 Shared types.
 
-| Item | Summary |
-|---|---|
-| struct [`Customer`](#customer) | Who buys. |
-| enum [`Payment`](#payment) | How an order is paid. |
-| const [`MAX_NAME`](#max_name) | The longest name. |
-| type [`CustomerId`](#customerid) |  |
+| Item | Summary | Value |
+|---|---|---|
+| struct [`Customer`](#customer) | Who buys. |  |
+| enum [`Payment`](#payment) | How an order is paid. |  |
+| const [`MAX_NAME`](#max_name) | The longest name. | `u32 = 64` |
+| type [`CustomerId`](#customerid) |  | `u64` |
 
 <a id="customer"></a>
 
@@ -38,7 +38,9 @@ Variants:
 
 The longest name.
 
-Type: `u32`. Value: `64`
+```comline
+const MAX_NAME: u32 = 64
+```
 
 <a id="customerid"></a>
 

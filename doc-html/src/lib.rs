@@ -464,18 +464,27 @@ impl Site<'_> {
         if let Some(docs) = &module.docs {
             body.push_str(&markdown(docs));
         }
+        // A "Value" column only when some unit has a value to show.
+        let values: Vec<Option<String>> = Self::units(module).map(|u| self.value_cell(page, u)).collect();
+        let valued = values.iter().any(Option::is_some);
         let rows: Vec<Vec<String>> = Self::units(module)
-            .map(|unit| {
+            .zip(&values)
+            .map(|(unit, value)| {
                 let name = unit.name().unwrap_or_default();
                 let text = unit.docs().map(|d| summary(&d.text)).unwrap_or("");
-                vec![
+                let mut row = vec![
                     format!("{} <a href=\"#{}\">{}</a>", unit.kind(), esc(&anchor(name)), code(name)),
                     markdown_inline(text),
-                ]
+                ];
+                if valued {
+                    row.push(value.clone().unwrap_or_default());
+                }
+                row
             })
             .collect();
         if !rows.is_empty() {
-            table(&mut body, &["Item", "Summary"], &rows);
+            let head: &[&str] = if valued { &["Item", "Summary", "Value"] } else { &["Item", "Summary"] };
+            table(&mut body, head, &rows);
         }
         for unit in Self::units(module) {
             self.unit(&mut body, page, unit);
@@ -526,12 +535,8 @@ impl Site<'_> {
                     table(out, &["Assert", "Message"], &rows);
                 }
             }
-            Unit::Constant { ty, value, .. } => {
-                let _ = write!(out, "<p>Type: {}", self.ty(page, ty));
-                if let Some(value) = value {
-                    let _ = write!(out, ". Value: {}", code(value));
-                }
-                out.push_str("</p>\n");
+            Unit::Constant { name, ty, value, .. } => {
+                let _ = writeln!(out, "<pre class=\"idl signature\"><code>{}</code></pre>", self.constant(page, name, ty, value.as_deref()));
             }
             Unit::TypeAlias { target, .. } => {
                 let _ = writeln!(out, "<p>Alias of {}</p>", self.ty(page, target));
@@ -553,6 +558,32 @@ impl Site<'_> {
             Unit::Unknown => {}
         }
         out.push_str("</section>\n");
+    }
+
+    /// A constant as one highlighted IDL line, `const MAX: u8 = 1`.
+    fn constant(&self, page: &str, name: &str, ty: &Type, value: Option<&str>) -> String {
+        let mut out = format!("{}{}{}{}", idl("const "), idl_name(name), idl(": "), self.ty_idl(page, ty));
+        if let Some(value) = value {
+            let _ = write!(out, "{}{}", idl(" = "), idl(value));
+        }
+        out
+    }
+
+    /// What a unit holds, for the module table's "Value" column: a
+    /// constant's type and value (`u8 = 1`), an alias's target.
+    fn value_cell(&self, page: &str, unit: &Unit) -> Option<String> {
+        let line = match unit {
+            Unit::Constant { ty, value, .. } => {
+                let mut line = self.ty_idl(page, ty);
+                if let Some(value) = value {
+                    let _ = write!(line, "{}{}", idl(" = "), idl(value));
+                }
+                line
+            }
+            Unit::TypeAlias { target, .. } => self.ty_idl(page, target),
+            _ => return None,
+        };
+        Some(format!("<code class=\"idl\">{line}</code>"))
     }
 
     fn fields(&self, out: &mut String, page: &str, what: &str, fields: &[Field], parent: Option<&Doc>) {

@@ -284,6 +284,19 @@ impl Pages<'_> {
 
     /// A module's page at `page`, headed `heading`: one of the package's,
     /// or an unlinked dependency's.
+    /// What a unit holds, for the module table's "Value" column: a
+    /// constant's type and value, an alias's target.
+    fn value_cell(&self, page: &str, unit: &Unit) -> Option<String> {
+        match unit {
+            Unit::Constant { ty, value, .. } => Some(match value {
+                Some(value) => format!("`{} = {value}`", type_text(ty)),
+                None => self.ty(page, ty),
+            }),
+            Unit::TypeAlias { target, .. } => Some(self.ty(page, target)),
+            _ => None,
+        }
+    }
+
     fn module_page(&self, page: &str, heading: &str, module: &Module) -> String {
         let mut out = format!("# `{heading}`\n\n");
         out.push_str(&self.notes());
@@ -292,11 +305,19 @@ impl Pages<'_> {
         }
         let units: Vec<&Unit> = module.units.iter().filter(|u| u.name().is_some()).collect();
         if !units.is_empty() {
-            out.push_str("| Item | Summary |\n|---|---|\n");
-            for unit in &units {
+            // A "Value" column only when some unit has a value to show.
+            let values: Vec<Option<String>> = units.iter().map(|u| self.value_cell(page, u)).collect();
+            let valued = values.iter().any(Option::is_some);
+            out.push_str(if valued { "| Item | Summary | Value |\n|---|---|---|\n" } else { "| Item | Summary |\n|---|---|\n" });
+            for (unit, value) in units.iter().zip(&values) {
                 let name = unit.name().unwrap_or_default();
                 let text = unit.docs().map(|d| summary(&d.text)).unwrap_or("");
-                out.push_str(&format!("| {} [`{name}`](#{}) | {} |\n", unit.kind(), anchor(name), cell(text)));
+                let head = format!("| {} [`{name}`](#{}) | {} |", unit.kind(), anchor(name), cell(text));
+                if valued {
+                    out.push_str(&format!("{head} {} |\n", cell(value.as_deref().unwrap_or(""))));
+                } else {
+                    out.push_str(&format!("{head}\n"));
+                }
             }
             out.push('\n');
         }
@@ -345,12 +366,9 @@ impl Pages<'_> {
                     out.push('\n');
                 }
             }
-            Unit::Constant { ty, value, .. } => {
-                let _ = write!(out, "Type: {}", self.ty(page, ty));
-                if let Some(value) = value {
-                    let _ = write!(out, ". Value: `{value}`");
-                }
-                out.push_str("\n\n");
+            Unit::Constant { name, ty, value, .. } => {
+                let value = value.as_ref().map(|v| format!(" = {v}")).unwrap_or_default();
+                let _ = write!(out, "```comline\nconst {name}: {}{value}\n```\n\n", type_text(ty));
             }
             Unit::TypeAlias { target, .. } => {
                 let _ = write!(out, "Alias of {}\n\n", self.ty(page, target));

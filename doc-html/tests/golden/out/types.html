@@ -57,12 +57,12 @@
 <h1><code>types</code></h1>
 <p>Shared types.</p>
 <div class="table"><table>
-<thead><tr><th>Item</th><th>Summary</th></tr></thead>
+<thead><tr><th>Item</th><th>Summary</th><th>Value</th></tr></thead>
 <tbody>
-<tr><td>struct <a href="#customer"><code>Customer</code></a></td><td>Who buys.</td></tr>
-<tr><td>enum <a href="#payment"><code>Payment</code></a></td><td>How an order is paid.</td></tr>
-<tr><td>const <a href="#max_name"><code>MAX_NAME</code></a></td><td>The longest name.</td></tr>
-<tr><td>type <a href="#customerid"><code>CustomerId</code></a></td><td></td></tr>
+<tr><td>struct <a href="#customer"><code>Customer</code></a></td><td>Who buys.</td><td></td></tr>
+<tr><td>enum <a href="#payment"><code>Payment</code></a></td><td>How an order is paid.</td><td></td></tr>
+<tr><td>const <a href="#max_name"><code>MAX_NAME</code></a></td><td>The longest name.</td><td><code class="idl"><span class="t">u32</span> <span class="p">=</span> <span class="l">64</span></code></td></tr>
+<tr><td>type <a href="#customerid"><code>CustomerId</code></a></td><td></td><td><code class="idl"><span class="t">u64</span></code></td></tr>
 </tbody>
 </table></div>
 <section class="unit" id="customer">
@@ -89,7 +89,7 @@
 <section class="unit" id="max_name">
 <h2><a class="self" href="#max_name">const <code>MAX_NAME</code></a></h2>
 <p>The longest name.</p>
-<p>Type: <code>u32</code>. Value: <code>64</code></p>
+<pre class="idl signature"><code><span class="k">const</span> <span class="n">MAX_NAME</span><span class="p">:</span> <span class="t">u32</span> <span class="p">=</span> <span class="l">64</span></code></pre>
 </section>
 <section class="unit" id="customerid">
 <h2><a class="self" href="#customerid">type <code>CustomerId</code></a></h2>
