@@ -221,7 +221,8 @@ fn described_table(out: &mut String, head: &[&str], mut rows: Vec<Vec<String>>) 
     table(out, &head, &rows);
 }
 
-/// A page's `<title>`: `<page> - package <name> - Comline`, or
+/// A page's `<title>`: `<page> - package <name> - Comline` (a module's page is
+/// `Schema <module>`), or
 /// `package <name> - Comline` for a package's overview; no version.
 fn page_title(page: &str, package: &str) -> String {
     if page.is_empty() {
@@ -241,7 +242,7 @@ impl Site<'_> {
             for module in &dependency.modules {
                 let page = dependency_page(&dependency.package, &module.path, "html");
                 let heading = format!("{}::{}", dependency.package, module.path);
-                let title = page_title(&module.path, &dependency.package);
+                let title = page_title(&format!("Schema {}", module.path), &dependency.package);
                 files.push(file(&page, self.module_page(&page, &heading, &title, module)));
             }
         }
@@ -465,7 +466,7 @@ impl Site<'_> {
 
     fn module(&self, module: &Module) -> String {
         let page = page_of(&module.path);
-        let title = page_title(&module.path, &self.model.package.name);
+        let title = page_title(&format!("Schema {}", module.path), &self.model.package.name);
         self.module_page(&page, &module.path, &title, module)
     }
 
