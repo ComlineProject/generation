@@ -36,7 +36,20 @@
 //! (`id="order"`), and a type links to its unit's anchor, on the same page or
 //! another module's. A type from a dependency (or `std`) links to
 //! `<base>/<module>/#<anchor>` when [`RenderOptions::links`] gives that
-//! dependency a base URL; otherwise it's plain text.
+//! dependency a base URL; `std` defaults to its hosted docs
+//! (`STD_DOCS`).
+//!
+//! **Dependencies.** The model's `dependencies` hold what the package reaches
+//! of each dependency, apart from its own modules: the index lists them under
+//! "Dependencies", and so does the sidebar, collapsed. One with a
+//! published base URL links there; any other gets pages of its own at
+//! `deps/<package>/<module>.html`, with only what the package reaches. A type
+//! from a dependency the package doesn't reach that far is plain text.
+//!
+//! **Changelog.** A release's page shows its changes since the previous
+//! release (span `release`); a dev build's shows the step from the build
+//! before it and links to its changes since the last release (span
+//! `since_release`).
 //!
 //! Doc text is Markdown, rendered with `pulldown-cmark`; raw HTML in it is
 //! escaped, not passed through. Everything else is escaped.
@@ -88,7 +101,7 @@ pub fn render(req: &RenderRequest) -> Result<Vec<GeneratedFile>> {
         return Err(eyre!("documentation model {} isn't one this renderer reads ({MODEL_VERSIONS:?})", req.model_version));
     }
     if !req.options.versions.is_empty() {
-        return site_index(&req.options.versions);
+        return site_index(&req.options.versions, &req.options.links);
     }
     render_json(&req.model, &req.options)
 }
@@ -185,6 +198,13 @@ impl Site<'_> {
         for module in &self.model.modules {
             files.push(file(&page_of(&module.path), self.module(module)));
         }
+        for dependency in self.unlinked() {
+            for module in &dependency.modules {
+                let page = dependency_page(&dependency.package, &module.path, "html");
+                let heading = format!("{}::{}", dependency.package, module.path);
+                files.push(file(&page, self.module_page(&page, &heading, module)));
+            }
+        }
         if !self.model.changelog.is_empty() {
             files.push(file("changelog.html", self.changelog()));
         }
@@ -200,13 +220,18 @@ impl Site<'_> {
         }
     }
 
+    /// The dependencies documented on the site: those `[doc] links` gives
+    /// no published docs.
+    fn unlinked(&self) -> impl Iterator<Item = &Dependency> {
+        self.model.dependencies.iter().filter(|d| dependency_link(self.links, &d.package).is_none())
+    }
+
     fn units(module: &Module) -> impl Iterator<Item = &Unit> {
         module.units.iter().filter(|u| u.name().is_some())
     }
 
-    /// A whole page: `page` is its path from the root, `current` the module
-    /// it shows, if any.
-    fn page(&self, page: &str, title: &str, current: Option<&str>, body: &str) -> String {
+    /// A whole page: `page` is its path from the root.
+    fn page(&self, page: &str, title: &str, body: &str) -> String {
         let root = relative(page, "x");
         let root = &root[..root.len() - 1];
         let mut out = String::new();
@@ -233,9 +258,9 @@ impl Site<'_> {
              aria-label=\"Search the documentation\" autocomplete=\"off\" spellcheck=\"false\">\n\
              <ul id=\"results\" class=\"results\" hidden></ul>\n</div>\n{THEME_BUTTON}</header>\n<div class=\"layout\">\n",
             esc(title),
-            esc(&self.title()),
+            esc(&self.model.package.name),
         );
-        self.sidebar(&mut out, page, current);
+        self.sidebar(&mut out, page);
         let mut notes = String::new();
         for note in self.notes {
             let _ = writeln!(notes, "<p class=\"note\" role=\"note\">{}</p>", esc(note.trim()));
@@ -255,29 +280,52 @@ impl Site<'_> {
         out
     }
 
-    fn sidebar(&self, out: &mut String, page: &str, current: Option<&str>) {
+    fn sidebar(&self, out: &mut String, page: &str) {
         out.push_str("<nav class=\"sidebar\" aria-label=\"Modules\">\n<ul>\n");
         let here = |to: &str| if to == page { " aria-current=\"page\"" } else { "" };
         let _ = writeln!(out, "<li><a href=\"{}\"{}>Overview</a></li>", relative(page, "index.html"), here("index.html"));
         for module in &self.model.modules {
             let to = page_of(&module.path);
-            let href = relative(page, &to);
-            let open = if current == Some(module.path.as_str()) { " open" } else { "" };
+            Self::sidebar_module(out, &module.path, &relative(page, &to), to == page, module, |name| {
+                format!("{}#{}", relative(page, &to), anchor(name))
+            });
+        }
+        if !self.model.dependencies.is_empty() {
+            // Collapsed unless this page is one of theirs.
+            let open = if page.starts_with("deps/") { " open" } else { "" };
             let _ = write!(
                 out,
-                "<li><details{open}><summary><a href=\"{href}\"{}>{}</a></summary>\n<ul>\n",
-                here(&to),
-                code(&module.path)
+                "<li class=\"dependencies\"><details{open}><summary>Dependencies</summary>\n<ul>\n"
             );
-            for unit in Self::units(module) {
-                let name = unit.name().unwrap_or_default();
-                let _ = writeln!(
-                    out,
-                    "<li><a href=\"{href}#{}\"><span class=\"kind\">{}</span> {}</a></li>",
-                    esc(&anchor(name)),
-                    unit.kind(),
-                    esc(name)
-                );
+            for dependency in &self.model.dependencies {
+                let package = &dependency.package;
+                match dependency_link(self.links, package) {
+                    Some(base) => {
+                        let _ = write!(
+                            out,
+                            "<li><details><summary><a href=\"{}\" rel=\"external\">{}</a> <span class=\"external\" aria-label=\"published docs\">\u{2197}</span></summary>\n<ul>\n",
+                            esc(&format!("{}/", base.trim_end_matches('/'))),
+                            code(package)
+                        );
+                        for module in &dependency.modules {
+                            let href = external_url(base, &module.path, None);
+                            Self::sidebar_module(out, &module.path, &href, false, module, |name| {
+                                external_url(base, &module.path, Some(name))
+                            });
+                        }
+                    }
+                    None => {
+                        let open = if page.starts_with(&format!("deps/{package}/")) { " open" } else { "" };
+                        let _ = write!(out, "<li><details{open}><summary>{}</summary>\n<ul>\n", code(package));
+                        for module in &dependency.modules {
+                            let to = dependency_page(package, &module.path, "html");
+                            Self::sidebar_module(out, &module.path, &relative(page, &to), to == page, module, |name| {
+                                format!("{}#{}", relative(page, &to), anchor(name))
+                            });
+                        }
+                    }
+                }
+                out.push_str("</ul></details></li>\n");
             }
             out.push_str("</ul></details></li>\n");
         }
@@ -290,6 +338,36 @@ impl Site<'_> {
             );
         }
         out.push_str("</ul>\n</nav>\n");
+    }
+
+    /// One module in the sidebar, open when it's the page shown: its
+    /// summary links to `href`, each unit to `unit_href(name)`.
+    fn sidebar_module(
+        out: &mut String,
+        path: &str,
+        href: &str,
+        current: bool,
+        module: &Module,
+        unit_href: impl Fn(&str) -> String,
+    ) {
+        let (open, here) = if current { (" open", " aria-current=\"page\"") } else { ("", "") };
+        let _ = write!(
+            out,
+            "<li><details{open}><summary><a href=\"{}\"{here}>{}</a></summary>\n<ul>\n",
+            esc(href),
+            code(path)
+        );
+        for unit in Self::units(module) {
+            let name = unit.name().unwrap_or_default();
+            let _ = writeln!(
+                out,
+                "<li><a href=\"{}\"><span class=\"kind\">{}</span> {}</a></li>",
+                esc(&unit_href(name)),
+                unit.kind(),
+                esc(name)
+            );
+        }
+        out.push_str("</ul></details></li>\n");
     }
 
     fn index(&self) -> String {
@@ -308,17 +386,55 @@ impl Site<'_> {
                     vec![format!("<a href=\"{}\">{}</a>", page_of(&m.path), code(&m.path)), markdown_inline(text)]
                 })
                 .collect();
-            table(&mut body, &["Module", ""], &rows);
+            table(&mut body, &["Module", "Summary"], &rows);
+        }
+        if !self.model.dependencies.is_empty() {
+            body.push_str("<h2>Dependencies</h2>\n<p>What this package uses of each dependency.</p>\n");
+            let rows: Vec<Vec<String>> = self
+                .model
+                .dependencies
+                .iter()
+                .map(|d| {
+                    let link = dependency_link(self.links, &d.package);
+                    let modules: Vec<String> = d
+                        .modules
+                        .iter()
+                        .map(|m| {
+                            let href = match link {
+                                Some(base) => external_url(base, &m.path, None),
+                                None => dependency_page(&d.package, &m.path, "html"),
+                            };
+                            format!("<a href=\"{}\">{}</a>", esc(&href), code(&m.path))
+                        })
+                        .collect();
+                    let package = match link {
+                        Some(base) => format!(
+                            "<a href=\"{}\" rel=\"external\">{}</a> (published docs)",
+                            esc(&format!("{}/", base.trim_end_matches('/'))),
+                            code(&d.package)
+                        ),
+                        None => code(&d.package),
+                    };
+                    vec![package, modules.join(", ")]
+                })
+                .collect();
+            table(&mut body, &["Dependency", "Modules used"], &rows);
         }
         if !self.model.changelog.is_empty() {
             body.push_str("<p>See the <a href=\"changelog.html\">changelog</a>.</p>\n");
         }
-        self.page("index.html", &self.title(), None, &body)
+        self.page("index.html", &self.title(), &body)
     }
 
     fn module(&self, module: &Module) -> String {
         let page = page_of(&module.path);
-        let mut body = format!("<h1>{}</h1>\n", code(&module.path));
+        self.module_page(&page, &module.path, module)
+    }
+
+    /// A module's page at `page`, headed `heading`: one of the package's,
+    /// or an unlinked dependency's.
+    fn module_page(&self, page: &str, heading: &str, module: &Module) -> String {
+        let mut body = format!("<h1>{}</h1>\n", code(heading));
         if let Some(docs) = &module.docs {
             body.push_str(&markdown(docs));
         }
@@ -333,12 +449,12 @@ impl Site<'_> {
             })
             .collect();
         if !rows.is_empty() {
-            table(&mut body, &["", ""], &rows);
+            table(&mut body, &["Item", "Summary"], &rows);
         }
         for unit in Self::units(module) {
-            self.unit(&mut body, &page, unit);
+            self.unit(&mut body, page, unit);
         }
-        self.page(&page, &format!("{} · {}", module.path, self.title()), Some(&module.path), &body)
+        self.page(page, &format!("{heading} · {}", self.title()), &body)
     }
 
     fn unit(&self, out: &mut String, page: &str, unit: &Unit) {
@@ -510,38 +626,75 @@ impl Site<'_> {
             let to = if to == page { String::new() } else { relative(page, &to) };
             return Some(format!("{to}#{}", anchor(&target.name)));
         }
-        let base = self.links.get(&target.package)?;
-        Some(format!(
-            "{}/{}/#{}",
-            base.trim_end_matches('/'),
-            target.schema.replace("::", "/"),
-            anchor(&target.name)
-        ))
+        if let Some(base) = dependency_link(self.links, &target.package) {
+            return Some(external_url(base, &target.schema, Some(&target.name)));
+        }
+        // An unlinked dependency's page, when the package reaches the unit.
+        let documented = self.model.dependencies.iter().any(|d| {
+            d.package == target.package
+                && d.modules.iter().any(|m| {
+                    m.path == target.schema && Self::units(m).any(|u| u.name() == Some(target.name.as_str()))
+                })
+        });
+        if !documented {
+            return None;
+        }
+        let to = dependency_page(&target.package, &target.schema, "html");
+        let to = if to == page { String::new() } else { relative(page, &to) };
+        Some(format!("{to}#{}", anchor(&target.name)))
     }
 
+    /// The changelog page: a release's changes since the previous release,
+    /// or a dev build's step from the build before it, with a link to
+    /// everything since the last release.
     fn changelog(&self) -> String {
         let mut body = String::from("<h1>Changelog</h1>\n");
-        for log in &self.model.changelog {
+        let since = self.model.since_release();
+        for log in self.model.shown_changelogs() {
             let _ = writeln!(body, "<h2>{} to {}</h2>", esc(&log.from), esc(&log.to));
-            if log.breaking.is_empty() && log.features.is_empty() && log.modifications.is_empty() {
-                body.push_str("<p>No changes.</p>\n");
+            for range in &since {
+                let _ = writeln!(
+                    body,
+                    "<p class=\"since-release\">Everything since the last release: \
+                     <a href=\"#since-{0}\">{0} to {1}</a>.</p>",
+                    esc(&range.from),
+                    esc(&range.to)
+                );
+            }
+            self.changes(&mut body, log, "h3");
+        }
+        for range in since {
+            let _ = writeln!(
+                body,
+                "<details class=\"since-release\" id=\"since-{0}\"><summary>Since the last release: {0} to {1}</summary>",
+                esc(&range.from),
+                esc(&range.to)
+            );
+            self.changes(&mut body, range, "h4");
+            body.push_str("</details>\n");
+        }
+        self.page("changelog.html", &format!("Changelog · {}", self.title()), &body)
+    }
+
+    /// One changelog's entries, by severity under `heading`s.
+    fn changes(&self, body: &mut String, log: &Changelog, heading: &str) {
+        if log.is_empty() {
+            body.push_str("<p>No changes.</p>\n");
+            return;
+        }
+        let entries = entries(log);
+        for (title, severity) in [("Breaking", "major"), ("Added", "minor"), ("Changed", "patch")] {
+            let list: Vec<&Entry> = entries.iter().filter(|e| e.severity == severity).collect();
+            if list.is_empty() {
                 continue;
             }
-            let entries = entries(log);
-            for (title, severity) in [("Breaking", "major"), ("Added", "minor"), ("Changed", "patch")] {
-                let list: Vec<&Entry> = entries.iter().filter(|e| e.severity == severity).collect();
-                if list.is_empty() {
-                    continue;
-                }
-                let _ = write!(body, "<h3>{title}</h3>\n<ul class=\"entries\">\n");
-                for e in list {
-                    let href = unit_target(self.model, e, "html");
-                    let _ = write!(body, "<li>{}</li>\n", entry_html(e, href.as_deref()));
-                }
-                body.push_str("</ul>\n");
+            let _ = write!(body, "<{heading}>{title}</{heading}>\n<ul class=\"entries\">\n");
+            for e in list {
+                let href = unit_target(self.model, e, "html");
+                let _ = write!(body, "<li>{}</li>\n", entry_html(e, href.as_deref()));
             }
+            body.push_str("</ul>\n");
         }
-        self.page("changelog.html", &format!("Changelog · {}", self.title()), None, &body)
     }
 
     /// `search.js`: the index as data, then the search box's script.
@@ -581,7 +734,7 @@ pub fn latest(versions: &[SiteVersion]) -> Option<&SiteVersion> {
 
 /// A multi-version site's root: `index.html`, `versions.js`, `compare.html`,
 /// `compare.js` and the shared `style.css`.
-pub fn site_index(versions: &[SiteVersion]) -> Result<Vec<GeneratedFile>> {
+pub fn site_index(versions: &[SiteVersion], links: &BTreeMap<String, String>) -> Result<Vec<GeneratedFile>> {
     let mut models = vec![];
     for version in versions {
         let model: DocModel = serde_json::from_str(&version.model)
@@ -610,6 +763,13 @@ pub fn site_index(versions: &[SiteVersion]) -> Result<Vec<GeneratedFile>> {
             }
             pages.insert(page_of(&module.path), serde_json::json!(anchors));
         }
+        for dependency in model.dependencies.iter().filter(|d| dependency_link(links, &d.package).is_none()) {
+            for module in &dependency.modules {
+                let anchors: Vec<String> =
+                    Site::units(module).filter_map(|u| u.name()).map(anchor).collect();
+                pages.insert(dependency_page(&dependency.package, &module.path, "html"), serde_json::json!(anchors));
+            }
+        }
         if !model.changelog.is_empty() {
             pages.insert("changelog.html".into(), serde_json::json!([]));
         }
@@ -630,7 +790,7 @@ pub fn site_index(versions: &[SiteVersion]) -> Result<Vec<GeneratedFile>> {
     let mut compare = vec![];
     for (version, model) in versions.iter().zip(&models) {
         let mut changes = vec![];
-        for log in &model.changelog {
+        for log in model.steps() {
             for e in entries(log) {
                 let href = unit_target(model, &e, "html").map(|to| format!("{}/{to}", version.id));
                 changes.push(serde_json::json!({

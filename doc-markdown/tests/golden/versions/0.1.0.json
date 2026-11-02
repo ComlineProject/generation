@@ -114,6 +114,22 @@
               },
               "optional": false,
               "default": null
+            },
+            {
+              "name": "greeting",
+              "docs": null,
+              "annotations": [],
+              "type": {
+                "kind": "named",
+                "name": "Greeting",
+                "target": {
+                  "package": "localdeps",
+                  "schema": "greeting",
+                  "name": "Greeting"
+                }
+              },
+              "optional": true,
+              "default": null
             }
           ]
         },
@@ -279,5 +295,65 @@
       ]
     }
   ],
-  "changelog": []
+  "changelog": [],
+  "dependencies": [
+    {
+      "package": "localdeps",
+      "modules": [
+        {
+          "path": "greeting",
+          "docs": null,
+          "units": [
+            {
+              "kind": "struct",
+              "name": "Greeting",
+              "docs": {
+                "text": "A greeting.",
+                "params": []
+              },
+              "annotations": [],
+              "fields": [
+                {
+                  "name": "text",
+                  "docs": null,
+                  "annotations": [],
+                  "type": {
+                    "kind": "primitive",
+                    "name": "string"
+                  },
+                  "optional": false,
+                  "default": null
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "package": "std",
+      "modules": [
+        {
+          "path": "http",
+          "docs": null,
+          "units": [
+            {
+              "kind": "enum",
+              "name": "HttpMethod",
+              "docs": {
+                "text": "An HTTP request method.",
+                "params": []
+              },
+              "variants": [
+                "GET",
+                "POST",
+                "PUT",
+                "DELETE"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
 }

@@ -3,7 +3,9 @@
 0.1.0 (a release built before headers were frozen, so it has none), then
 0.2.0-dev.1 (a dev build), 0.2.0 (the release it leads to) and the
 unreleased working tree. Each carries the changelog from the one before it,
-as core computes it; nothing here judges a change.
+as core computes it; nothing here judges a change. The release 0.2.0 also
+carries its changes since 0.1.0 (span `release`): its dev build's and its
+own.
 """
 import copy, json, pathlib
 
@@ -13,8 +15,11 @@ base = json.loads((here / "../model.json").read_text())
 def unit(model, name):
     return next(u for m in model["modules"] for u in m["units"] if u.get("name") == name)
 
-def log(frm, to, breaking=(), features=(), modifications=()):
-    return {"from": frm, "to": to, "breaking": list(breaking), "features": list(features), "modifications": list(modifications)}
+def log(frm, to, breaking=(), features=(), modifications=(), span=None):
+    out = {"from": frm, "to": to, "breaking": list(breaking), "features": list(features), "modifications": list(modifications)}
+    if span:
+        out["span"] = span
+    return out
 
 v1 = copy.deepcopy(base)
 v1["package"]["version"] = "0.1.0"
@@ -38,8 +43,12 @@ dev["changelog"] = [log("0.1.0", "0.2.0-dev.1",
 
 rel = copy.deepcopy(dev)
 rel["package"]["version"] = "0.2.0"
-rel["changelog"] = [log("0.2.0-dev.1", "0.2.0", modifications=[
-    {"kind": "docstring_changed", "name": "Order"}])]
+docstring = [{"kind": "docstring_changed", "name": "Order"}]
+# The step from the dev build (what a comparison composes), and the
+# release's changes since the previous release, which its page shows.
+rel["changelog"] = [log("0.2.0-dev.1", "0.2.0", modifications=docstring),
+    log("0.1.0", "0.2.0", breaking=dev["changelog"][0]["breaking"],
+        features=dev["changelog"][0]["features"], modifications=docstring, span="release")]
 
 now = copy.deepcopy(base)
 now["package"]["version"] = None

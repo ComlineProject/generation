@@ -2,7 +2,7 @@
 
 Shared types.
 
-| | |
+| Item | Summary |
 |---|---|
 | struct [`Customer`](#customer) | Who buys. |
 | enum [`Payment`](#payment) | How an order is paid. |

@@ -4,7 +4,7 @@
 >
 > **Note:** Built versions don't record their wire tables yet (core#153).
 
-| | |
+| Item | Summary |
 |---|---|
 | struct [`Customer`](#customer) | Who buys. |
 | enum [`Payment`](#payment) | How an order is paid. |

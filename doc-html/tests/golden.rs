@@ -41,19 +41,47 @@ fn renders_the_golden_pages() {
             assert_eq!(file.contents, expected, "{} drifted; run with COMLINE_BLESS=1", path.display());
         }
     }
-    assert_eq!(paths, ["index.html", "api.html", "types.html", "changelog.html", "style.css", "search.js"]);
+    assert_eq!(paths, ["index.html", "api.html", "types.html", "deps/localdeps/greeting.html", "changelog.html", "style.css", "search.js"]);
 }
 
 #[test]
-fn a_dependency_type_without_a_link_is_plain_text() {
+fn dependency_types_link_to_their_docs() {
     let files = comline_doc_html::render_json(&model(), &RenderOptions::default()).unwrap();
-    let api = files.iter().find(|f| f.path.to_str() == Some("api.html")).unwrap();
-    assert!(api.contents.contains("<td><code>method</code></td><td><code>HttpMethod</code></td>"), "{}", api.contents);
-    assert!(api.contents.contains("<a href=\"types.html#customer\"><code>Customer</code></a>"));
+    let get = |p: &str| &files.iter().find(|f| f.path.to_str() == Some(p)).unwrap().contents;
+    let api = get("api.html");
+    assert!(api.contains("<a href=\"https://comlineproject.github.io/docs/std/http/#httpmethod\"><code>HttpMethod</code></a>"), "{api}");
+    assert!(api.contains("<a href=\"deps/localdeps/greeting.html#greeting\"><code>Greeting</code></a>"), "{api}");
+    assert!(api.contains("<a href=\"types.html#customer\"><code>Customer</code></a>"));
+    // The sidebar: own modules, then a collapsed Dependencies section.
+    let sidebar = api.split("<nav class=\"sidebar\"").nth(1).unwrap().split("</nav>").next().unwrap();
+    let (own, deps) = sidebar.split_once("<li class=\"dependencies\"><details><summary>Dependencies</summary>").unwrap();
+    assert!(own.contains("<code>api</code>") && own.contains("<code>types</code>"));
+    assert!(!own.contains("greeting") && !own.contains("http"));
+    assert!(deps.contains("<code>localdeps</code>") && deps.contains("<code>std</code>"));
+    // On a dependency's page the section is open.
+    let greeting = get("deps/localdeps/greeting.html");
+    assert!(greeting.contains("<li class=\"dependencies\"><details open>"), "{greeting}");
+    assert!(greeting.contains("<a href=\"../../style.css\">") || greeting.contains("href=\"../../style.css\""));
+    // Only the package's name in the brand.
+    assert!(api.contains("<a class=\"brand\" href=\"index.html\">shop</a>"), "{api}");
 }
 
-/// Self-contained: nothing loads from the network, and the pages reach
-/// their stylesheet and script by relative paths, so `file://` works.
+/// A dev build's page: its step, and a link to everything since the last
+/// release; a release's: its changes since the previous release only.
+#[test]
+fn changelog_spans() {
+    let mut model: serde_json::Value = serde_json::from_str(&model()).unwrap();
+    let step = model["changelog"][0].clone();
+    let mut since = step.clone();
+    since["from"] = "0.1.0".into();
+    since["span"] = "since_release".into();
+    model["changelog"] = serde_json::json!([step, since]);
+    let files = comline_doc_html::render_json(&model.to_string(), &RenderOptions::default()).unwrap();
+    let log = &files.iter().find(|f| f.path.to_str() == Some("changelog.html")).unwrap().contents;
+    assert!(log.contains("Everything since the last release: <a href=\"#since-0.1.0\">0.1.0 to 0.2.0</a>."), "{log}");
+    assert!(log.contains("<details class=\"since-release\" id=\"since-0.1.0\">"), "{log}");
+}
+
 #[test]
 fn loads_nothing_from_the_network() {
     let files = comline_doc_html::render_json(&model(), &options()).unwrap();
@@ -61,7 +89,7 @@ fn loads_nothing_from_the_network() {
         for needle in ["src=\"http", "src=\"//", "href=\"//", "@import", "fetch(", "XMLHttpRequest"] {
             assert!(!file.contents.contains(needle), "{} has {needle}", file.path.display());
         }
-        if file.path.extension().is_some_and(|e| e == "html") {
+        if file.path.extension().is_some_and(|e| e == "html") && file.path.parent() == Some(Path::new("")) {
             assert!(file.contents.contains("<link rel=\"stylesheet\" href=\"style.css\">"));
             assert!(file.contents.contains("<script src=\"search.js\" data-root=\"\"></script>"));
         }
@@ -86,7 +114,7 @@ fn renders_through_the_protocol() {
         options: options(),
     });
     let Response::Render(out) = protocol::respond(&registry, &protocol::encode(&request).unwrap()) else { panic!() };
-    assert_eq!(out.files.len(), 6);
+    assert_eq!(out.files.len(), 7);
 }
 
 /// The 3-version fixture (`../doc-markdown/tests/golden/versions/`, written by
@@ -162,7 +190,9 @@ fn a_multi_version_site_loads_nothing_from_the_network() {
             assert!(!contents.contains(needle), "{path} has {needle}");
         }
         if path.ends_with(".html") && path.contains('/') {
-            assert!(contents.contains("<script src=\"../versions.js\"></script>"), "{path}");
+            let depth = path.matches('/').count();
+            let versions = format!("<script src=\"{}versions.js\"></script>", "../".repeat(depth));
+            assert!(contents.contains(&versions), "{path}");
             assert!(contents.contains("<select id=\"version-picker\">"), "{path}");
         }
     }

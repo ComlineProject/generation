@@ -9,7 +9,7 @@
 </head>
 <body data-page="api.html" data-version="0.1.0" data-root="">
 <header class="top">
-<a class="brand" href="index.html">shop 0.1.0</a>
+<a class="brand" href="index.html">shop</a>
 <form class="picker" id="version-form">
 <label for="version-picker">Version</label>
 <select id="version-picker"><option value="0.1.0" selected>0.1.0</option></select>
@@ -39,6 +39,23 @@
 <li><a href="types.html#max_name"><span class="kind">const</span> MAX_NAME</a></li>
 <li><a href="types.html#customerid"><span class="kind">type</span> CustomerId</a></li>
 </ul></details></li>
+<li class="dependencies"><details><summary>Dependencies</summary>
+<ul>
+<li><details><summary><code>localdeps</code></summary>
+<ul>
+<li><details><summary><a href="deps/localdeps/greeting.html"><code>greeting</code></a></summary>
+<ul>
+<li><a href="deps/localdeps/greeting.html#greeting"><span class="kind">struct</span> Greeting</a></li>
+</ul></details></li>
+</ul></details></li>
+<li><details><summary><a href="https://comlineproject.github.io/docs/std/" rel="external"><code>std</code></a> <span class="external" aria-label="published docs">↗</span></summary>
+<ul>
+<li><details><summary><a href="https://comlineproject.github.io/docs/std/http/"><code>http</code></a></summary>
+<ul>
+<li><a href="https://comlineproject.github.io/docs/std/http/#httpmethod"><span class="kind">enum</span> HttpMethod</a></li>
+</ul></details></li>
+</ul></details></li>
+</ul></details></li>
 </ul>
 </nav>
 <main>
@@ -46,7 +63,7 @@
 <p class="note" role="note">Built versions don&#39;t record their wire tables yet (core#153).</p>
 <h1><code>api</code></h1>
 <div class="table"><table>
-<thead><tr><th></th><th></th></tr></thead>
+<thead><tr><th>Item</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td>error <a href="#outofstock"><code>OutOfStock</code></a></td><td>Not in stock.</td></tr>
 <tr><td>struct <a href="#order"><code>Order</code></a></td><td>One order.</td></tr>
@@ -74,6 +91,7 @@
 <tr><td><code>payments</code></td><td><a href="types.html#payment"><code>Payment</code></a><code>[]</code></td><td></td></tr>
 <tr><td><code>method</code></td><td><a href="https://comlineproject.github.io/docs/std/http/#httpmethod"><code>HttpMethod</code></a></td><td></td></tr>
 <tr><td><code>lines</code></td><td>union(<code>u32</code> <code>string</code>)</td><td></td></tr>
+<tr><td><code>greeting</code></td><td><a href="deps/localdeps/greeting.html#greeting"><code>Greeting</code></a> (optional)</td><td></td></tr>
 </tbody>
 </table></div>
 </section>

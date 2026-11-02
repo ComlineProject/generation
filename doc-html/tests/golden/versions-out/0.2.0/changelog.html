@@ -9,7 +9,7 @@
 </head>
 <body data-page="changelog.html" data-version="0.2.0" data-root="">
 <header class="top">
-<a class="brand" href="index.html">shop 0.2.0</a>
+<a class="brand" href="index.html">shop</a>
 <form class="picker" id="version-form">
 <label for="version-picker">Version</label>
 <select id="version-picker"><option value="0.2.0" selected>0.2.0</option></select>
@@ -39,13 +39,44 @@
 <li><a href="types.html#max_name"><span class="kind">const</span> MAX_NAME</a></li>
 <li><a href="types.html#customerid"><span class="kind">type</span> CustomerId</a></li>
 </ul></details></li>
+<li class="dependencies"><details><summary>Dependencies</summary>
+<ul>
+<li><details><summary><code>localdeps</code></summary>
+<ul>
+<li><details><summary><a href="deps/localdeps/greeting.html"><code>greeting</code></a></summary>
+<ul>
+<li><a href="deps/localdeps/greeting.html#greeting"><span class="kind">struct</span> Greeting</a></li>
+</ul></details></li>
+</ul></details></li>
+<li><details><summary><a href="https://comlineproject.github.io/docs/std/" rel="external"><code>std</code></a> <span class="external" aria-label="published docs">↗</span></summary>
+<ul>
+<li><details><summary><a href="https://comlineproject.github.io/docs/std/http/"><code>http</code></a></summary>
+<ul>
+<li><a href="https://comlineproject.github.io/docs/std/http/#httpmethod"><span class="kind">enum</span> HttpMethod</a></li>
+</ul></details></li>
+</ul></details></li>
+</ul></details></li>
 <li><a href="changelog.html" aria-current="page">Changelog</a></li>
 </ul>
 </nav>
 <main>
 <p class="note" role="note">Built versions don&#39;t record their wire tables yet (core#153).</p>
 <h1>Changelog</h1>
-<h2>0.2.0-dev.1 to 0.2.0</h2>
+<h2>0.1.0 to 0.2.0</h2>
+<h3>Breaking</h3>
+<ul class="entries">
+<li><div class="entry">
+<p class="entry-head"><span class="badge major">major</span> <a href="types.html#payment"><code>Payment.Cash</code></a>: enum variant removed</p>
+<pre class="idl change"><code><span class="del"><span class="sign" aria-label="before">−</span> <span class="t">Cash</span></span></code></pre>
+</div></li>
+</ul>
+<h3>Added</h3>
+<ul class="entries">
+<li><div class="entry">
+<p class="entry-head"><span class="badge minor">minor</span> <a href="types.html#customer"><code>Customer.phone</code></a>: field added</p>
+<pre class="idl change"><code><span class="add"><span class="sign" aria-label="after">+</span> <span class="k">optional</span> <span class="n">phone</span><span class="p">:</span> <span class="t">string</span></span></code></pre>
+</div></li>
+</ul>
 <h3>Changed</h3>
 <ul class="entries">
 <li><div class="entry">

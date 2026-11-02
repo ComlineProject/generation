@@ -23,7 +23,20 @@
 //! page or another module's. A type from a dependency (or `std`) links to
 //! `<base>/<module>/#<anchor>` when [`RenderOptions::links`] gives that
 //! dependency a base URL, the directory-URL form mkdocs and zensical publish
-//! pages at; otherwise it's plain text.
+//! pages at; `std` defaults to its hosted docs
+//! (`STD_DOCS`).
+//!
+//! **Dependencies.** The model's `dependencies` hold what the package reaches
+//! of each dependency, apart from its own modules: the index lists them under
+//! "Dependencies" and so does `nav.yml`. One with a
+//! published base URL links there; any other gets pages of its own at
+//! `deps/<package>/<module>.md`, with only what the package reaches. A type
+//! from a dependency the package doesn't reach that far is plain text.
+//!
+//! **Changelog.** A release's page shows its changes since the previous
+//! release (span `release`); a dev build's shows the step from the build
+//! before it and links to its changes since the last release (span
+//! `since_release`).
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -138,11 +151,24 @@ impl Pages<'_> {
         for module in &self.model.modules {
             files.push(file(&page_of(&module.path), self.module(module)));
         }
+        for dependency in self.unlinked() {
+            for module in &dependency.modules {
+                let page = dependency_page(&dependency.package, &module.path, "md");
+                let heading = format!("{}::{}", dependency.package, module.path);
+                files.push(file(&page, self.module_page(&page, &heading, module)));
+            }
+        }
         if !self.model.changelog.is_empty() {
             files.push(file("changelog.md", self.changelog()));
         }
         files.push(file("nav.yml", self.nav()));
         files
+    }
+
+    /// The dependencies documented here: those `[doc] links` gives no
+    /// published docs.
+    fn unlinked(&self) -> impl Iterator<Item = &Dependency> {
+        self.model.dependencies.iter().filter(|d| dependency_link(self.links, &d.package).is_none())
     }
 
     /// This version's notes, as a quote; empty without any.
@@ -172,10 +198,30 @@ impl Pages<'_> {
             out.push_str(&format!("{}\n\n", docs.trim()));
         }
         if !self.model.modules.is_empty() {
-            out.push_str("## Modules\n\n| Module | |\n|---|---|\n");
+            out.push_str("## Modules\n\n| Module | Summary |\n|---|---|\n");
             for module in &self.model.modules {
                 let text = module.docs.as_deref().map(summary).unwrap_or("");
                 out.push_str(&format!("| [`{}`]({}) | {} |\n", module.path, page_of(&module.path), cell(text)));
+            }
+            out.push('\n');
+        }
+        if !self.model.dependencies.is_empty() {
+            out.push_str("## Dependencies\n\nWhat this package uses of each dependency.\n\n| Dependency | Modules used |\n|---|---|\n");
+            for d in &self.model.dependencies {
+                let link = dependency_link(self.links, &d.package);
+                let modules: Vec<String> = d
+                    .modules
+                    .iter()
+                    .map(|m| match link {
+                        Some(base) => format!("[`{}`]({})", m.path, external_url(base, &m.path, None)),
+                        None => format!("[`{}`]({})", m.path, dependency_page(&d.package, &m.path, "md")),
+                    })
+                    .collect();
+                let package = match link {
+                    Some(base) => format!("[`{}`]({}/) (published docs)", d.package, base.trim_end_matches('/')),
+                    None => format!("`{}`", d.package),
+                };
+                out.push_str(&format!("| {package} | {} |\n", modules.join(", ")));
             }
             out.push('\n');
         }
@@ -192,6 +238,22 @@ impl Pages<'_> {
         for module in &self.model.modules {
             out.push_str(&format!("  - {}: {}\n", quote(&module.path), page_of(&module.path)));
         }
+        if !self.model.dependencies.is_empty() {
+            out.push_str("  - Dependencies:\n");
+            for d in &self.model.dependencies {
+                match dependency_link(self.links, &d.package) {
+                    Some(base) => {
+                        out.push_str(&format!("    - {}: {}\n", quote(&d.package), quote(&format!("{}/", base.trim_end_matches('/')))));
+                    }
+                    None => {
+                        out.push_str(&format!("    - {}:\n", quote(&d.package)));
+                        for m in &d.modules {
+                            out.push_str(&format!("      - {}: {}\n", quote(&m.path), dependency_page(&d.package, &m.path, "md")));
+                        }
+                    }
+                }
+            }
+        }
         if !self.model.changelog.is_empty() {
             out.push_str("  - Changelog: changelog.md\n");
         }
@@ -200,14 +262,20 @@ impl Pages<'_> {
 
     fn module(&self, module: &Module) -> String {
         let page = page_of(&module.path);
-        let mut out = format!("# `{}`\n\n", module.path);
+        self.module_page(&page, &module.path, module)
+    }
+
+    /// A module's page at `page`, headed `heading`: one of the package's,
+    /// or an unlinked dependency's.
+    fn module_page(&self, page: &str, heading: &str, module: &Module) -> String {
+        let mut out = format!("# `{heading}`\n\n");
         out.push_str(&self.notes());
         if let Some(docs) = &module.docs {
             out.push_str(&format!("{}\n\n", docs.trim()));
         }
         let units: Vec<&Unit> = module.units.iter().filter(|u| u.name().is_some()).collect();
         if !units.is_empty() {
-            out.push_str("| | |\n|---|---|\n");
+            out.push_str("| Item | Summary |\n|---|---|\n");
             for unit in &units {
                 let name = unit.name().unwrap_or_default();
                 let text = unit.docs().map(|d| summary(&d.text)).unwrap_or("");
@@ -216,7 +284,7 @@ impl Pages<'_> {
             out.push('\n');
         }
         for unit in units {
-            self.unit(&mut out, &page, unit);
+            self.unit(&mut out, page, unit);
         }
         finish(out)
     }
@@ -379,36 +447,70 @@ impl Pages<'_> {
             let to = if to == page { String::new() } else { relative(page, &to) };
             return Some(format!("{to}#{}", anchor(&target.name)));
         }
-        let base = self.links.get(&target.package)?;
-        Some(format!(
-            "{}/{}/#{}",
-            base.trim_end_matches('/'),
-            target.schema.replace("::", "/"),
-            anchor(&target.name)
-        ))
+        if let Some(base) = dependency_link(self.links, &target.package) {
+            return Some(external_url(base, &target.schema, Some(&target.name)));
+        }
+        // An unlinked dependency's page, when the package reaches the unit.
+        let documented = self.model.dependencies.iter().any(|d| {
+            d.package == target.package
+                && d.modules.iter().any(|m| m.path == target.schema && m.units.iter().any(|u| u.name() == Some(target.name.as_str())))
+        });
+        if !documented {
+            return None;
+        }
+        let to = dependency_page(&target.package, &target.schema, "md");
+        let to = if to == page { String::new() } else { relative(page, &to) };
+        Some(format!("{to}#{}", anchor(&target.name)))
     }
 
+    /// A release's changes since the previous release, or a dev build's
+    /// step from the build before it, with a link to everything since the
+    /// last release.
     fn changelog(&self) -> String {
         let mut out = String::from("# Changelog\n\n");
-        for log in &self.model.changelog {
+        let since = self.model.since_release();
+        for log in self.model.shown_changelogs() {
             let _ = write!(out, "## {} to {}\n\n", log.from, log.to);
-            if log.breaking.is_empty() && log.features.is_empty() && log.modifications.is_empty() {
-                out.push_str("No changes.\n\n");
-                continue;
+            for range in &since {
+                let _ = write!(
+                    out,
+                    "Everything since the last release: [{0} to {1}](#since-{2}).\n\n",
+                    range.from,
+                    range.to,
+                    anchor(&range.from)
+                );
             }
-            let entries = entries(log);
-            for (title, severity) in [("Breaking", "major"), ("Added", "minor"), ("Changed", "patch")] {
-                let list: Vec<&Entry> = entries.iter().filter(|e| e.severity == severity).collect();
-                if list.is_empty() {
-                    continue;
-                }
-                let _ = write!(out, "### {title}\n\n");
-                for e in list {
-                    entry(&mut out, e, unit_target(self.model, e, "md").as_deref());
-                }
-            }
+            self.changes(&mut out, log, "###");
+        }
+        for range in since {
+            let _ = write!(
+                out,
+                "<a id=\"since-{}\"></a>\n\n## Since the last release: {} to {}\n\n",
+                anchor(&range.from),
+                range.from,
+                range.to
+            );
+            self.changes(&mut out, range, "###");
         }
         finish(out)
+    }
+
+    fn changes(&self, out: &mut String, log: &Changelog, heading: &str) {
+        if log.is_empty() {
+            out.push_str("No changes.\n\n");
+            return;
+        }
+        let entries = entries(log);
+        for (title, severity) in [("Breaking", "major"), ("Added", "minor"), ("Changed", "patch")] {
+            let list: Vec<&Entry> = entries.iter().filter(|e| e.severity == severity).collect();
+            if list.is_empty() {
+                continue;
+            }
+            let _ = write!(out, "{heading} {title}\n\n");
+            for e in list {
+                entry(out, e, unit_target(self.model, e, "md").as_deref());
+            }
+        }
     }
 }
 

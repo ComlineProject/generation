@@ -40,15 +40,55 @@ fn renders_the_golden_pages() {
             assert_eq!(file.contents, expected, "{} drifted; run with COMLINE_BLESS=1", path.display());
         }
     }
-    assert_eq!(paths, ["index.md", "api.md", "types.md", "changelog.md", "nav.yml"]);
+    assert_eq!(paths, ["index.md", "api.md", "types.md", "deps/localdeps/greeting.md", "changelog.md", "nav.yml"]);
 }
 
 #[test]
-fn a_dependency_type_without_a_link_is_plain_text() {
+fn dependency_types_link_to_their_docs() {
     let files = comline_doc_markdown::render_json(&model(), &RenderOptions::default()).unwrap();
-    let api = files.iter().find(|f| f.path.to_str() == Some("api.md")).unwrap();
-    assert!(api.contents.contains("| `method` | `HttpMethod` |"), "{}", api.contents);
-    assert!(api.contents.contains("[`Customer`](types.md#customer)"));
+    let get = |p: &str| &files.iter().find(|f| f.path.to_str() == Some(p)).unwrap().contents;
+    let api = get("api.md");
+    // `std` without a `[doc] links` entry: its hosted docs.
+    assert!(api.contains("[`HttpMethod`](https://comlineproject.github.io/docs/std/http/#httpmethod)"), "{api}");
+    // An unlinked dependency: its page here, never an own module's.
+    assert!(api.contains("[`Greeting`](deps/localdeps/greeting.md#greeting)"), "{api}");
+    assert!(api.contains("[`Customer`](types.md#customer)"));
+    assert!(get("deps/localdeps/greeting.md").starts_with("# `localdeps::greeting`"));
+    assert!(!files.iter().any(|f| f.path.starts_with("deps/std")));
+    let nav = get("nav.yml");
+    assert!(nav.contains("  - Dependencies:\n    - \"localdeps\":\n      - \"greeting\": deps/localdeps/greeting.md\n    - \"std\": \"https://comlineproject.github.io/docs/std/\"\n"), "{nav}");
+
+    // A link for it publishes it elsewhere instead.
+    let links = BTreeMap::from([("localdeps".to_string(), "https://example.com/localdeps".to_string())]);
+    let files = comline_doc_markdown::render_json(&model(), &RenderOptions { links, ..Default::default() }).unwrap();
+    assert!(!files.iter().any(|f| f.path.starts_with("deps")));
+    let api = &files.iter().find(|f| f.path.to_str() == Some("api.md")).unwrap().contents;
+    assert!(api.contains("[`Greeting`](https://example.com/localdeps/greeting/#greeting)"), "{api}");
+}
+
+/// A dev build's page: its step, and a link to everything since the last
+/// release; a release's: its changes since the previous release only.
+#[test]
+fn changelog_spans() {
+    let mut model: serde_json::Value = serde_json::from_str(&model()).unwrap();
+    let step = model["changelog"][0].clone();
+    let mut since = step.clone();
+    since["from"] = "0.1.0".into();
+    since["span"] = "since_release".into();
+    model["changelog"] = serde_json::json!([step, since]);
+    let files = comline_doc_markdown::render_json(&model.to_string(), &RenderOptions::default()).unwrap();
+    let log = &files.iter().find(|f| f.path.to_str() == Some("changelog.md")).unwrap().contents;
+    assert!(log.contains("Everything since the last release: [0.1.0 to 0.2.0](#since-0.1.0)."), "{log}");
+    assert!(log.contains("<a id=\"since-0.1.0\"></a>\n\n## Since the last release: 0.1.0 to 0.2.0"), "{log}");
+
+    let mut release = model["changelog"][0].clone();
+    release["from"] = "0.0.9".into();
+    release["span"] = "release".into();
+    model["changelog"] = serde_json::json!([model["changelog"][0].clone(), release]);
+    let files = comline_doc_markdown::render_json(&model.to_string(), &RenderOptions::default()).unwrap();
+    let log = &files.iter().find(|f| f.path.to_str() == Some("changelog.md")).unwrap().contents;
+    assert!(log.contains("## 0.0.9 to 0.2.0"), "{log}");
+    assert!(!log.contains("## 0.1.0 to 0.2.0"), "{log}");
 }
 
 #[test]
@@ -67,7 +107,7 @@ fn renders_through_the_protocol() {
         options: options(),
     });
     let Response::Render(out) = protocol::respond(&registry, &protocol::encode(&request).unwrap()) else { panic!() };
-    assert_eq!(out.files.len(), 5);
+    assert_eq!(out.files.len(), 6);
 }
 
 /// The 3-version fixture (`../doc-markdown/tests/golden/versions/`, written by
