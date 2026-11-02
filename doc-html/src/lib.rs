@@ -76,10 +76,24 @@ const PICKER: &str = include_str!("../assets/picker.js");
 const COMPARE: &str = include_str!("../assets/compare.js");
 const THEME: &str = include_str!("../assets/theme.js");
 
-/// In `<head>`: the stored theme choice, applied before the page paints.
-/// Storage may be blocked (`file://`, private windows), so it's tried.
-const THEME_EARLY: &str = "<script>try{var t=localStorage.getItem(\"comline-doc-theme\");\
-if(t===\"light\"||t===\"dark\")document.documentElement.setAttribute(\"data-theme\",t)}catch(e){}</script>\n";
+/// In `<head>`: the saved theme choice, applied before the page paints. The
+/// choice comes from `?theme=` on the address (carried by internal links, and
+/// stripped here), else the `comline-doc-theme=` token in `window.name`
+/// (which follows a tab from page to page even where `file://` pages each get
+/// their own `localStorage`), else `localStorage`; whichever it came from is
+/// then saved to the other two. `auto` sets no `data-theme`, so the
+/// stylesheet's `prefers-color-scheme` rule decides. Every storage is tried,
+/// never trusted: any may be blocked.
+const THEME_EARLY: &str = "<script>(function(){var K=\"comline-doc-theme\",t=null,\
+v=function(x){return x===\"auto\"||x===\"light\"||x===\"dark\"?x:null};\
+try{var u=new URL(location.href);t=v(u.searchParams.get(\"theme\"));\
+if(u.searchParams.has(\"theme\")){u.searchParams.delete(\"theme\");history.replaceState(history.state,\"\",u.pathname+u.search+u.hash)}}catch(e){}\
+if(!t)try{var m=new RegExp(\"(?:^|;)\"+K+\"=(auto|light|dark)(?=;|$)\").exec(window.name);t=m&&m[1]}catch(e){}\
+if(!t)try{t=v(localStorage.getItem(K))}catch(e){}\
+try{if(t===\"light\"||t===\"dark\")document.documentElement.setAttribute(\"data-theme\",t);\
+else document.documentElement.removeAttribute(\"data-theme\")}catch(e){}\
+if(t){try{window.name=window.name.split(\";\").filter(function(p){return p&&p.indexOf(K+\"=\")!==0}).concat(K+\"=\"+t).join(\";\")}catch(e){}\
+try{if(t===\"auto\")localStorage.removeItem(K);else localStorage.setItem(K,t)}catch(e){}}})()</script>\n";
 
 /// The header's theme button: hidden until its script runs.
 const THEME_BUTTON: &str = "<button type=\"button\" class=\"theme\" id=\"theme-toggle\" \
@@ -192,6 +206,21 @@ fn table(out: &mut String, head: &[&str], rows: &[Vec<String>]) {
     out.push_str("</tbody>\n</table></div>\n");
 }
 
+/// A table whose last column, "Description", is dropped when no row has
+/// anything in it (each row's last cell is its description).
+fn described_table(out: &mut String, head: &[&str], mut rows: Vec<Vec<String>>) {
+    let described = rows.iter().any(|r| r.last().is_some_and(|c| !c.trim().is_empty()));
+    let mut head = head.to_vec();
+    if described {
+        head.push("Description");
+    } else {
+        for row in &mut rows {
+            row.pop();
+        }
+    }
+    table(out, &head, &rows);
+}
+
 impl Site<'_> {
     fn all(&self) -> Vec<GeneratedFile> {
         let mut files = vec![file("index.html", self.index())];
@@ -291,12 +320,9 @@ impl Site<'_> {
             });
         }
         if !self.model.dependencies.is_empty() {
-            // Collapsed unless this page is one of theirs.
-            let open = if page.starts_with("deps/") { " open" } else { "" };
-            let _ = write!(
-                out,
-                "<li class=\"dependencies\"><details{open}><summary>Dependencies</summary>\n<ul>\n"
-            );
+            // Open by default; each package inside stays collapsed unless
+            // this page is one of theirs.
+            out.push_str("<li class=\"dependencies\"><details open><summary>Dependencies</summary>\n<ul>\n");
             for dependency in &self.model.dependencies {
                 let package = &dependency.package;
                 match dependency_link(self.links, package) {
@@ -438,18 +464,27 @@ impl Site<'_> {
         if let Some(docs) = &module.docs {
             body.push_str(&markdown(docs));
         }
+        // A "Value" column only when some unit has a value to show.
+        let values: Vec<Option<String>> = Self::units(module).map(|u| self.value_cell(page, u)).collect();
+        let valued = values.iter().any(Option::is_some);
         let rows: Vec<Vec<String>> = Self::units(module)
-            .map(|unit| {
+            .zip(&values)
+            .map(|(unit, value)| {
                 let name = unit.name().unwrap_or_default();
                 let text = unit.docs().map(|d| summary(&d.text)).unwrap_or("");
-                vec![
+                let mut row = vec![
                     format!("{} <a href=\"#{}\">{}</a>", unit.kind(), esc(&anchor(name)), code(name)),
                     markdown_inline(text),
-                ]
+                ];
+                if valued {
+                    row.push(value.clone().unwrap_or_default());
+                }
+                row
             })
             .collect();
         if !rows.is_empty() {
-            table(&mut body, &["Item", "Summary"], &rows);
+            let head: &[&str] = if valued { &["Item", "Summary", "Value"] } else { &["Item", "Summary"] };
+            table(&mut body, head, &rows);
         }
         for unit in Self::units(module) {
             self.unit(&mut body, page, unit);
@@ -500,12 +535,8 @@ impl Site<'_> {
                     table(out, &["Assert", "Message"], &rows);
                 }
             }
-            Unit::Constant { ty, value, .. } => {
-                let _ = write!(out, "<p>Type: {}", self.ty(page, ty));
-                if let Some(value) = value {
-                    let _ = write!(out, ". Value: {}", code(value));
-                }
-                out.push_str("</p>\n");
+            Unit::Constant { name, ty, value, .. } => {
+                let _ = writeln!(out, "<pre class=\"idl signature\"><code>{}</code></pre>", self.constant(page, name, ty, value.as_deref()));
             }
             Unit::TypeAlias { target, .. } => {
                 let _ = writeln!(out, "<p>Alias of {}</p>", self.ty(page, target));
@@ -527,6 +558,32 @@ impl Site<'_> {
             Unit::Unknown => {}
         }
         out.push_str("</section>\n");
+    }
+
+    /// A constant as one highlighted IDL line, `const MAX: u8 = 1`.
+    fn constant(&self, page: &str, name: &str, ty: &Type, value: Option<&str>) -> String {
+        let mut out = format!("{}{}{}{}", idl("const "), idl_name(name), idl(": "), self.ty_idl(page, ty));
+        if let Some(value) = value {
+            let _ = write!(out, "{}{}", idl(" = "), idl(value));
+        }
+        out
+    }
+
+    /// What a unit holds, for the module table's "Value" column: a
+    /// constant's type and value (`u8 = 1`), an alias's target.
+    fn value_cell(&self, page: &str, unit: &Unit) -> Option<String> {
+        let line = match unit {
+            Unit::Constant { ty, value, .. } => {
+                let mut line = self.ty_idl(page, ty);
+                if let Some(value) = value {
+                    let _ = write!(line, "{}{}", idl(" = "), idl(value));
+                }
+                line
+            }
+            Unit::TypeAlias { target, .. } => self.ty_idl(page, target),
+            _ => return None,
+        };
+        Some(format!("<code class=\"idl\">{line}</code>"))
     }
 
     fn fields(&self, out: &mut String, page: &str, what: &str, fields: &[Field], parent: Option<&Doc>) {
@@ -553,27 +610,17 @@ impl Site<'_> {
                 vec![code(&f.name), ty, text]
             })
             .collect();
-        table(out, &[what, "Type", ""], &rows);
+        described_table(out, &[what, "Type"], rows);
     }
 
     fn function(&self, out: &mut String, page: &str, protocol: &str, f: &Function) {
         let id = esc(&format!("{}-{}", anchor(protocol), anchor(&f.name)));
         let _ = write!(
             out,
-            "<div class=\"function\" id=\"{id}\">\n<h3><a class=\"self\" href=\"#{id}\">{}</a></h3>\n",
+            "<div class=\"function\" id=\"{id}\">\n<h3><a class=\"self\" href=\"#{id}\">function {}</a></h3>\n",
             code(&f.name)
         );
-        let args: Vec<String> =
-            f.arguments.iter().map(|a| format!("{}: {}", esc(&a.name), self.ty(page, &a.ty))).collect();
-        let mut signature = format!("{}({})", code(&f.name), args.join(", "));
-        if let Some(returns) = &f.returns {
-            let _ = write!(signature, " -&gt; {}", self.ty(page, returns));
-        }
-        if !f.throws.is_empty() {
-            let throws: Vec<String> = f.throws.iter().map(|t| self.ty(page, t)).collect();
-            let _ = write!(signature, " ! {}", throws.join(", "));
-        }
-        let _ = writeln!(out, "<p class=\"signature\">{signature}</p>");
+        let _ = writeln!(out, "<pre class=\"idl signature\"><code>{}</code></pre>", self.signature(page, f));
         if let Some(docs) = &f.docs {
             if !docs.text.trim().is_empty() {
                 out.push_str(&markdown(&docs.text));
@@ -595,9 +642,57 @@ impl Site<'_> {
                     ]
                 })
                 .collect();
-            table(out, &["Argument", "Type", ""], &rows);
+            described_table(out, &["Argument", "Type"], rows);
         }
         out.push_str("</div>\n");
+    }
+
+    /// A function as one highlighted IDL line, `function greet(name: string)
+    /// -> Greeting ! Rude;`, its type names linked where they can be.
+    fn signature(&self, page: &str, f: &Function) -> String {
+        let mut out = format!("{}{}{}", idl("function "), idl_name(&f.name), idl("("));
+        for (i, a) in f.arguments.iter().enumerate() {
+            if i > 0 {
+                out.push_str(&idl(", "));
+            }
+            let _ = write!(out, "{}{}{}", idl_name(&a.name), idl(": "), self.ty_idl(page, &a.ty));
+        }
+        out.push_str(&idl(")"));
+        if let Some(returns) = &f.returns {
+            let _ = write!(out, "{}{}", idl(" -> "), self.ty_idl(page, returns));
+        }
+        for (i, t) in f.throws.iter().enumerate() {
+            out.push_str(&idl(if i == 0 { " ! " } else { ", " }));
+            out.push_str(&self.ty_idl(page, t));
+        }
+        out.push_str(&idl(";"));
+        out
+    }
+
+    /// A type as highlighted IDL, each name linked where it can be.
+    fn ty_idl(&self, page: &str, ty: &Type) -> String {
+        match ty {
+            Type::Primitive { name } => idl(name),
+            Type::Unit => idl("()"),
+            Type::Named { name, target } => {
+                let name = format!("<span class=\"t\">{}</span>", esc(name));
+                match target.as_ref().and_then(|t| self.link(page, t)) {
+                    Some(url) => format!("<a href=\"{}\">{name}</a>", esc(&url)),
+                    None => name,
+                }
+            }
+            Type::Array { element, length } => {
+                let suffix = match length {
+                    Some(n) => format!("[{n}]"),
+                    None => "[]".to_string(),
+                };
+                format!("{}{}", self.ty_idl(page, element), idl(&suffix))
+            }
+            Type::Union { members } => {
+                let members: Vec<String> = members.iter().map(|m| self.ty_idl(page, m)).collect();
+                format!("{}{}{}", idl("union("), members.join(" "), idl(")"))
+            }
+        }
     }
 
     /// A type as HTML, each name linked where it can be.
@@ -925,6 +1020,11 @@ fn wire_summary(out: &mut String, p: &ProtocolSummary) {
     if let Some(reason) = p.unverified_reason() {
         let _ = writeln!(out, "<p>{}: &quot;{}&quot;</p>", code("@unverified"), esc(reason));
     }
+}
+
+/// A name in an IDL line, highlighted as a name whatever its spelling.
+fn idl_name(name: &str) -> String {
+    format!("<span class=\"n\">{}</span>", esc(name))
 }
 
 /// An IDL line, highlighted: a span per piece, classed by

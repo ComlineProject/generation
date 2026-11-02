@@ -10,6 +10,6 @@
 
 A greeting.
 
-| Field | Type | |
-|---|---|---|
-| `text` | `string` |  |
+| Field | Type |
+|---|---|
+| `text` | `string` |

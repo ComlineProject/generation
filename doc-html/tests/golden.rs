@@ -52,13 +52,14 @@ fn dependency_types_link_to_their_docs() {
     assert!(api.contains("<a href=\"https://comlineproject.github.io/docs/std/http/#httpmethod\"><code>HttpMethod</code></a>"), "{api}");
     assert!(api.contains("<a href=\"deps/localdeps/greeting.html#greeting\"><code>Greeting</code></a>"), "{api}");
     assert!(api.contains("<a href=\"types.html#customer\"><code>Customer</code></a>"));
-    // The sidebar: own modules, then a collapsed Dependencies section.
+    // The sidebar: own modules, then an open Dependencies section whose packages are collapsed.
     let sidebar = api.split("<nav class=\"sidebar\"").nth(1).unwrap().split("</nav>").next().unwrap();
-    let (own, deps) = sidebar.split_once("<li class=\"dependencies\"><details><summary>Dependencies</summary>").unwrap();
+    let (own, deps) = sidebar.split_once("<li class=\"dependencies\"><details open><summary>Dependencies</summary>").unwrap();
     assert!(own.contains("<code>api</code>") && own.contains("<code>types</code>"));
     assert!(!own.contains("greeting") && !own.contains("http"));
     assert!(deps.contains("<code>localdeps</code>") && deps.contains("<code>std</code>"));
-    // On a dependency's page the section is open.
+    assert!(deps.contains("<li><details><summary><code>localdeps</code>") || deps.contains("<li><details><summary><a href=\"deps/localdeps/"), "{deps}");
+    // On a dependency's page its package is open too.
     let greeting = get("deps/localdeps/greeting.html");
     assert!(greeting.contains("<li class=\"dependencies\"><details open>"), "{greeting}");
     assert!(greeting.contains("<a href=\"../../style.css\">") || greeting.contains("href=\"../../style.css\""));
@@ -210,7 +211,11 @@ fn a_multi_version_site_loads_nothing_from_the_network() {
         if path.ends_with(".html") {
             assert!(contents.contains("id=\"theme-toggle\""), "{path}");
             let head = contents.split("</head>").next().unwrap();
-            assert!(head.contains("localStorage.getItem(\"comline-doc-theme\")"), "{path}");
+            for needle in ["\"comline-doc-theme\"", "window.name", "localStorage.getItem(K)", "searchParams", "removeAttribute(\"data-theme\")"] {
+                assert!(head.contains(needle), "{path} lacks {needle}");
+            }
+            // `auto` is the absence of the attribute, never a value of it.
+            assert!(!contents.contains("data-theme=\"auto\""), "{path}");
         }
     }
     assert!(compare.contains(r#""api::Orders.cancel":"cancel(order: Order) -> bool""#), "{compare}");
@@ -225,4 +230,33 @@ fn the_version_carries_a_content_hash() {
     assert_eq!(crate_version, env!("CARGO_PKG_VERSION"));
     assert_eq!(hash.len(), 16, "{version}");
     assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "{version}");
+}
+
+/// A function is one highlighted IDL line with its types linked, the text of
+/// it exactly the line a schema would have; and a table with nothing to
+/// describe has no Description column.
+#[test]
+fn a_function_is_one_idl_line() {
+    let files = comline_doc_html::render_json(&model(), &options()).unwrap();
+    let api = &files.iter().find(|f| f.path.to_str() == Some("api.html")).unwrap().contents;
+    assert!(api.contains("<h3><a class=\"self\" href=\"#orders-place\">function <code>place</code></a></h3>"));
+    let pre = api.split("<pre class=\"idl signature\"><code>").nth(1).unwrap().split("</code></pre>").next().unwrap();
+    assert!(pre.contains("<a href=\"#order\"><span class=\"t\">Order</span></a>"), "{pre}");
+    let mut text = String::new();
+    let mut in_tag = false;
+    for c in pre.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' if in_tag => in_tag = false,
+            c if !in_tag => text.push(c),
+            _ => {}
+        }
+    }
+    assert_eq!(text, "function place(order: Order) -&gt; u64 ! OutOfStock;");
+    // `place` documents its argument; `ping` has none, and structs without
+    // field docs lose the column.
+    assert!(api.contains("<th>Argument</th><th>Type</th><th>Description</th>"));
+    assert!(!api.contains("<th>Type</th><th></th>"), "an empty header");
+    let types = &files.iter().find(|f| f.path.to_str() == Some("types.html")).unwrap().contents;
+    assert!(!types.contains("<th>Type</th><th></th>"), "an empty header");
 }

@@ -18,9 +18,9 @@ Not in stock.
 
 Ordinal `0`. Message: `{item} is out of stock`
 
-| Field | Type | |
-|---|---|---|
-| `item` | `string` |  |
+| Field | Type |
+|---|---|
+| `item` | `string` |
 
 <a id="order"></a>
 
@@ -28,13 +28,13 @@ Ordinal `0`. Message: `{item} is out of stock`
 
 One order.
 
-| Field | Type | |
-|---|---|---|
-| `customer` | [`Customer`](types.md#customer) |  |
-| `payments` | [`Payment`](types.md#payment)`[]` |  |
-| `method` | [`HttpMethod`](https://comlineproject.github.io/docs/std/http/#httpmethod) |  |
-| `lines` | union(`u32` `string`) |  |
-| `greeting` | [`Greeting`](deps/localdeps/greeting.md#greeting) (optional) |  |
+| Field | Type |
+|---|---|
+| `customer` | [`Customer`](types.md#customer) |
+| `payments` | [`Payment`](types.md#payment)`[]` |
+| `method` | [`HttpMethod`](https://comlineproject.github.io/docs/std/http/#httpmethod) |
+| `lines` | union(`u32` `string`) |
+| `greeting` | [`Greeting`](deps/localdeps/greeting.md#greeting) (optional) |
 
 <a id="orders"></a>
 
@@ -44,18 +44,22 @@ Orders things.
 
 <a id="orders-place"></a>
 
-### `place`
+### function `place`
 
-`place`(order: [`Order`](#order)) -> `u64` ! [`OutOfStock`](#outofstock)
+```comline
+function place(order: Order) -> u64 ! OutOfStock;
+```
 
 Place an order.
 
-| Argument | Type | |
+| Argument | Type | Description |
 |---|---|---|
 | `order` | [`Order`](#order) | what to place |
 
 <a id="orders-ping"></a>
 
-### `ping`
+### function `ping`
 
-`ping`()
+```comline
+function ping();
+```
