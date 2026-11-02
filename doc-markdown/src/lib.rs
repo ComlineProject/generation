@@ -282,21 +282,26 @@ impl Pages<'_> {
         self.module_page(&page, &module.path, module)
     }
 
-    /// A module's page at `page`, headed `heading`: one of the package's,
-    /// or an unlinked dependency's.
-    /// What a unit holds, for the module table's "Value" column: a
-    /// constant's type and value, an alias's target.
-    fn value_cell(&self, page: &str, unit: &Unit) -> Option<String> {
+    /// A unit's type, for the module table's "Type" column: a constant's
+    /// type, an alias's target.
+    fn type_cell(&self, page: &str, unit: &Unit) -> Option<String> {
         match unit {
-            Unit::Constant { ty, value, .. } => Some(match value {
-                Some(value) => format!("`{} = {value}`", type_text(ty)),
-                None => self.ty(page, ty),
-            }),
+            Unit::Constant { ty, .. } => Some(self.ty(page, ty)),
             Unit::TypeAlias { target, .. } => Some(self.ty(page, target)),
             _ => None,
         }
     }
 
+    /// A unit's value, for the module table's "Value" column: a constant's.
+    fn value_cell(&self, unit: &Unit) -> Option<String> {
+        match unit {
+            Unit::Constant { value: Some(value), .. } => Some(format!("`{value}`")),
+            _ => None,
+        }
+    }
+
+    /// A module's page at `page`, headed `heading`: one of the package's,
+    /// or an unlinked dependency's.
     fn module_page(&self, page: &str, heading: &str, module: &Module) -> String {
         let mut out = format!("# `{heading}`\n\n");
         out.push_str(&self.notes());
@@ -305,19 +310,31 @@ impl Pages<'_> {
         }
         let units: Vec<&Unit> = module.units.iter().filter(|u| u.name().is_some()).collect();
         if !units.is_empty() {
-            // A "Value" column only when some unit has a value to show.
-            let values: Vec<Option<String>> = units.iter().map(|u| self.value_cell(page, u)).collect();
-            let valued = values.iter().any(Option::is_some);
-            out.push_str(if valued { "| Item | Summary | Value |\n|---|---|---|\n" } else { "| Item | Summary |\n|---|---|\n" });
-            for (unit, value) in units.iter().zip(&values) {
+            // A "Type" and a "Value" column, each only when some unit has one.
+            let cells: Vec<(Option<String>, Option<String>)> =
+                units.iter().map(|u| (self.type_cell(page, u), self.value_cell(u))).collect();
+            let typed = cells.iter().any(|(t, _)| t.is_some());
+            let valued = cells.iter().any(|(_, v)| v.is_some());
+            let mut head = String::from("| Item | Summary |");
+            let mut rule = String::from("|---|---|");
+            for (on, name) in [(typed, "Type"), (valued, "Value")] {
+                if on {
+                    head.push_str(&format!(" {name} |"));
+                    rule.push_str("---|");
+                }
+            }
+            out.push_str(&format!("{head}\n{rule}\n"));
+            for (unit, (ty, value)) in units.iter().zip(&cells) {
                 let name = unit.name().unwrap_or_default();
                 let text = unit.docs().map(|d| summary(&d.text)).unwrap_or("");
-                let head = format!("| {} [`{name}`](#{}) | {} |", unit.kind(), anchor(name), cell(text));
-                if valued {
-                    out.push_str(&format!("{head} {} |\n", cell(value.as_deref().unwrap_or(""))));
-                } else {
-                    out.push_str(&format!("{head}\n"));
+                out.push_str(&format!("| {} [`{name}`](#{}) | {} |", unit.kind(), anchor(name), cell(text)));
+                if typed {
+                    out.push_str(&format!(" {} |", cell(ty.as_deref().unwrap_or(""))));
                 }
+                if valued {
+                    out.push_str(&format!(" {} |", cell(value.as_deref().unwrap_or(""))));
+                }
+                out.push('\n');
             }
             out.push('\n');
         }
