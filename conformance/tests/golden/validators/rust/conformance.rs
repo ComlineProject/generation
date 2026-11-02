@@ -14,7 +14,7 @@ pub const IR_HASH: u64 = 0xeab4408b940579fb;
 
 /// Digest of every schema in the package — what a connection's handshake
 /// checks, so both ends agree on each protocol's number.
-pub const CONNECTION_IR_HASH: u64 = 0x87c0a4abdc2a26bc;
+pub const CONNECTION_IR_HASH: u64 = 0xf9d255a977b3b030;
 
 /// The package's wire format (`wire.format`): what this file's helpers
 /// encode with, and what the peer has to speak too.
@@ -45,7 +45,7 @@ impl comline_runtime::validation::Validate for Profile {
             if !((value.chars().count() as i128) >= 2) {
                 out.push(comline_runtime::validation::ValidationError {
                     field: path.clone(),
-                    message: format!("{} must be at least {} characters", path, 2),
+                    message: format!("{} must be at least {} characters", path, 2i128),
                 });
             }
             if first && !out.is_empty() {
@@ -54,7 +54,7 @@ impl comline_runtime::validation::Validate for Profile {
             if !((value.chars().count() as i128) <= 8) {
                 out.push(comline_runtime::validation::ValidationError {
                     field: path.clone(),
-                    message: format!("{} must be at most {} characters", path, 8),
+                    message: format!("{} must be at most {} characters", path, 8i128),
                 });
             }
         }
@@ -68,7 +68,7 @@ impl comline_runtime::validation::Validate for Profile {
             if !(((*value as i128) >= 0) && ((*value as i128) <= 120)) {
                 out.push(comline_runtime::validation::ValidationError {
                     field: path.clone(),
-                    message: format!("{} must be between {} and {}", path, 0, 120),
+                    message: format!("{} must be between {} and {}", path, 0i128, 120i128),
                 });
             }
         }
@@ -82,7 +82,7 @@ impl comline_runtime::validation::Validate for Profile {
                 if !((value.chars().count() as i128) >= 2) {
                     out.push(comline_runtime::validation::ValidationError {
                         field: path.clone(),
-                        message: format!("{} must be at least {} characters", path, 2),
+                        message: format!("{} must be at least {} characters", path, 2i128),
                     });
                 }
                 if first && !out.is_empty() {
@@ -91,7 +91,7 @@ impl comline_runtime::validation::Validate for Profile {
                 if !((value.chars().count() as i128) <= 8) {
                     out.push(comline_runtime::validation::ValidationError {
                         field: path.clone(),
-                        message: format!("{} must be at most {} characters", path, 8),
+                        message: format!("{} must be at most {} characters", path, 8i128),
                     });
                 }
             }
@@ -108,7 +108,7 @@ impl comline_runtime::validation::Validate for Profile {
                 if !((value.chars().count() as i128) >= 2) {
                     out.push(comline_runtime::validation::ValidationError {
                         field: path.clone(),
-                        message: format!("{} must be at least {} characters", path, 2),
+                        message: format!("{} must be at least {} characters", path, 2i128),
                     });
                 }
                 if first && !out.is_empty() {
@@ -117,7 +117,7 @@ impl comline_runtime::validation::Validate for Profile {
                 if !((value.chars().count() as i128) <= 8) {
                     out.push(comline_runtime::validation::ValidationError {
                         field: path.clone(),
-                        message: format!("{} must be at most {} characters", path, 8),
+                        message: format!("{} must be at most {} characters", path, 8i128),
                     });
                 }
             }
@@ -142,23 +142,23 @@ impl comline_runtime::validation::Validate for Post {
         {
             let path = comline_runtime::validation::field_path(path, "body");
             let value = &self.body;
-            // StringBounds(min_chars = 1, max_chars = 1024)
+            // StringBounds(min_chars = 1, max_chars = 4294967295)
             if first && !out.is_empty() {
                 return;
             }
             if !((value.chars().count() as i128) >= 1) {
                 out.push(comline_runtime::validation::ValidationError {
                     field: path.clone(),
-                    message: format!("{} must be at least {} characters", path, 1),
+                    message: format!("{} must be at least {} characters", path, 1i128),
                 });
             }
             if first && !out.is_empty() {
                 return;
             }
-            if !((value.chars().count() as i128) <= 1024) {
+            if !((value.chars().count() as i128) <= 4294967295) {
                 out.push(comline_runtime::validation::ValidationError {
                     field: path.clone(),
-                    message: format!("{} must be at most {} characters", path, 1024),
+                    message: format!("{} must be at most {} characters", path, 4294967295i128),
                 });
             }
         }
@@ -183,7 +183,7 @@ impl comline_runtime::validation::Validate for SocialRenameParams {
             if !((value.chars().count() as i128) >= 2) {
                 out.push(comline_runtime::validation::ValidationError {
                     field: path.clone(),
-                    message: format!("{} must be at least {} characters", path, 2),
+                    message: format!("{} must be at least {} characters", path, 2i128),
                 });
             }
             if first && !out.is_empty() {
@@ -192,7 +192,7 @@ impl comline_runtime::validation::Validate for SocialRenameParams {
             if !((value.chars().count() as i128) <= 8) {
                 out.push(comline_runtime::validation::ValidationError {
                     field: path.clone(),
-                    message: format!("{} must be at most {} characters", path, 8),
+                    message: format!("{} must be at most {} characters", path, 8i128),
                 });
             }
         }

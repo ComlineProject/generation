@@ -5,7 +5,7 @@ pub type Format = comline_runtime::format::Packed;
 
 /// Digest of every schema in the package — what a connection's handshake
 /// checks, so both ends agree on each protocol's number.
-pub const CONNECTION_IR_HASH: u64 = 0x87c0a4abdc2a26bc;
+pub const CONNECTION_IR_HASH: u64 = 0xf9d255a977b3b030;
 
 /// What the accepting side provides: one field per protocol, so leaving one out
 /// doesn't compile.
