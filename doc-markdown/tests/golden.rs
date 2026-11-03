@@ -10,13 +10,17 @@ use comline_codegen::protocol::{self, RenderOptions, RenderRequest, Request, Res
 
 fn options() -> RenderOptions {
     RenderOptions {
-        links: BTreeMap::from([("std".to_string(), "https://comlineproject.github.io/docs/std/".to_string())]),
+        links: BTreeMap::from([(
+            "std".to_string(),
+            "https://comlineproject.github.io/docs/std/".to_string(),
+        )]),
         ..Default::default()
     }
 }
 
 fn model() -> String {
-    std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/model.json")).unwrap()
+    std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/model.json"))
+        .unwrap()
 }
 
 #[test]
@@ -35,23 +39,51 @@ fn renders_the_golden_pages() {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(&path, &file.contents).unwrap();
         } else {
-            let expected = std::fs::read_to_string(&path)
-                .unwrap_or_else(|_| panic!("no golden {}; run with COMLINE_BLESS=1", path.display()));
-            assert_eq!(file.contents, expected, "{} drifted; run with COMLINE_BLESS=1", path.display());
+            let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+                panic!("no golden {}; run with COMLINE_BLESS=1", path.display())
+            });
+            assert_eq!(
+                file.contents,
+                expected,
+                "{} drifted; run with COMLINE_BLESS=1",
+                path.display()
+            );
         }
     }
-    assert_eq!(paths, ["index.md", "api.md", "types.md", "deps/localdeps/greeting.md", "changelog.md", "nav.yml"]);
+    assert_eq!(
+        paths,
+        [
+            "index.md",
+            "api.md",
+            "types.md",
+            "deps/localdeps/greeting.md",
+            "changelog.md",
+            "nav.yml"
+        ]
+    );
 }
 
 #[test]
 fn dependency_types_link_to_their_docs() {
     let files = comline_doc_markdown::render_json(&model(), &RenderOptions::default()).unwrap();
-    let get = |p: &str| &files.iter().find(|f| f.path.to_str() == Some(p)).unwrap().contents;
+    let get = |p: &str| {
+        &files
+            .iter()
+            .find(|f| f.path.to_str() == Some(p))
+            .unwrap()
+            .contents
+    };
     let api = get("api.md");
     // `std` without a `[doc] links` entry: its hosted docs.
-    assert!(api.contains("[`HttpMethod`](https://comlineproject.github.io/docs/std/http/#httpmethod)"), "{api}");
+    assert!(
+        api.contains("[`HttpMethod`](https://comlineproject.github.io/docs/std/http/#httpmethod)"),
+        "{api}"
+    );
     // An unlinked dependency: its page here, never an own module's.
-    assert!(api.contains("[`Greeting`](deps/localdeps/greeting.md#greeting)"), "{api}");
+    assert!(
+        api.contains("[`Greeting`](deps/localdeps/greeting.md#greeting)"),
+        "{api}"
+    );
     assert!(api.contains("[`Customer`](types.md#customer)"));
     assert!(get("deps/localdeps/greeting.md").starts_with("# `localdeps::greeting`"));
     assert!(!files.iter().any(|f| f.path.starts_with("deps/std")));
@@ -59,11 +91,28 @@ fn dependency_types_link_to_their_docs() {
     assert!(nav.contains("  - Dependencies:\n    - \"localdeps\":\n      - \"greeting\": deps/localdeps/greeting.md\n    - \"std\": \"https://comlineproject.github.io/docs/std/\"\n"), "{nav}");
 
     // A link for it publishes it elsewhere instead.
-    let links = BTreeMap::from([("localdeps".to_string(), "https://example.com/localdeps".to_string())]);
-    let files = comline_doc_markdown::render_json(&model(), &RenderOptions { links, ..Default::default() }).unwrap();
+    let links = BTreeMap::from([(
+        "localdeps".to_string(),
+        "https://example.com/localdeps".to_string(),
+    )]);
+    let files = comline_doc_markdown::render_json(
+        &model(),
+        &RenderOptions {
+            links,
+            ..Default::default()
+        },
+    )
+    .unwrap();
     assert!(!files.iter().any(|f| f.path.starts_with("deps")));
-    let api = &files.iter().find(|f| f.path.to_str() == Some("api.md")).unwrap().contents;
-    assert!(api.contains("[`Greeting`](https://example.com/localdeps/greeting/#greeting)"), "{api}");
+    let api = &files
+        .iter()
+        .find(|f| f.path.to_str() == Some("api.md"))
+        .unwrap()
+        .contents;
+    assert!(
+        api.contains("[`Greeting`](https://example.com/localdeps/greeting/#greeting)"),
+        "{api}"
+    );
 }
 
 /// A dev build's page: its step, and a link to everything since the last
@@ -76,17 +125,33 @@ fn changelog_spans() {
     since["from"] = "0.1.0".into();
     since["span"] = "since_release".into();
     model["changelog"] = serde_json::json!([step, since]);
-    let files = comline_doc_markdown::render_json(&model.to_string(), &RenderOptions::default()).unwrap();
-    let log = &files.iter().find(|f| f.path.to_str() == Some("changelog.md")).unwrap().contents;
-    assert!(log.contains("Everything since the last release: [0.1.0 to 0.2.0](#since-0.1.0)."), "{log}");
-    assert!(log.contains("<a id=\"since-0.1.0\"></a>\n\n## Since the last release: 0.1.0 to 0.2.0"), "{log}");
+    let files =
+        comline_doc_markdown::render_json(&model.to_string(), &RenderOptions::default()).unwrap();
+    let log = &files
+        .iter()
+        .find(|f| f.path.to_str() == Some("changelog.md"))
+        .unwrap()
+        .contents;
+    assert!(
+        log.contains("Everything since the last release: [0.1.0 to 0.2.0](#since-0.1.0)."),
+        "{log}"
+    );
+    assert!(
+        log.contains("<a id=\"since-0.1.0\"></a>\n\n## Since the last release: 0.1.0 to 0.2.0"),
+        "{log}"
+    );
 
     let mut release = model["changelog"][0].clone();
     release["from"] = "0.0.9".into();
     release["span"] = "release".into();
     model["changelog"] = serde_json::json!([model["changelog"][0].clone(), release]);
-    let files = comline_doc_markdown::render_json(&model.to_string(), &RenderOptions::default()).unwrap();
-    let log = &files.iter().find(|f| f.path.to_str() == Some("changelog.md")).unwrap().contents;
+    let files =
+        comline_doc_markdown::render_json(&model.to_string(), &RenderOptions::default()).unwrap();
+    let log = &files
+        .iter()
+        .find(|f| f.path.to_str() == Some("changelog.md"))
+        .unwrap()
+        .contents;
     assert!(log.contains("## 0.0.9 to 0.2.0"), "{log}");
     assert!(!log.contains("## 0.1.0 to 0.2.0"), "{log}");
 }
@@ -95,7 +160,9 @@ fn changelog_spans() {
 fn renders_through_the_protocol() {
     let mut registry = comline_codegen::Registry::new();
     comline_doc_markdown::register(&mut registry);
-    let Response::Describe(d) = protocol::respond(&registry, &protocol::encode(&Request::describe()).unwrap()) else {
+    let Response::Describe(d) =
+        protocol::respond(&registry, &protocol::encode(&Request::describe()).unwrap())
+    else {
         panic!()
     };
     assert_eq!(d.renderers.len(), 1);
@@ -106,7 +173,10 @@ fn renders_through_the_protocol() {
         model: model(),
         options: options(),
     });
-    let Response::Render(out) = protocol::respond(&registry, &protocol::encode(&request).unwrap()) else { panic!() };
+    let Response::Render(out) = protocol::respond(&registry, &protocol::encode(&request).unwrap())
+    else {
+        panic!()
+    };
     assert_eq!(out.files.len(), 6);
 }
 
@@ -129,24 +199,46 @@ pub fn render_versions() -> Vec<(String, String)> {
     for (id, release, kind) in versions {
         let model = std::fs::read_to_string(dir.join(format!("{id}.json"))).unwrap();
         let notes = match id {
-            "0.1.0" => vec!["Built before headers were frozen (core#152): it has no package or module headers.".to_string(), wire.clone()],
+            "0.1.0" => vec![
+                "Built before headers were frozen (core#152): it has no package or module headers."
+                    .to_string(),
+                wire.clone(),
+            ],
             "unreleased" => vec![],
             _ => vec![wire.clone()],
         };
-        let options = RenderOptions { version: Some(id.to_string()), notes, ..options() };
+        let options = RenderOptions {
+            version: Some(id.to_string()),
+            notes,
+            ..options()
+        };
         for file in comline_doc_markdown::render_json(&model, &options).unwrap() {
-            out.push((format!("{id}/{}", file.path.to_string_lossy().replace('\\', "/")), file.contents));
+            out.push((
+                format!("{id}/{}", file.path.to_string_lossy().replace('\\', "/")),
+                file.contents,
+            ));
         }
-        site.push(SiteVersion { id: id.into(), release: release.into(), kind, model });
+        site.push(SiteVersion {
+            id: id.into(),
+            release: release.into(),
+            kind,
+            model,
+        });
     }
     let request = RenderRequest {
         renderer: comline_doc_markdown::RENDERER.id.into(),
         model_version: 1,
         model: site.last().unwrap().model.clone(),
-        options: RenderOptions { versions: site, ..options() },
+        options: RenderOptions {
+            versions: site,
+            ..options()
+        },
     };
     for file in comline_doc_markdown::render(&request).unwrap() {
-        out.push((file.path.to_string_lossy().replace('\\', "/"), file.contents));
+        out.push((
+            file.path.to_string_lossy().replace('\\', "/"),
+            file.contents,
+        ));
     }
     out
 }
@@ -165,9 +257,15 @@ fn renders_every_version_and_the_site_index() {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(&path, contents).unwrap();
         } else {
-            let expected = std::fs::read_to_string(&path)
-                .unwrap_or_else(|_| panic!("no golden {}; run with COMLINE_BLESS=1", path.display()));
-            assert_eq!(contents, &expected, "{} drifted; run with COMLINE_BLESS=1", path.display());
+            let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+                panic!("no golden {}; run with COMLINE_BLESS=1", path.display())
+            });
+            assert_eq!(
+                contents,
+                &expected,
+                "{} drifted; run with COMLINE_BLESS=1",
+                path.display()
+            );
         }
     }
 }
