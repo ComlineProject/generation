@@ -10,12 +10,12 @@ Goal: Implement a TypeScript code generator (`codelib_gen/typescript.rs`) to sup
 - **Enums**: Map to `export enum Name { Variant = "Variant", }` (String enums for better JSON interop)
 - **Protocols**: Map to `export interface Name { func(...): ret; }`
 - **Type Mapping**:
-    - `u8`..`u64`/`i8`..`i64`/`float`/[int](file:///home/ag/Documents/shared/projects/GM%20-%20Dev/comline/comline-rs/core/core/src/package/config/ir/interpreter/interpret.rs#11-29) -> [number](file:///home/ag/Documents/shared/projects/GM%20-%20Dev/comline/comline-rs/core/core/tests/schema/parser/comprehensive.rs#233-238)
+    - `u8`..`u64`/`i8`..`i64`/`float`/[int](https://github.com/ComlineProject/core/blob/d8bc708bf23e4accd06a13da1d317b10596888c7/core/src/package/config/ir/interpreter/interpret.rs#L11-L29) -> [number](https://github.com/ComlineProject/core/blob/d8bc708bf23e4accd06a13da1d317b10596888c7/core/tests/schema/parser/comprehensive.rs#L233-L238)
     - `bool` -> `boolean`
-    - [string](file:///home/ag/Documents/shared/projects/GM%20-%20Dev/comline/comline-rs/core/core/src/schema/idl/grammar.rs#370-373) -> [string](file:///home/ag/Documents/shared/projects/GM%20-%20Dev/comline/comline-rs/core/core/src/schema/idl/grammar.rs#370-373)
+    - [string](https://github.com/ComlineProject/core/blob/d8bc708bf23e4accd06a13da1d317b10596888c7/core/src/schema/idl/grammar.rs#L370-L373) -> [string](https://github.com/ComlineProject/core/blob/d8bc708bf23e4accd06a13da1d317b10596888c7/core/src/schema/idl/grammar.rs#L370-L373)
     - `Vec<T>` -> `T[]` (via name analysis)
 
-### 2. Register in [core/src/codelib_gen/mod.rs](file:///home/ag/Documents/shared/projects/GM%20-%20Dev/comline/comline-rs/core/core/src/codelib_gen/mod.rs)
+### 2. Register in [core/src/codelib_gen/mod.rs](https://github.com/ComlineProject/core/blob/d8bc708bf23e4accd06a13da1d317b10596888c7/core/src/codelib_gen/mod.rs)
 - Valid names: `"typescript"`, `"ts"`
 - Map to `typescript::generate_typescript`
 
