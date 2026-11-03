@@ -5,6 +5,7 @@
 //! `comline-codegen-typescript`, …), each contributing through its own
 //! `register(&mut Registry)`. See `design/generation.md`.
 
+pub mod bounds;
 pub mod builder;
 pub mod collisions;
 pub mod config;
