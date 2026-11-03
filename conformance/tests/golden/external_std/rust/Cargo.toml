@@ -12,4 +12,4 @@ autobins = false
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-comline_std = { git = "https://github.com/ComlineProject/comline-rust", rev = "3c6df80fa2b47760fc8932d6035b22193bbc35f1" }
+comline_std = { git = "https://github.com/ComlineProject/comline-rust", rev = "e09b906b50d94153d3821a42b6767f99134e5c58" }
