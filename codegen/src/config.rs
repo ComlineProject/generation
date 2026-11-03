@@ -170,7 +170,7 @@ pub struct Doc {
     /// Where each dependency's documentation lives, by the name the package
     /// gives the dependency (or `std`): `links = { std = "https://..." }`. A
     /// type from a dependency listed here links into its docs; one that
-    /// isn't is plain text.
+    /// isn't links to the pages renderers write for it under `deps/`.
     pub links: std::collections::BTreeMap<String, String>,
     /// Add a changelog from this built version (a version or commit hash) to
     /// the documented one. `--changelog-from` overrides it.
