@@ -165,22 +165,22 @@
           "tracking": null
         },
         "bounds": {
-          "note": "a bounded string is a `String` and a bounded list a `Vec`; nothing checks the maximum yet",
+          "note": null,
           "proven_by": [
             "bounds"
           ],
           "since": null,
-          "state": "ignored",
-          "tracking": "core#98"
+          "state": "supported",
+          "tracking": null
         },
         "chars": {
-          "note": "no wire format carries a single `char` yet",
+          "note": null,
           "proven_by": [
             "chars"
           ],
           "since": null,
-          "state": "unsupported",
-          "tracking": "core#98"
+          "state": "supported",
+          "tracking": null
         },
         "connections": {
           "note": null,
@@ -400,7 +400,8 @@
             "validators_on_decode",
             "format_json",
             "format_msgpack",
-            "bounds"
+            "bounds",
+            "chars"
           ],
           "since": null,
           "state": "supported",
@@ -495,22 +496,22 @@
           "tracking": null
         },
         "bounds": {
-          "note": "a bounded string is a `string` and a bounded list an array; nothing checks the maximum yet",
+          "note": null,
           "proven_by": [
             "bounds"
           ],
           "since": null,
-          "state": "ignored",
-          "tracking": "core#98"
+          "state": "supported",
+          "tracking": null
         },
         "chars": {
-          "note": "no wire format carries a single `char` yet",
+          "note": null,
           "proven_by": [
             "chars"
           ],
           "since": null,
-          "state": "unsupported",
-          "tracking": "core#98"
+          "state": "supported",
+          "tracking": null
         },
         "connections": {
           "note": null,
@@ -730,7 +731,8 @@
             "unions",
             "large_fixed_arrays_nested",
             "format_json",
-            "bounds"
+            "bounds",
+            "chars"
           ],
           "since": null,
           "state": "supported",
