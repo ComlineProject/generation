@@ -142,6 +142,40 @@ impl<'a> Validation<'a> {
         self.plan_at(ns, ty, parameters, at, 0)
     }
 
+    /// `ty`, written in schema `ns`, with every alias that carries a bound
+    /// ([`has_bounds`](crate::bounds::has_bounds)) replaced by what it stands
+    /// for, through arrays and other aliases: each use site of
+    /// `type Name = char[max 32]` checks at most 32 characters. An alias
+    /// without a bound stays named. Names inside an expanded alias are as its
+    /// own schema writes them.
+    pub fn expand_bounds(&self, ns: &str, ty: &TypeRef) -> TypeRef {
+        self.expand_at(ns, ty, 0)
+    }
+
+    fn expand_at(&self, ns: &str, ty: &TypeRef, depth: usize) -> TypeRef {
+        if depth == MAX_DEPTH {
+            return ty.clone();
+        }
+        match ty {
+            TypeRef::Named(name) => match self.resolve(ns, name) {
+                Some((alias_ns, FrozenUnit::TypeAlias { target, .. })) => {
+                    let expanded = self.expand_at(alias_ns, target, depth + 1);
+                    if crate::bounds::has_bounds(&expanded) { expanded } else { ty.clone() }
+                }
+                _ => ty.clone(),
+            },
+            TypeRef::Array { element, length, max } => TypeRef::Array {
+                element: Box::new(self.expand_at(ns, element, depth + 1)),
+                length: *length,
+                max: *max,
+            },
+            TypeRef::Union(members) => {
+                TypeRef::Union(members.iter().map(|m| self.expand_at(ns, m, depth + 1)).collect())
+            }
+            other => other.clone(),
+        }
+    }
+
     /// Whether the struct or error `name` (as written in `ns`) has any check
     /// on a field, directly or further down.
     pub fn needs_validation(&self, ns: &str, name: &str) -> bool {

@@ -6,7 +6,7 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 
 | Feature | rust ≥ 1.85.0 | typescript ≥ 5.0 |
 |---|---|---|
-| structs <br><sub>`structs`</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +12 more</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +13 more</sub> |
+| structs <br><sub>`structs`</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +13 more</sub> | ✅ supported <br><sub>proven by `primitives`, `optional_and_arrays`, `type_refs` +14 more</sub> |
 | enums <br><sub>`enums`</sub> | ✅ supported <br><sub>proven by `enum_basic`</sub> | ✅ supported <br><sub>proven by `enum_basic`</sub> |
 | optional fields <br><sub>`optional-fields`</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +4 more</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +5 more</sub> |
 | arrays <br><sub>`arrays`</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +4 more</sub> | ✅ supported <br><sub>proven by `optional_and_arrays`, `type_refs`, `shapes` +5 more</sub> |
@@ -31,5 +31,5 @@ What each generator implements, and the conformance fixtures that prove it. A cl
 | the `packed@1` format <br><sub>`format-packed`</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +4 more</sub> | ✅ supported <br><sub>proven by `protocol`, `error_shapes`, `validators` +4 more</sub> |
 | the `json@1` format <br><sub>`format-json`</sub> | ✅ supported <br><sub>proven by `format_json`</sub> | ✅ supported <br><sub>proven by `format_json`</sub> |
 | the `msgpack@1` format <br><sub>`format-msgpack`</sub> | ✅ supported <br><sub>proven by `format_msgpack`</sub> | ❌ unsupported: `@comline/runtime` has no MessagePack codec yet <br><sub>proven by `format_msgpack`</sub> |
-| bounds <br><sub>`bounds`</sub> | ⚪ ignored: a bounded string is a `String` and a bounded list a `Vec`; nothing checks the maximum yet (core#98) <br><sub>proven by `bounds`</sub> | ⚪ ignored: a bounded string is a `string` and a bounded list an array; nothing checks the maximum yet (core#98) <br><sub>proven by `bounds`</sub> |
-| single characters <br><sub>`chars`</sub> | ❌ unsupported: no wire format carries a single `char` yet (core#98) <br><sub>proven by `chars`</sub> | ❌ unsupported: no wire format carries a single `char` yet (core#98) <br><sub>proven by `chars`</sub> |
+| bounds <br><sub>`bounds`</sub> | ✅ supported <br><sub>proven by `bounds`</sub> | ✅ supported <br><sub>proven by `bounds`</sub> |
+| single characters <br><sub>`chars`</sub> | ✅ supported <br><sub>proven by `chars`</sub> | ✅ supported <br><sub>proven by `chars`</sub> |
