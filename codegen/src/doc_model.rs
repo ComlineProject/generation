@@ -337,7 +337,10 @@ impl DocModel {
     /// A dev build's changes since the last release, which its changelog
     /// page links to below the step.
     pub fn since_release(&self) -> Vec<&Changelog> {
-        self.changelog.iter().filter(|l| l.is_since_release()).collect()
+        self.changelog
+            .iter()
+            .filter(|l| l.is_since_release())
+            .collect()
     }
 
     /// The steps, which a comparison across versions composes.
@@ -364,7 +367,11 @@ pub fn dependency_link<'a>(links: &'a BTreeMap<String, String>, package: &str) -
 
 /// A published page: `<base>/<module>/`, with `#<anchor>` for `name`.
 pub fn external_url(base: &str, module: &str, name: Option<&str>) -> String {
-    let mut url = format!("{}/{}/", base.trim_end_matches('/'), module.replace("::", "/"));
+    let mut url = format!(
+        "{}/{}/",
+        base.trim_end_matches('/'),
+        module.replace("::", "/")
+    );
     if let Some(name) = name {
         url.push('#');
         url.push_str(&anchor(name));
@@ -461,7 +468,10 @@ pub fn relative(from: &str, to: &str) -> String {
 
 /// The first non-empty line of `docs`.
 pub fn summary(docs: &str) -> &str {
-    docs.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("")
+    docs.lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
 }
 
 /// The docs of a field or argument: its own, else its parent's `@name:` line.
@@ -524,22 +534,32 @@ impl ProtocolSummary {
     /// The format, framing and handshake rows: the same rows as the
     /// language server's hover (`protocol_summary.rs`) and `comline inspect`.
     pub fn choices(&self) -> Vec<ChoiceRow<'_>> {
-        [("format", &self.format), ("framing", &self.framing), ("handshake", &self.handshake)]
-            .into_iter()
-            .map(|(key, choice)| ChoiceRow {
-                key,
-                value: &choice.value,
-                params: choice.params.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect(),
-                source: match choice.source.as_str() {
-                    "annotation" => ChoiceSource::Annotation(key),
-                    "package_default" if key == "handshake" => ChoiceSource::PackageDefault("handshake".into()),
-                    "package_default" => ChoiceSource::PackageDefault(format!("wire.{key}")),
-                    "core_default" => ChoiceSource::CoreDefault,
-                    "framing" => ChoiceSource::Framing,
-                    other => ChoiceSource::Other(other.to_string()),
-                },
-            })
-            .collect()
+        [
+            ("format", &self.format),
+            ("framing", &self.framing),
+            ("handshake", &self.handshake),
+        ]
+        .into_iter()
+        .map(|(key, choice)| ChoiceRow {
+            key,
+            value: &choice.value,
+            params: choice
+                .params
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect(),
+            source: match choice.source.as_str() {
+                "annotation" => ChoiceSource::Annotation(key),
+                "package_default" if key == "handshake" => {
+                    ChoiceSource::PackageDefault("handshake".into())
+                }
+                "package_default" => ChoiceSource::PackageDefault(format!("wire.{key}")),
+                "core_default" => ChoiceSource::CoreDefault,
+                "framing" => ChoiceSource::Framing,
+                other => ChoiceSource::Other(other.to_string()),
+            },
+        })
+        .collect()
     }
 
     /// The guarantee rows.
@@ -547,7 +567,9 @@ impl ProtocolSummary {
         self.guarantees
             .iter()
             .map(|row| GuaranteeView {
-                guarantee: Guarantee::from_name(&row.guarantee).map(|g| g.describe()).unwrap_or(&row.guarantee),
+                guarantee: Guarantee::from_name(&row.guarantee)
+                    .map(|g| g.describe())
+                    .unwrap_or(&row.guarantee),
                 held: row.held,
                 causes: row.causes.join("; "),
                 accepted: match row.acceptance.state.as_str() {
@@ -571,7 +593,11 @@ pub fn type_text(ty: &Type) -> String {
     match ty {
         Type::Primitive { name } | Type::Named { name, .. } => name.clone(),
         Type::Unit => "()".to_string(),
-        Type::Array { element, length, max } => format!("{}{}", type_text(element), array_suffix(*length, *max)),
+        Type::Array {
+            element,
+            length,
+            max,
+        } => format!("{}{}", type_text(element), array_suffix(*length, *max)),
         Type::Union { members } => {
             let members: Vec<String> = members.iter().map(type_text).collect();
             format!("union({})", members.join(" "))
@@ -590,7 +616,11 @@ pub fn array_suffix(length: Option<u64>, max: Option<u64>) -> String {
 
 /// A function's signature as text: `place(order: Order) -> bool ! OutOfStock`.
 pub fn signature_text(f: &Function) -> String {
-    let args: Vec<String> = f.arguments.iter().map(|a| format!("{}: {}", a.name, type_text(&a.ty))).collect();
+    let args: Vec<String> = f
+        .arguments
+        .iter()
+        .map(|a| format!("{}: {}", a.name, type_text(&a.ty)))
+        .collect();
     let mut out = format!("{}({})", f.name, args.join(", "));
     if let Some(returns) = &f.returns {
         out.push_str(&format!(" -> {}", type_text(returns)));
@@ -638,7 +668,11 @@ pub fn structure(model: &DocModel) -> BTreeMap<String, String> {
                     }
                     "enum".to_string()
                 }
-                Unit::Error { ordinal, fields: fs, .. } => {
+                Unit::Error {
+                    ordinal,
+                    fields: fs,
+                    ..
+                } => {
                     fields(fs, &mut member);
                     format!("error #{ordinal}")
                 }
@@ -648,7 +682,9 @@ pub fn structure(model: &DocModel) -> BTreeMap<String, String> {
                     }
                     "protocol".to_string()
                 }
-                Unit::Validator { targets, params, .. } => {
+                Unit::Validator {
+                    targets, params, ..
+                } => {
                     fields(params, &mut member);
                     let targets: Vec<String> = targets.iter().map(type_text).collect();
                     format!("validator for {}", targets.join(", "))
@@ -732,7 +768,13 @@ fn capitalize(text: &str) -> String {
 /// One entry as `comline_core::schema::ir::diff` serializes it (a `kind`
 /// and that kind's fields, plus core's `old` / `new` lines), ready to show.
 pub fn entry(change: &Value, severity: &'static str) -> Entry {
-    let get = |k: &str| change.get(k).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    let get = |k: &str| {
+        change
+            .get(k)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
     let opt = |k: &str| change.get(k).and_then(|v| v.as_str()).map(str::to_string);
     let kind = get("kind");
     let line = |k: &str| opt(k).filter(|l| !l.trim().is_empty());
@@ -747,7 +789,11 @@ pub fn entry(change: &Value, severity: &'static str) -> Entry {
     } else if let Some(t) = opt("type_name") {
         (t, opt("field_name"))
     } else if let Some(e) = opt("enum_name") {
-        let variant = if kind == "renamed_enum_variant" { None } else { opt("variant") };
+        let variant = if kind == "renamed_enum_variant" {
+            None
+        } else {
+            opt("variant")
+        };
         (e, variant)
     } else if let Some(p) = opt("protocol_name") {
         (p, opt("function_name"))
@@ -778,9 +824,15 @@ pub fn entry(change: &Value, severity: &'static str) -> Entry {
                 "made required".to_string()
             }
         }
-        "renamed_enum_variant" => format!("variant {} renamed to {}", get("old_name"), get("new_name")),
+        "renamed_enum_variant" => {
+            format!("variant {} renamed to {}", get("old_name"), get("new_name"))
+        }
         "renamed_protocol" => format!("renamed from {}", get("old_name")),
-        "renamed_namespace" => format!("namespace {} renamed to {}", get("old_name"), get("new_name")),
+        "renamed_namespace" => format!(
+            "namespace {} renamed to {}",
+            get("old_name"),
+            get("new_name")
+        ),
         "added_thrown_error" => format!("now throws {}", get("error")),
         "removed_thrown_error" => format!("no longer throws {}", get("error")),
         "changed_error_ordinal" => "ordinal changed".to_string(),
@@ -797,7 +849,9 @@ pub fn entry(change: &Value, severity: &'static str) -> Entry {
         "deprecated" => "deprecated".to_string(),
         "validation_tightened" => "validation tightened".to_string(),
         "validation_loosened" => "validation loosened".to_string(),
-        k if k.starts_with("reordered_") => format!("{} reordered", words(&k["reordered_".len()..])),
+        k if k.starts_with("reordered_") => {
+            format!("{} reordered", words(&k["reordered_".len()..]))
+        }
         k if k.starts_with("added_") => format!("{} added", words(&k["added_".len()..])),
         k if k.starts_with("removed_") => format!("{} removed", words(&k["removed_".len()..])),
         "" => "changed".to_string(),
@@ -811,7 +865,12 @@ pub fn entry(change: &Value, severity: &'static str) -> Entry {
             change
                 .get(k)
                 .and_then(|v| v.as_array())
-                .map(|a| a.iter().filter_map(|g| g.as_str()).collect::<Vec<_>>().join(", "))
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|g| g.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
                 .unwrap_or_default()
         };
         let from_to = |a: &str, b: &str| match (opt(a), opt(b)) {
@@ -819,18 +878,28 @@ pub fn entry(change: &Value, severity: &'static str) -> Entry {
             _ => None,
         };
         match kind.as_str() {
-            "docstring_changed" | "doc_changed" => Some("Its documentation changed; nothing on the wire did.".to_string()),
+            "docstring_changed" | "doc_changed" => {
+                Some("Its documentation changed; nothing on the wire did.".to_string())
+            }
             "changed_error_ordinal" => {
                 let n = |k: &str| change.get(k).map(|v| v.to_string()).unwrap_or_default();
-                Some(format!("Its ordinal, which travels on the wire, moved from {} to {}.", n("old_ordinal"), n("new_ordinal")))
+                Some(format!(
+                    "Its ordinal, which travels on the wire, moved from {} to {}.",
+                    n("old_ordinal"),
+                    n("new_ordinal")
+                ))
             }
             "gave_up_guarantees" => Some(format!("It gives up: {}.", list("guarantees"))),
             "restored_guarantees" => Some(format!("It keeps again: {}.", list("guarantees"))),
-            "reordered_functions" => Some("Its functions moved, and its framing calls them by position.".to_string()),
-            "reordered_fields" => Some("Its fields moved, and a format in play keys them by position.".to_string()),
-            "reordered_enum_variants" => {
-                Some("Its variants moved, and a format in play encodes them by position.".to_string())
+            "reordered_functions" => {
+                Some("Its functions moved, and its framing calls them by position.".to_string())
             }
+            "reordered_fields" => {
+                Some("Its fields moved, and a format in play keys them by position.".to_string())
+            }
+            "reordered_enum_variants" => Some(
+                "Its variants moved, and a format in play encodes them by position.".to_string(),
+            ),
             "renamed_namespace" => Some("Paths that name it need the new name.".to_string()),
             "changed_field_type" | "type_respelled" => from_to("old_type", "new_type"),
             "changed_constant_type" => from_to("old_type", "new_type"),
@@ -842,7 +911,16 @@ pub fn entry(change: &Value, severity: &'static str) -> Entry {
         }
     };
 
-    Entry { severity, unit, member, subject, what, old, new, sentence }
+    Entry {
+        severity,
+        unit,
+        member,
+        subject,
+        what,
+        old,
+        new,
+        sentence,
+    }
 }
 
 /// Where the unit (or function) an entry is about is documented in
@@ -850,7 +928,10 @@ pub fn entry(change: &Value, severity: &'static str) -> Entry {
 /// `None` when the version doesn't have it (a removal).
 pub fn unit_target(model: &DocModel, e: &Entry, ext: &str) -> Option<String> {
     model.modules.iter().find_map(|module| {
-        let unit = module.units.iter().find(|u| u.name() == Some(e.unit.as_str()))?;
+        let unit = module
+            .units
+            .iter()
+            .find(|u| u.name() == Some(e.unit.as_str()))?;
         let mut id = anchor(&e.unit);
         if let (Unit::Protocol { functions, .. }, Some(member)) = (unit, &e.member) {
             if functions.iter().any(|f| &f.name == member) {
@@ -893,11 +974,25 @@ impl Token {
     }
 }
 
-const KEYWORDS: &[&str] =
-    &["struct", "enum", "protocol", "function", "error", "const", "type", "validator", "for", "optional", "message", "union", "use", "as"];
+const KEYWORDS: &[&str] = &[
+    "struct",
+    "enum",
+    "protocol",
+    "function",
+    "error",
+    "const",
+    "type",
+    "validator",
+    "for",
+    "optional",
+    "message",
+    "union",
+    "use",
+    "as",
+];
 const PRIMITIVES: &[&str] = &[
-    "u8", "u16", "u32", "u64", "u128", "s8", "s16", "s32", "s64", "s128", "i8", "i16", "i32", "i64", "f32", "f64",
-    "bool", "string", "bytes", "char",
+    "u8", "u16", "u32", "u64", "u128", "s8", "s16", "s32", "s64", "s128", "i8", "i16", "i32",
+    "i64", "f32", "f64", "bool", "string", "bytes", "char",
 ];
 
 /// An IDL line split into highlighted pieces. Lexical only: a lowercase
@@ -910,7 +1005,9 @@ pub fn tokens(line: &str) -> Vec<(Token, &str)> {
         let rest = &line[i..];
         let c = rest.chars().next().unwrap();
         let len = if c.is_whitespace() {
-            let n = rest.find(|ch: char| !ch.is_whitespace()).unwrap_or(rest.len());
+            let n = rest
+                .find(|ch: char| !ch.is_whitespace())
+                .unwrap_or(rest.len());
             out.push((Token::Space, &rest[..n]));
             n
         } else if rest.starts_with("/*") {
@@ -934,18 +1031,30 @@ pub fn tokens(line: &str) -> Vec<(Token, &str)> {
             out.push((Token::Literal, &rest[..n]));
             n
         } else if c == '@' {
-            let n = 1 + rest[1..].find(|ch: char| !(ch.is_alphanumeric() || ch == '_')).unwrap_or(rest.len() - 1);
+            let n = 1 + rest[1..]
+                .find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
+                .unwrap_or(rest.len() - 1);
             out.push((Token::Annotation, &rest[..n]));
             n
-        } else if c.is_ascii_digit() || (c == '-' && bytes.get(i + 1).is_some_and(u8::is_ascii_digit)) {
-            let n = 1 + rest[1..].find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '.' || ch == '_')).unwrap_or(rest.len() - 1);
+        } else if c.is_ascii_digit()
+            || (c == '-' && bytes.get(i + 1).is_some_and(u8::is_ascii_digit))
+        {
+            let n = 1 + rest[1..]
+                .find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '.' || ch == '_'))
+                .unwrap_or(rest.len() - 1);
             out.push((Token::Literal, &rest[..n]));
             n
         } else if c.is_alphabetic() || c == '_' {
-            let n = rest.find(|ch: char| !(ch.is_alphanumeric() || ch == '_')).unwrap_or(rest.len());
+            let n = rest
+                .find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
+                .unwrap_or(rest.len());
             let word = &rest[..n];
             // `max` is a keyword only right after `[`, as in the IDL.
-            let after_bracket = out.iter().rev().find(|(t, _)| *t != Token::Space).is_some_and(|(_, s)| *s == "[");
+            let after_bracket = out
+                .iter()
+                .rev()
+                .find(|(t, _)| *t != Token::Space)
+                .is_some_and(|(_, s)| *s == "[");
             let token = if KEYWORDS.contains(&word) || (word == "max" && after_bracket) {
                 Token::Keyword
             } else if word == "true" || word == "false" {
@@ -983,30 +1092,49 @@ mod tests {
         });
         let e = entry(&change, "major");
         assert_eq!(e.title(), "Greeter.greet: signature changed");
-        assert_eq!((e.unit.as_str(), e.member.as_deref()), ("Greeter", Some("greet")));
+        assert_eq!(
+            (e.unit.as_str(), e.member.as_deref()),
+            ("Greeter", Some("greet"))
+        );
         assert_eq!(e.sentence, None);
-        let docs = entry(&serde_json::json!({"kind": "docstring_changed", "name": "Order.total"}), "patch");
+        let docs = entry(
+            &serde_json::json!({"kind": "docstring_changed", "name": "Order.total"}),
+            "patch",
+        );
         assert_eq!(docs.title(), "Order.total: documentation changed");
         assert!(docs.sentence.is_some());
     }
 
     #[test]
     fn highlights_an_idl_line() {
-        let classes: Vec<(Option<&str>, &str)> = tokens("function greet(name: string) -> Greeting ! Rude;")
-            .into_iter()
-            .filter(|(t, _)| *t != Token::Space)
-            .map(|(t, s)| (t.class(), s))
-            .collect();
+        let classes: Vec<(Option<&str>, &str)> =
+            tokens("function greet(name: string) -> Greeting ! Rude;")
+                .into_iter()
+                .filter(|(t, _)| *t != Token::Space)
+                .map(|(t, s)| (t.class(), s))
+                .collect();
         assert_eq!(
             classes,
             [
-                (Some("k"), "function"), (Some("n"), "greet"), (Some("p"), "("), (Some("n"), "name"), (Some("p"), ":"),
-                (Some("t"), "string"), (Some("p"), ")"), (Some("p"), "->"), (Some("t"), "Greeting"), (Some("p"), "!"),
-                (Some("t"), "Rude"), (Some("p"), ";"),
+                (Some("k"), "function"),
+                (Some("n"), "greet"),
+                (Some("p"), "("),
+                (Some("n"), "name"),
+                (Some("p"), ":"),
+                (Some("t"), "string"),
+                (Some("p"), ")"),
+                (Some("p"), "->"),
+                (Some("t"), "Greeting"),
+                (Some("p"), "!"),
+                (Some("t"), "Rude"),
+                (Some("p"), ";"),
             ]
         );
-        let lit: Vec<&str> =
-            tokens("@deprecated = \"use \\\"x\\\"\" f\"{a}\" 42").into_iter().filter(|(t, _)| *t == Token::Literal).map(|(_, s)| s).collect();
+        let lit: Vec<&str> = tokens("@deprecated = \"use \\\"x\\\"\" f\"{a}\" 42")
+            .into_iter()
+            .filter(|(t, _)| *t == Token::Literal)
+            .map(|(_, s)| s)
+            .collect();
         assert_eq!(lit, ["\"use \\\"x\\\"\"", "f\"{a}\"", "42"]);
     }
 
@@ -1020,13 +1148,14 @@ mod tests {
 
     #[test]
     fn max_is_a_keyword_right_after_a_bracket_only() {
-        let kinds: Vec<(Token, &str)> =
-            tokens("names: char[max 64]").into_iter().filter(|(t, _)| *t != Token::Space).collect();
+        let kinds: Vec<(Token, &str)> = tokens("names: char[max 64]")
+            .into_iter()
+            .filter(|(t, _)| *t != Token::Space)
+            .collect();
         assert!(kinds.contains(&(Token::Keyword, "max")), "{kinds:?}");
         assert!(tokens("max: u32").contains(&(Token::Name, "max")));
         assert_eq!(array_suffix(None, Some(64)), "[max 64]");
         assert_eq!(array_suffix(Some(2), None), "[2]");
         assert_eq!(array_suffix(None, None), "[]");
     }
-
 }

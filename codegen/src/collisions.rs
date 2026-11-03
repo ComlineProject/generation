@@ -157,12 +157,21 @@ mod tests {
         let err = check(
             "gateway",
             &units,
-            [Derived::new("GatewayError", "protocol `Gateway`'s error union")],
+            [Derived::new(
+                "GatewayError",
+                "protocol `Gateway`'s error union",
+            )],
         )
         .expect_err("the name is taken");
         let message = err.to_string();
-        assert!(message.contains("declares error `GatewayError`"), "{message}");
-        assert!(message.contains("protocol `Gateway`'s error union"), "{message}");
+        assert!(
+            message.contains("declares error `GatewayError`"),
+            "{message}"
+        );
+        assert!(
+            message.contains("protocol `Gateway`'s error union"),
+            "{message}"
+        );
     }
 
     /// The kind does not matter — core keeps one flat declaration namespace.
@@ -172,7 +181,10 @@ mod tests {
         let err = check(
             "chat",
             &units,
-            [Derived::new("RudeError", "the thrown class for error `Rude`")],
+            [Derived::new(
+                "RudeError",
+                "the thrown class for error `Rude`",
+            )],
         )
         .expect_err("the name is taken");
         assert!(err.to_string().contains("declares struct `RudeError`"));
@@ -191,8 +203,14 @@ mod tests {
         .expect_err("both want the same name");
         let message = err.to_string();
         assert!(message.contains("twice"), "{message}");
-        assert!(message.contains("protocol `Chat`, function `send`"), "{message}");
-        assert!(message.contains("protocol `ChatSend`'s error union"), "{message}");
+        assert!(
+            message.contains("protocol `Chat`, function `send`"),
+            "{message}"
+        );
+        assert!(
+            message.contains("protocol `ChatSend`'s error union"),
+            "{message}"
+        );
     }
 
     #[test]

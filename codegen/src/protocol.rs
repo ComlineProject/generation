@@ -73,7 +73,11 @@ pub struct Request {
 impl Request {
     /// `body`, stamped with this build's protocol and IR format.
     pub fn new(body: RequestBody) -> Self {
-        Request { protocol: PROTOCOL_VERSION, ir_format: IR_FORMAT, body }
+        Request {
+            protocol: PROTOCOL_VERSION,
+            ir_format: IR_FORMAT,
+            body,
+        }
     }
 
     pub fn describe() -> Self {
@@ -238,7 +242,10 @@ impl GenerateRequest {
     /// The target's version, parsed.
     pub fn version(&self) -> Result<LangVersion> {
         LangVersion::parse(&self.target.version).ok_or_else(|| {
-            eyre!("`{}` isn't a version: expected dotted numbers, like `1.70.0`", self.target.version)
+            eyre!(
+                "`{}` isn't a version: expected dotted numbers, like `1.70.0`",
+                self.target.version
+            )
         })
     }
 
@@ -247,7 +254,10 @@ impl GenerateRequest {
     /// that needs a newer toolchain. An unparsable version counts as the
     /// floor; [`crate::features::refuse_unsupported`] has already refused it.
     pub fn at_least(&self, boundary: &str) -> bool {
-        match (LangVersion::parse(&self.target.version), LangVersion::parse(boundary)) {
+        match (
+            LangVersion::parse(&self.target.version),
+            LangVersion::parse(boundary),
+        ) {
             (Some(version), Some(boundary)) => version >= boundary,
             _ => false,
         }
@@ -275,7 +285,9 @@ pub enum Response {
     /// The rendered documentation, as files.
     Render(Generated),
     /// The request was refused or generation failed.
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 /// A generator's answer to [`RequestBody::Describe`].
@@ -367,7 +379,10 @@ pub struct SupportInfo {
 
 impl SupportInfo {
     pub fn table(table: SupportTable) -> Vec<SupportInfo> {
-        table.iter().map(|(feature, support)| SupportInfo::new(feature.id(), support)).collect()
+        table
+            .iter()
+            .map(|(feature, support)| SupportInfo::new(feature.id(), support))
+            .collect()
     }
 
     fn new(feature: &str, s: &Support) -> Self {
@@ -376,7 +391,9 @@ impl SupportInfo {
             state: s.state.id().to_string(),
             note: s.note.map(str::to_string),
             tracking: s.tracking.map(str::to_string),
-            since: s.since.map(|since| (since.version.to_string(), since.why.to_string())),
+            since: s
+                .since
+                .map(|since| (since.version.to_string(), since.why.to_string())),
         }
     }
 }
@@ -410,13 +427,19 @@ pub struct FileOut {
 
 impl From<GeneratedFile> for FileOut {
     fn from(f: GeneratedFile) -> Self {
-        FileOut { path: path_string(&f.path), contents: f.contents.into_bytes() }
+        FileOut {
+            path: path_string(&f.path),
+            contents: f.contents.into_bytes(),
+        }
     }
 }
 
 /// `path` with `/` separators on every platform.
 fn path_string(path: &std::path::Path) -> String {
-    path.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/")
+    path.components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 impl FileOut {
@@ -459,7 +482,11 @@ pub fn describe(registry: &Registry) -> Description {
 pub fn respond(registry: &Registry, request: &[u8]) -> Response {
     let header: Header = match decode(request) {
         Ok(header) => header,
-        Err(e) => return error(format!("the request isn't a generator protocol request: {e}")),
+        Err(e) => {
+            return error(format!(
+                "the request isn't a generator protocol request: {e}"
+            ))
+        }
     };
     if header.protocol != PROTOCOL_VERSION {
         return error(format!(
@@ -490,7 +517,11 @@ fn render(registry: &Registry, req: &RenderRequest) -> Response {
         return error(format!(
             "no renderer `{}` here (offered: {})",
             req.renderer,
-            if offered.is_empty() { "none".to_string() } else { offered.join(", ") }
+            if offered.is_empty() {
+                "none".to_string()
+            } else {
+                offered.join(", ")
+            }
         ));
     };
     if !renderer.model_versions.contains(&req.model_version) {
@@ -500,11 +531,16 @@ fn render(registry: &Registry, req: &RenderRequest) -> Response {
         ));
     }
     match catch_unwind(AssertUnwindSafe(|| (renderer.render)(req))) {
-        Ok(Ok(files)) => {
-            Response::Render(Generated { files: files.into_iter().map(FileOut::from).collect(), diagnostics: vec![] })
-        }
+        Ok(Ok(files)) => Response::Render(Generated {
+            files: files.into_iter().map(FileOut::from).collect(),
+            diagnostics: vec![],
+        }),
         Ok(Err(e)) => error(format!("{e:#}")),
-        Err(panic) => error(format!("the `{}` renderer panicked: {}", renderer.id, panic_message(&*panic))),
+        Err(panic) => error(format!(
+            "the `{}` renderer panicked: {}",
+            renderer.id,
+            panic_message(&*panic)
+        )),
     }
 }
 
@@ -522,11 +558,16 @@ fn generate(registry: &Registry, req: &GenerateRequest) -> Response {
         Err(e) => return error(e.to_string()),
     };
     match catch_unwind(AssertUnwindSafe(|| (resolved.generator.generate)(req))) {
-        Ok(Ok(files)) => {
-            Response::Generate(Generated { files: files.into_iter().map(FileOut::from).collect(), diagnostics: vec![] })
-        }
+        Ok(Ok(files)) => Response::Generate(Generated {
+            files: files.into_iter().map(FileOut::from).collect(),
+            diagnostics: vec![],
+        }),
         Ok(Err(e)) => error(format!("{e:#}")),
-        Err(panic) => error(format!("the {} generator panicked: {}", req.target.language, panic_message(&*panic))),
+        Err(panic) => error(format!(
+            "the {} generator panicked: {}",
+            req.target.language,
+            panic_message(&*panic)
+        )),
     }
 }
 
@@ -551,7 +592,9 @@ pub fn serve_stdio(registry: &Registry) -> ExitCode {
     let mut request = Vec::new();
     let response = match std::io::stdin().lock().read_to_end(&mut request) {
         Ok(_) => handle(registry, &request),
-        Err(e) => encode(&error(format!("couldn't read the request from stdin: {e}"))).unwrap_or_default(),
+        Err(e) => {
+            encode(&error(format!("couldn't read the request from stdin: {e}"))).unwrap_or_default()
+        }
     };
     let mut stdout = std::io::stdout().lock();
     match stdout.write_all(&response).and_then(|()| stdout.flush()) {
@@ -572,7 +615,10 @@ mod tests {
         vec![
             FrozenUnit::Namespace("demo".into()),
             FrozenUnit::Import("std::Str".into(), Some("S".into()), (3, 9)),
-            FrozenUnit::Property { name: "framing".into(), value: ConfigValue::Str("datagram@2".into()) },
+            FrozenUnit::Property {
+                name: "framing".into(),
+                value: ConfigValue::Str("datagram@2".into()),
+            },
         ]
     }
 
@@ -580,15 +626,25 @@ mod tests {
         GenerateRequest {
             mode: Mode::Lib,
             schemas: vec![("demo".into(), units()), ("other::nested".into(), vec![])],
-            package: PackageMeta { name: "demo".into(), version: "1.2.3".into() },
-            target: TargetLanguage { language: "toy".into(), version: "2.1".into() },
+            package: PackageMeta {
+                name: "demo".into(),
+                version: "1.2.3".into(),
+            },
+            target: TargetLanguage {
+                language: "toy".into(),
+                version: "2.1".into(),
+            },
             wire_format: "packed@1".into(),
             external_std: true,
             validate_on_decode: ValidateOnDecode::Collect,
             async_api: true,
             encodings: BTreeMap::from([(
                 "datagram@2".into(),
-                EncodingMapping { type_path: "x::Datagram2".into(), package: Some("x".into()), version: None },
+                EncodingMapping {
+                    type_path: "x::Datagram2".into(),
+                    package: Some("x".into()),
+                    version: None,
+                },
             )]),
         }
     }
@@ -635,9 +691,20 @@ mod tests {
             ext: "toy",
             generate: toy,
             support: TOY_SUPPORT,
-            versions: Versions { floor: "2.0", changes: &[], verified_up_to: "2.0", forward_compatible: true },
+            versions: Versions {
+                floor: "2.0",
+                changes: &[],
+                verified_up_to: "2.0",
+                forward_compatible: true,
+            },
         });
-        registry.register_renderer(Renderer { id: "toydoc", model_versions: &[1], version: "1", sites: false, render: toydoc });
+        registry.register_renderer(Renderer {
+            id: "toydoc",
+            model_versions: &[1],
+            version: "1",
+            sites: false,
+            render: toydoc,
+        });
         registry
     }
 
@@ -645,7 +712,10 @@ mod tests {
         if req.model == "panic" {
             panic!("toydoc panicked");
         }
-        Ok(vec![GeneratedFile { path: "index.md".into(), contents: format!("{} {:?}", req.model, req.options.links) }])
+        Ok(vec![GeneratedFile {
+            path: "index.md".into(),
+            contents: format!("{} {:?}", req.model, req.options.links),
+        }])
     }
 
     fn render_request(model: &str) -> RenderRequest {
@@ -663,20 +733,34 @@ mod tests {
     #[test]
     fn render_answers_with_files() {
         round_trip(Request::render(render_request("{}")));
-        round_trip(Response::Render(Generated { files: vec![], diagnostics: vec![] }));
-        let Response::Render(out) = answer(&Request::render(render_request("{}"))) else { panic!() };
-        assert_eq!(out.files, [FileOut { path: "index.md".into(), contents: b"{} {\"std\": \"https://x/std\"}".to_vec() }]);
+        round_trip(Response::Render(Generated {
+            files: vec![],
+            diagnostics: vec![],
+        }));
+        let Response::Render(out) = answer(&Request::render(render_request("{}"))) else {
+            panic!()
+        };
+        assert_eq!(
+            out.files,
+            [FileOut {
+                path: "index.md".into(),
+                contents: b"{} {\"std\": \"https://x/std\"}".to_vec()
+            }]
+        );
     }
 
     #[test]
     fn render_refusals_are_errors() {
         let mut unknown = render_request("{}");
         unknown.renderer = "html".into();
-        assert!(message(answer(&Request::render(unknown))).contains("no renderer `html` here (offered: toydoc)"));
+        assert!(message(answer(&Request::render(unknown)))
+            .contains("no renderer `html` here (offered: toydoc)"));
         let mut newer = render_request("{}");
         newer.model_version = 9;
         assert!(message(answer(&Request::render(newer))).contains("documentation model 9"));
-        assert!(message(answer(&Request::render(render_request("panic")))).contains("toydoc panicked"));
+        assert!(
+            message(answer(&Request::render(render_request("panic")))).contains("toydoc panicked")
+        );
     }
 
     #[test]
@@ -687,7 +771,12 @@ mod tests {
             protocols: (u32, u32),
             ir_formats: Vec<u32>,
         }
-        let bytes = encode(&Old { languages: vec![], protocols: (0, 0), ir_formats: vec![3] }).unwrap();
+        let bytes = encode(&Old {
+            languages: vec![],
+            protocols: (0, 0),
+            ir_formats: vec![3],
+        })
+        .unwrap();
         assert_eq!(decode::<Description>(&bytes).unwrap().renderers, vec![]);
     }
 
@@ -711,13 +800,26 @@ mod tests {
     #[test]
     fn responses_round_trip() {
         round_trip(Response::Describe(describe(&registry())));
-        round_trip(Response::Describe(Description { languages: vec![], protocols: (0, 3), ir_formats: vec![], renderers: vec![] }));
+        round_trip(Response::Describe(Description {
+            languages: vec![],
+            protocols: (0, 3),
+            ir_formats: vec![],
+            renderers: vec![],
+        }));
         round_trip(Response::Generate(Generated {
-            files: vec![FileOut { path: "a/b.rs".into(), contents: vec![0, 159, 255] }],
+            files: vec![FileOut {
+                path: "a/b.rs".into(),
+                contents: vec![0, 159, 255],
+            }],
             diagnostics: vec!["careful".into()],
         }));
-        round_trip(Response::Generate(Generated { files: vec![], diagnostics: vec![] }));
-        round_trip(Response::Error { message: "no".into() });
+        round_trip(Response::Generate(Generated {
+            files: vec![],
+            diagnostics: vec![],
+        }));
+        round_trip(Response::Error {
+            message: "no".into(),
+        });
     }
 
     #[test]
@@ -745,7 +847,13 @@ mod tests {
             async_api: r.async_api,
         };
         let decoded: GenerateRequest = decode(&encode(&old).unwrap()).unwrap();
-        assert_eq!(decoded, GenerateRequest { encodings: BTreeMap::new(), ..r });
+        assert_eq!(
+            decoded,
+            GenerateRequest {
+                encodings: BTreeMap::new(),
+                ..r
+            }
+        );
     }
 
     fn answer(request: &Request) -> Response {
@@ -761,7 +869,10 @@ mod tests {
 
     #[test]
     fn a_protocol_mismatch_names_both_sides() {
-        let request = Request { protocol: 7, ..Request::describe() };
+        let request = Request {
+            protocol: 7,
+            ..Request::describe()
+        };
         assert_eq!(
             message(answer(&request)),
             "the request speaks generator protocol 7, and this generator speaks protocol 0"
@@ -770,10 +881,15 @@ mod tests {
 
     #[test]
     fn an_ir_format_mismatch_names_both_sides() {
-        let request = Request { ir_format: 999, ..Request::generate(gen_request()) };
+        let request = Request {
+            ir_format: 999,
+            ..Request::generate(gen_request())
+        };
         assert_eq!(
             message(answer(&request)),
-            format!("the request carries IR format 999, and this generator reads IR format {IR_FORMAT}")
+            format!(
+                "the request carries IR format 999, and this generator reads IR format {IR_FORMAT}"
+            )
         );
     }
 
@@ -785,7 +901,12 @@ mod tests {
             ir_format: u32,
             body: (u8, String),
         }
-        let bytes = encode(&Future { protocol: 1, ir_format: IR_FORMAT, body: (9, "?".into()) }).unwrap();
+        let bytes = encode(&Future {
+            protocol: 1,
+            ir_format: IR_FORMAT,
+            body: (9, "?".into()),
+        })
+        .unwrap();
         let response: Response = decode(&handle(&registry(), &bytes)).unwrap();
         assert!(message(response).starts_with("the request speaks generator protocol 1,"));
     }
@@ -794,13 +915,18 @@ mod tests {
     fn bad_input_is_an_error_not_a_panic() {
         for bytes in [&b""[..], b"\xff\x00garbage", b"\xa0"] {
             let response: Response = decode(&handle(&registry(), bytes)).unwrap();
-            assert!(matches!(response, Response::Error { .. }), "{bytes:?}: {response:?}");
+            assert!(
+                matches!(response, Response::Error { .. }),
+                "{bytes:?}: {response:?}"
+            );
         }
     }
 
     #[test]
     fn describe_lists_the_registry() {
-        let Response::Describe(d) = answer(&Request::describe()) else { panic!() };
+        let Response::Describe(d) = answer(&Request::describe()) else {
+            panic!()
+        };
         assert_eq!(d.protocols, (PROTOCOL_VERSION, PROTOCOL_VERSION));
         assert_eq!(d.ir_formats, vec![IR_FORMAT]);
         assert_eq!(d.languages.len(), 1);
@@ -808,29 +934,52 @@ mod tests {
         assert_eq!(d.languages[0].versions.floor, "2.0");
         assert_eq!(d.languages[0].support[0].feature, "structs");
         assert_eq!(d.languages[0].support[0].state, "supported");
-        assert_eq!(d.renderers, [RendererInfo { id: "toydoc".into(), model_versions: vec![1], version: "1".into(), sites: false }]);
+        assert_eq!(
+            d.renderers,
+            [RendererInfo {
+                id: "toydoc".into(),
+                model_versions: vec![1],
+                version: "1".into(),
+                sites: false
+            }]
+        );
     }
 
     #[test]
     fn handle_generates_what_the_generator_does() {
         let req = gen_request();
         let direct: Vec<FileOut> = toy(&req).unwrap().into_iter().map(FileOut::from).collect();
-        let Response::Generate(generated) = answer(&Request::generate(req)) else { panic!() };
+        let Response::Generate(generated) = answer(&Request::generate(req)) else {
+            panic!()
+        };
         assert_eq!(generated.files, direct);
         assert_eq!(generated.files[1].path, "other/nested.toy");
-        assert_eq!(generated.files[1].path_buf(), PathBuf::from("other").join("nested.toy"));
+        assert_eq!(
+            generated.files[1].path_buf(),
+            PathBuf::from("other").join("nested.toy")
+        );
     }
 
     #[test]
     fn generator_failures_are_errors() {
         let mut req = gen_request();
         req.package.name = "fail".into();
-        assert_eq!(message(answer(&Request::generate(req.clone()))), "refused: fail");
+        assert_eq!(
+            message(answer(&Request::generate(req.clone()))),
+            "refused: fail"
+        );
         req.package.name = "panic".into();
-        assert_eq!(message(answer(&Request::generate(req.clone()))), "the toy generator panicked: toy panicked");
+        assert_eq!(
+            message(answer(&Request::generate(req.clone()))),
+            "the toy generator panicked: toy panicked"
+        );
         req.target.version = "1.0".into();
-        assert!(message(answer(&Request::generate(req.clone()))).contains("older than the toy generator handles"));
+        assert!(message(answer(&Request::generate(req.clone())))
+            .contains("older than the toy generator handles"));
         req.target.language = "go".into();
-        assert_eq!(message(answer(&Request::generate(req))), "this build of comline has no go generator");
+        assert_eq!(
+            message(answer(&Request::generate(req))),
+            "this build of comline has no go generator"
+        );
     }
 }

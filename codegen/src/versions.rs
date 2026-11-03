@@ -27,7 +27,11 @@ impl LangVersion {
     pub fn parse(text: &str) -> Option<Self> {
         let parts = text
             .split('.')
-            .map(|part| part.parse::<u64>().ok().filter(|_| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit())))
+            .map(|part| {
+                part.parse::<u64>()
+                    .ok()
+                    .filter(|_| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+            })
             .collect::<Option<Vec<_>>>()?;
         Some(Self(parts))
     }
@@ -100,13 +104,18 @@ pub struct Versions {
 impl Versions {
     /// Every boundary, the floor first.
     pub fn boundaries(&self) -> Vec<&'static str> {
-        std::iter::once(self.floor).chain(self.changes.iter().copied()).collect()
+        std::iter::once(self.floor)
+            .chain(self.changes.iter().copied())
+            .collect()
     }
 
     /// The boundary `version` generates as: the newest at or below it.
     /// `None` below the floor.
     pub fn boundary_for(&self, version: &LangVersion) -> Option<&'static str> {
-        self.boundaries().into_iter().rev().find(|b| known(b) <= *version)
+        self.boundaries()
+            .into_iter()
+            .rev()
+            .find(|b| known(b) <= *version)
     }
 
     /// Whether generating for `version` is verified: within the verified
@@ -133,7 +142,10 @@ impl Versions {
         let boundaries = self.boundaries();
         for pair in boundaries.windows(2) {
             if known(pair[0]) >= known(pair[1]) {
-                problems.push(format!("boundary `{}` doesn't come after `{}`", pair[1], pair[0]));
+                problems.push(format!(
+                    "boundary `{}` doesn't come after `{}`",
+                    pair[1], pair[0]
+                ));
             }
         }
         let newest = boundaries.last().expect("the floor is a boundary");
@@ -146,12 +158,18 @@ impl Versions {
         for (feature, support) in support {
             if let Some(since) = support.since {
                 match LangVersion::parse(since.version) {
-                    None => problems.push(format!("`{}`'s gate `{}` isn't a version", feature.id(), since.version)),
-                    Some(gate) if !boundaries.iter().any(|b| known(b) == gate) => problems.push(format!(
-                        "`{}` is gated at `{}`, which isn't a boundary - list it in `changes`",
+                    None => problems.push(format!(
+                        "`{}`'s gate `{}` isn't a version",
                         feature.id(),
                         since.version
                     )),
+                    Some(gate) if !boundaries.iter().any(|b| known(b) == gate) => {
+                        problems.push(format!(
+                            "`{}` is gated at `{}`, which isn't a boundary - list it in `changes`",
+                            feature.id(),
+                            since.version
+                        ))
+                    }
                     Some(_) => {}
                 }
             }
@@ -203,7 +221,12 @@ mod tests {
     #[test]
     fn past_the_ceiling_is_verified_only_in_a_forward_compatible_language() {
         assert!(RUST.is_verified(&v("1.99")));
-        let ts = Versions { floor: "5.0", changes: &[], verified_up_to: "5.9", forward_compatible: false };
+        let ts = Versions {
+            floor: "5.0",
+            changes: &[],
+            verified_up_to: "5.9",
+            forward_compatible: false,
+        };
         assert!(ts.is_verified(&v("5.9.3")));
         assert!(!ts.is_verified(&v("6.0")));
     }
@@ -211,8 +234,14 @@ mod tests {
     #[test]
     fn a_gate_must_be_a_boundary() {
         const TABLE: SupportTable = &[
-            (Feature::Connections, Support::supported().from("1.75.0", "async fn in traits")),
-            (Feature::Unions, Support::supported().from("1.76.0", "nothing in particular")),
+            (
+                Feature::Connections,
+                Support::supported().from("1.75.0", "async fn in traits"),
+            ),
+            (
+                Feature::Unions,
+                Support::supported().from("1.76.0", "nothing in particular"),
+            ),
         ];
         assert_eq!(
             RUST.problems(TABLE),
@@ -222,7 +251,12 @@ mod tests {
 
     #[test]
     fn boundaries_go_up_and_stay_verified() {
-        let bad = Versions { floor: "1.70.0", changes: &["1.70", "2.0"], verified_up_to: "1.90", forward_compatible: true };
+        let bad = Versions {
+            floor: "1.70.0",
+            changes: &["1.70", "2.0"],
+            verified_up_to: "1.90",
+            forward_compatible: true,
+        };
         assert_eq!(
             bad.problems(&[]),
             [
@@ -230,7 +264,10 @@ mod tests {
                 "boundary `2.0` is past `verified_up_to` (`1.90`): a boundary is a version conformance runs at",
             ]
         );
-        let unparsable = Versions { floor: "one", ..RUST };
+        let unparsable = Versions {
+            floor: "one",
+            ..RUST
+        };
         assert_eq!(unparsable.problems(&[]), ["`one` isn't a version"]);
     }
 }

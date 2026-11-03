@@ -30,13 +30,21 @@ use comline_core::schema::idl::annotations::{FORMAT_JSON, FRAMING_JSONRPC, HANDS
 use comline_core::schema::ir::frozen::unit::FrozenUnit;
 use eyre::{bail, Result};
 
-const KINDS: [EncodingKind; 3] = [EncodingKind::Format, EncodingKind::Framing, EncodingKind::Handshake];
+const KINDS: [EncodingKind; 3] = [
+    EncodingKind::Format,
+    EncodingKind::Framing,
+    EncodingKind::Handshake,
+];
 
 /// The canonical spelling of an encoding name: an official encoding's, in
 /// any of its spellings, as core resolves it (`json-rpc` and `jsonrpc@1` are
 /// `jsonrpc`); any other name unchanged.
 pub fn canonical(name: &str) -> String {
-    KINDS.iter().find_map(|kind| official::resolve(*kind, name)).unwrap_or(name).to_string()
+    KINDS
+        .iter()
+        .find_map(|kind| official::resolve(*kind, name))
+        .unwrap_or(name)
+        .to_string()
 }
 
 /// Every encoding a package uses, canonical: its wire format, and each
@@ -79,18 +87,27 @@ pub fn resolve(
 ) -> Result<BTreeMap<String, EncodingMapping>> {
     let mut resolved = BTreeMap::new();
     for unit in official.iter().chain(declared) {
-        let ConfigUnit::Encoding { name, map, .. } = unit else { continue };
+        let ConfigUnit::Encoding { name, map, .. } = unit else {
+            continue;
+        };
         if let Some(m) = map.get(language) {
             resolved.insert(
                 canonical(name),
-                EncodingMapping { type_path: m.ty.clone(), package: m.package.clone(), version: m.version.clone() },
+                EncodingMapping {
+                    type_path: m.ty.clone(),
+                    package: m.package.clone(),
+                    version: m.version.clone(),
+                },
             );
         }
     }
     for (name, mapping) in overrides {
         resolved.insert(canonical(name), mapping.clone());
     }
-    let missing: Vec<&String> = used.iter().filter(|name| !resolved.contains_key(*name)).collect();
+    let missing: Vec<&String> = used
+        .iter()
+        .filter(|name| !resolved.contains_key(*name))
+        .collect();
     if !missing.is_empty() {
         let lines: Vec<String> = missing
             .iter()
@@ -142,8 +159,14 @@ pub fn type_of<'a>(encodings: &'a BTreeMap<String, EncodingMapping>, name: &str)
 /// declares and overrides nothing gets. For a request built by hand (tests,
 /// tools); the CLI and the playground go through [`fill`].
 pub fn official_for(language: &str) -> BTreeMap<String, EncodingMapping> {
-    resolve(language, official::units(), &[], &BTreeMap::new(), &BTreeSet::new())
-        .expect("nothing is used, so nothing can be missing")
+    resolve(
+        language,
+        official::units(),
+        &[],
+        &BTreeMap::new(),
+        &BTreeSet::new(),
+    )
+    .expect("nothing is used, so nothing can be missing")
 }
 
 /// Fill `req.encodings` for its target's language: [`resolve`] over what
@@ -166,13 +189,24 @@ mod tests {
     use comline_core::schema::ir::frozen::unit::ConfigValue;
 
     fn mapping(ty: &str) -> EncodingMapping {
-        EncodingMapping { type_path: ty.into(), package: None, version: None }
+        EncodingMapping {
+            type_path: ty.into(),
+            package: None,
+            version: None,
+        }
     }
 
     fn declared(name: &str, kind: EncodingKind, rust: Option<&str>) -> ConfigUnit {
         let mut map = BTreeMap::new();
         if let Some(ty) = rust {
-            map.insert("rust".to_string(), Suggested { ty: ty.into(), package: Some("acme".into()), version: Some("1".into()) });
+            map.insert(
+                "rust".to_string(),
+                Suggested {
+                    ty: ty.into(),
+                    package: Some("acme".into()),
+                    version: Some("1".into()),
+                },
+            );
         }
         ConfigUnit::Encoding {
             name: name.into(),
@@ -187,7 +221,10 @@ mod tests {
     fn protocol(framing: &str) -> FrozenUnit {
         FrozenUnit::Protocol {
             docstring: String::new(),
-            parameters: vec![FrozenUnit::Property { name: "framing".into(), value: ConfigValue::Str(framing.into()) }],
+            parameters: vec![FrozenUnit::Property {
+                name: "framing".into(),
+                value: ConfigValue::Str(framing.into()),
+            }],
             name: "P".into(),
             functions: vec![],
             span: (0, 0),
@@ -201,26 +238,62 @@ mod tests {
         assert_eq!(canonical("datagram@1"), "datagram");
         assert_eq!(canonical("datagram@2"), "datagram@2");
         assert_eq!(canonical("com.acme.lines@1"), "com.acme.lines@1");
-        let all = resolve("rust", official::units(), &[], &BTreeMap::new(), &BTreeSet::new()).unwrap();
+        let all = resolve(
+            "rust",
+            official::units(),
+            &[],
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+        )
+        .unwrap();
         let keys: Vec<&str> = all.keys().map(String::as_str).collect();
-        assert_eq!(keys, ["comline@1", "datagram", "datagram@2", "json@1", "jsonrpc", "msgpack@1", "packed@1"]);
-        assert_eq!(all["jsonrpc"].type_path, "comline_runtime::framing::JsonRpcFraming");
+        assert_eq!(
+            keys,
+            [
+                "comline@1",
+                "datagram",
+                "datagram@2",
+                "json@1",
+                "jsonrpc",
+                "msgpack@1",
+                "packed@1"
+            ]
+        );
+        assert_eq!(
+            all["jsonrpc"].type_path,
+            "comline_runtime::framing::JsonRpcFraming"
+        );
     }
 
     #[test]
     fn an_override_beats_the_declaration() {
-        let declared = [declared("com.acme.lines@1", EncodingKind::Framing, Some("acme::Lines"))];
+        let declared = [declared(
+            "com.acme.lines@1",
+            EncodingKind::Framing,
+            Some("acme::Lines"),
+        )];
         let used = BTreeSet::from(["com.acme.lines@1".to_string()]);
-        let suggested = resolve("rust", official::units(), &declared, &BTreeMap::new(), &used).unwrap();
+        let suggested = resolve(
+            "rust",
+            official::units(),
+            &declared,
+            &BTreeMap::new(),
+            &used,
+        )
+        .unwrap();
         assert_eq!(suggested["com.acme.lines@1"].type_path, "acme::Lines");
-        assert_eq!(suggested["com.acme.lines@1"].package.as_deref(), Some("acme"));
+        assert_eq!(
+            suggested["com.acme.lines@1"].package.as_deref(),
+            Some("acme")
+        );
         let overrides = BTreeMap::from([("com.acme.lines@1".to_string(), mapping("mine::Lines"))]);
         let overridden = resolve("rust", official::units(), &declared, &overrides, &used).unwrap();
         assert_eq!(overridden["com.acme.lines@1"], mapping("mine::Lines"));
         // An override of an official name, by its declared spelling, lands on
         // the canonical key.
         let overrides = BTreeMap::from([("jsonrpc@1".to_string(), mapping("mine::Rpc"))]);
-        let overridden = resolve("rust", official::units(), &[], &overrides, &BTreeSet::new()).unwrap();
+        let overridden =
+            resolve("rust", official::units(), &[], &overrides, &BTreeSet::new()).unwrap();
         assert_eq!(overridden["jsonrpc"], mapping("mine::Rpc"));
         assert!(!overridden.contains_key("jsonrpc@1"));
     }
@@ -228,20 +301,63 @@ mod tests {
     #[test]
     fn an_unmapped_encoding_is_an_error_only_when_used() {
         let declared = [declared("com.acme.lines@1", EncodingKind::Framing, None)];
-        assert!(resolve("rust", official::units(), &declared, &BTreeMap::new(), &BTreeSet::new()).is_ok());
+        assert!(resolve(
+            "rust",
+            official::units(),
+            &declared,
+            &BTreeMap::new(),
+            &BTreeSet::new()
+        )
+        .is_ok());
         let used = BTreeSet::from(["com.acme.lines@1".to_string()]);
-        let err = resolve("rust", official::units(), &declared, &BTreeMap::new(), &used).unwrap_err().to_string();
-        assert!(err.starts_with("encoding `com.acme.lines@1` has no rust mapping: map it in comline.toml"), "{err}");
+        let err = resolve(
+            "rust",
+            official::units(),
+            &declared,
+            &BTreeMap::new(),
+            &used,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            err.starts_with(
+                "encoding `com.acme.lines@1` has no rust mapping: map it in comline.toml"
+            ),
+            "{err}"
+        );
         // MessagePack has no TypeScript mapping.
         let used = BTreeSet::from(["msgpack@1".to_string()]);
-        let err = resolve("typescript", official::units(), &[], &BTreeMap::new(), &used).unwrap_err().to_string();
-        assert!(err.contains("`msgpack@1` has no typescript mapping"), "{err}");
+        let err = resolve(
+            "typescript",
+            official::units(),
+            &[],
+            &BTreeMap::new(),
+            &used,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            err.contains("`msgpack@1` has no typescript mapping"),
+            "{err}"
+        );
     }
 
     #[test]
     fn used_names_the_format_framings_and_handshakes() {
-        let schemas = vec![("app".to_string(), vec![protocol("com.acme.lines@1"), protocol("json-rpc")])];
+        let schemas = vec![(
+            "app".to_string(),
+            vec![protocol("com.acme.lines@1"), protocol("json-rpc")],
+        )];
         let used: Vec<String> = used(&schemas, "packed@1").into_iter().collect();
-        assert_eq!(used, ["com.acme.lines@1", "comline@1", "json@1", "jsonrpc", "packed@1"]);
+        assert_eq!(
+            used,
+            [
+                "com.acme.lines@1",
+                "comline@1",
+                "json@1",
+                "jsonrpc",
+                "packed@1"
+            ]
+        );
     }
 }

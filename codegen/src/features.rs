@@ -18,10 +18,10 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use comline_core::schema::ir::frozen::types::{PrimitiveType, TypeRef};
 use comline_core::schema::idl::annotations::{
     DEFAULT_FORMAT, FORMAT_JSON, FORMAT_MSGPACK, FORMAT_PACKED, FRAMING_JSONRPC, HANDSHAKE_NONE,
 };
+use comline_core::schema::ir::frozen::types::{PrimitiveType, TypeRef};
 use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenUnit};
 use eyre::{eyre, Result};
 
@@ -261,16 +261,36 @@ pub struct Since {
 
 impl Support {
     pub const fn supported() -> Self {
-        Support { state: State::Supported, note: None, tracking: None, since: None }
+        Support {
+            state: State::Supported,
+            note: None,
+            tracking: None,
+            since: None,
+        }
     }
     pub const fn partial(note: &'static str) -> Self {
-        Support { state: State::Partial, note: Some(note), tracking: None, since: None }
+        Support {
+            state: State::Partial,
+            note: Some(note),
+            tracking: None,
+            since: None,
+        }
     }
     pub const fn ignored(note: &'static str) -> Self {
-        Support { state: State::Ignored, note: Some(note), tracking: None, since: None }
+        Support {
+            state: State::Ignored,
+            note: Some(note),
+            tracking: None,
+            since: None,
+        }
     }
     pub const fn unsupported(note: &'static str) -> Self {
-        Support { state: State::Unsupported, note: Some(note), tracking: None, since: None }
+        Support {
+            state: State::Unsupported,
+            note: Some(note),
+            tracking: None,
+            since: None,
+        }
     }
     pub const fn tracked(mut self, tracking: &'static str) -> Self {
         self.tracking = Some(tracking);
@@ -365,11 +385,20 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
 
     for (namespace, units) in schemas {
         let mut push = |feature, owner: String, span: Option<(usize, usize)>| {
-            uses.push(FeatureUse { feature, namespace: namespace.clone(), owner, span: known(span) });
+            uses.push(FeatureUse {
+                feature,
+                namespace: namespace.clone(),
+                owner,
+                span: known(span),
+            });
         };
 
         if namespace.contains('/') || namespace.contains("::") {
-            push(Feature::NestedNamespaces, format!("schema '{namespace}'"), None);
+            push(
+                Feature::NestedNamespaces,
+                format!("schema '{namespace}'"),
+                None,
+            );
         }
 
         for unit in units {
@@ -377,21 +406,49 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                 FrozenUnit::Import(path, _, span) => {
                     push(Feature::Imports, format!("use {path}"), Some(*span));
                 }
-                FrozenUnit::Struct { name, fields, parameters, span, .. } => {
+                FrozenUnit::Struct {
+                    name,
+                    fields,
+                    parameters,
+                    span,
+                    ..
+                } => {
                     push(Feature::Structs, format!("struct '{name}'"), Some(*span));
                     if has_property(parameters, "max_depth") {
-                        push(Feature::Bounds, format!("struct '{name}', `@max_depth`"), Some(*span));
+                        push(
+                            Feature::Bounds,
+                            format!("struct '{name}', `@max_depth`"),
+                            Some(*span),
+                        );
                     }
-                    fields_of(&format!("struct '{name}'"), fields, &mut push, &mut validators);
+                    fields_of(
+                        &format!("struct '{name}'"),
+                        fields,
+                        &mut push,
+                        &mut validators,
+                    );
                 }
-                FrozenUnit::Error { name, fields, span, .. } => {
+                FrozenUnit::Error {
+                    name, fields, span, ..
+                } => {
                     push(Feature::Errors, format!("error '{name}'"), *span);
-                    fields_of(&format!("error '{name}'"), fields, &mut push, &mut validators);
+                    fields_of(
+                        &format!("error '{name}'"),
+                        fields,
+                        &mut push,
+                        &mut validators,
+                    );
                 }
                 FrozenUnit::Enum { name, span, .. } => {
                     push(Feature::Enums, format!("enum '{name}'"), Some(*span));
                 }
-                FrozenUnit::TypeAlias { name, target, parameters, span, .. } => {
+                FrozenUnit::TypeAlias {
+                    name,
+                    target,
+                    parameters,
+                    span,
+                    ..
+                } => {
                     let owner = format!("type alias '{name}'");
                     push(Feature::TypeAliases, owner.clone(), Some(*span));
                     types_of(&owner, target, false, Some(*span), &mut push);
@@ -402,7 +459,13 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                     push(Feature::Constants, owner.clone(), Some(*span));
                     types_of(&owner, ty, false, Some(*span), &mut push);
                 }
-                FrozenUnit::Protocol { name, functions, parameters, span, .. } => {
+                FrozenUnit::Protocol {
+                    name,
+                    functions,
+                    parameters,
+                    span,
+                    ..
+                } => {
                     let owner = format!("protocol '{name}'");
                     push(Feature::Protocols, owner.clone(), Some(*span));
                     // Core has already applied the package's `wire.framing`.
@@ -420,7 +483,14 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                         connections = true;
                     }
                     for function in functions {
-                        let FrozenUnit::Function { name: f, arguments, _return, throws, span, .. } = function
+                        let FrozenUnit::Function {
+                            name: f,
+                            arguments,
+                            _return,
+                            throws,
+                            span,
+                            ..
+                        } = function
                         else {
                             continue;
                         };
@@ -433,7 +503,13 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                             types_of(&owner, &argument.ty, false, Some(argument.span), &mut push);
                         }
                         if let Some(ret) = _return {
-                            types_of(&format!("{owner}, return"), ret, false, Some(*span), &mut push);
+                            types_of(
+                                &format!("{owner}, return"),
+                                ret,
+                                false,
+                                Some(*span),
+                                &mut push,
+                            );
                         }
                     }
                 }
@@ -443,17 +519,28 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
     }
 
     let mut option = |feature, owner: &str| {
-        uses.push(FeatureUse { feature, namespace: String::new(), owner: owner.to_string(), span: None });
+        uses.push(FeatureUse {
+            feature,
+            namespace: String::new(),
+            owner: owner.to_string(),
+            span: None,
+        });
     };
     if options.mode == Some(Mode::Lib) {
         option(Feature::LibMode, "the generation request (`lib` mode)");
     }
     if options.external_std {
-        option(Feature::ExternalStd, "the generation request (`external_std`)");
+        option(
+            Feature::ExternalStd,
+            "the generation request (`external_std`)",
+        );
     }
     // Only a schema with checks to run makes the option mean anything.
     if validators && options.validate_on_decode != ValidateOnDecode::Off {
-        option(Feature::ValidateOnDecode, "the generation request (`validate_on_decode`)");
+        option(
+            Feature::ValidateOnDecode,
+            "the generation request (`validate_on_decode`)",
+        );
     }
     // Only connection protocols have an async form.
     if connections && options.async_api {
@@ -487,7 +574,15 @@ fn fields_of(
     validators: &mut bool,
 ) {
     for field in fields {
-        let FrozenUnit::Field { name, ty, optional, parameters, span, .. } = field else {
+        let FrozenUnit::Field {
+            name,
+            ty,
+            optional,
+            parameters,
+            span,
+            ..
+        } = field
+        else {
             continue;
         };
         let owner = format!("{owner}, field '{name}'");
@@ -512,12 +607,20 @@ fn types_of(
 ) {
     match ty {
         // An array of `char` is a string: bounded, or of an exact length.
-        TypeRef::Array { element, length, max } if **element == TypeRef::Primitive(PrimitiveType::Char) => {
+        TypeRef::Array {
+            element,
+            length,
+            max,
+        } if **element == TypeRef::Primitive(PrimitiveType::Char) => {
             if length.is_some() || max.is_some() {
                 push(Feature::Bounds, owner.to_string(), span);
             }
         }
-        TypeRef::Array { element, length, max } => {
+        TypeRef::Array {
+            element,
+            length,
+            max,
+        } => {
             if max.is_some() {
                 push(Feature::Bounds, owner.to_string(), span);
             }
@@ -552,7 +655,11 @@ fn validator_refs(
     let mut any = false;
     for parameter in parameters {
         if let FrozenUnit::ValidatorRef { name, span, .. } = parameter {
-            push(Feature::Validators, format!("{owner}, validator '{name}'"), Some(*span));
+            push(
+                Feature::Validators,
+                format!("{owner}, validator '{name}'"),
+                Some(*span),
+            );
             any = true;
         }
     }
@@ -561,7 +668,9 @@ fn validator_refs(
 
 /// Whether `parameters` set `@key`, whatever its value.
 fn has_property(parameters: &[FrozenUnit], key: &str) -> bool {
-    parameters.iter().any(|p| matches!(p, FrozenUnit::Property { name, .. } if name == key))
+    parameters
+        .iter()
+        .any(|p| matches!(p, FrozenUnit::Property { name, .. } if name == key))
 }
 
 /// The text of a scalar `@key = value` annotation.
@@ -578,7 +687,11 @@ fn annotation<'a>(parameters: &'a [FrozenUnit], key: &str) -> Option<&'a str> {
 /// Refuses `req` when it uses a feature `support` marks unsupported, naming
 /// every such use - not only the first. A generator calls this before
 /// generating anything.
-pub fn refuse_unsupported(generator: &str, req: &GenerateRequest, support: SupportTable) -> Result<()> {
+pub fn refuse_unsupported(
+    generator: &str,
+    req: &GenerateRequest,
+    support: SupportTable,
+) -> Result<()> {
     let version = req.version()?;
     let uses = used(&req.schemas, &Options::of(req));
     let unsupported = unsupported_uses(&uses, support, &version);
@@ -594,13 +707,20 @@ pub fn unsupported_uses<'u>(
     support: SupportTable,
     version: &LangVersion,
 ) -> Vec<&'u FeatureUse> {
-    uses.iter().filter(|u| support_at(support, u.feature, version).state == State::Unsupported).collect()
+    uses.iter()
+        .filter(|u| support_at(support, u.feature, version).state == State::Unsupported)
+        .collect()
 }
 
 /// The message for a refused request: one line per feature, then its uses.
 /// `generator` is the language's name, which a gated feature's line uses to
 /// name the version to declare (`rust#1.75.0`).
-pub fn refusal(generator: &str, unsupported: &[&FeatureUse], support: SupportTable, version: &LangVersion) -> String {
+pub fn refusal(
+    generator: &str,
+    unsupported: &[&FeatureUse],
+    support: SupportTable,
+    version: &LangVersion,
+) -> String {
     let mut by_feature: BTreeMap<Feature, Vec<&FeatureUse>> = BTreeMap::new();
     for u in unsupported {
         by_feature.entry(u.feature).or_default().push(u);
@@ -622,7 +742,12 @@ pub fn refusal(generator: &str, unsupported: &[&FeatureUse], support: SupportTab
                 );
             }
             None => {
-                let _ = write!(message, "the {generator} generator doesn't support {} ({})", feature.title(), feature.id());
+                let _ = write!(
+                    message,
+                    "the {generator} generator doesn't support {} ({})",
+                    feature.title(),
+                    feature.id()
+                );
                 if let Some(note) = s.note {
                     let _ = write!(message, ": {note}");
                 }
@@ -634,8 +759,12 @@ pub fn refusal(generator: &str, unsupported: &[&FeatureUse], support: SupportTab
         message.push('\n');
         for u in uses {
             match u.namespace.is_empty() {
-                true => { let _ = writeln!(message, "  - {}", u.owner); }
-                false => { let _ = writeln!(message, "  - schema '{}', {}", u.namespace, u.owner); }
+                true => {
+                    let _ = writeln!(message, "  - {}", u.owner);
+                }
+                false => {
+                    let _ = writeln!(message, "  - schema '{}', {}", u.namespace, u.owner);
+                }
             }
         }
     }
@@ -652,7 +781,11 @@ pub fn strip(
     options: &Options,
 ) -> Option<(Vec<(String, Vec<FrozenUnit>)>, Options)> {
     let without_refs = |parameters: &[FrozenUnit]| -> Vec<FrozenUnit> {
-        parameters.iter().filter(|p| !matches!(p, FrozenUnit::ValidatorRef { .. })).cloned().collect()
+        parameters
+            .iter()
+            .filter(|p| !matches!(p, FrozenUnit::ValidatorRef { .. }))
+            .cloned()
+            .collect()
     };
     match feature {
         Feature::Validators => {
@@ -664,14 +797,17 @@ pub fn strip(
                         .map(|unit| {
                             let mut unit = unit.clone();
                             match &mut unit {
-                                FrozenUnit::Struct { fields, .. } | FrozenUnit::Error { fields, .. } => {
+                                FrozenUnit::Struct { fields, .. }
+                                | FrozenUnit::Error { fields, .. } => {
                                     for field in fields {
                                         if let FrozenUnit::Field { parameters, .. } = field {
                                             *parameters = without_refs(parameters);
                                         }
                                     }
                                 }
-                                FrozenUnit::TypeAlias { parameters, .. } => *parameters = without_refs(parameters),
+                                FrozenUnit::TypeAlias { parameters, .. } => {
+                                    *parameters = without_refs(parameters)
+                                }
                                 _ => {}
                             }
                             unit
@@ -681,20 +817,37 @@ pub fn strip(
                 })
                 .collect();
             // No checks left to run on decode either.
-            let options = Options { validate_on_decode: ValidateOnDecode::Off, ..options.clone() };
+            let options = Options {
+                validate_on_decode: ValidateOnDecode::Off,
+                ..options.clone()
+            };
             Some((schemas, options))
         }
         Feature::ValidateOnDecode => {
-            let options = Options { validate_on_decode: ValidateOnDecode::Off, ..options.clone() };
+            let options = Options {
+                validate_on_decode: ValidateOnDecode::Off,
+                ..options.clone()
+            };
             Some((schemas.to_vec(), options))
         }
-        Feature::Async => Some((schemas.to_vec(), Options { async_api: false, ..options.clone() })),
+        Feature::Async => Some((
+            schemas.to_vec(),
+            Options {
+                async_api: false,
+                ..options.clone()
+            },
+        )),
         // Every maximum and exact string length dropped (`char[max 64]` and
         // `char[8]` back to `string`), and every depth limit.
         Feature::Bounds => {
             let schemas = schemas
                 .iter()
-                .map(|(namespace, units)| (namespace.clone(), units.iter().map(without_bounds).collect()))
+                .map(|(namespace, units)| {
+                    (
+                        namespace.clone(),
+                        units.iter().map(without_bounds).collect(),
+                    )
+                })
                 .collect();
             Some((schemas, options.clone()))
         }
@@ -706,7 +859,8 @@ pub fn strip(
 fn without_bounds(unit: &FrozenUnit) -> FrozenUnit {
     let mut unit = unit.clone();
     let no_depth = |parameters: &mut Vec<FrozenUnit>| {
-        parameters.retain(|p| !matches!(p, FrozenUnit::Property { name, .. } if name == "max_depth"))
+        parameters
+            .retain(|p| !matches!(p, FrozenUnit::Property { name, .. } if name == "max_depth"))
     };
     let fields = |fields: &mut Vec<FrozenUnit>| {
         for field in fields {
@@ -716,19 +870,28 @@ fn without_bounds(unit: &FrozenUnit) -> FrozenUnit {
         }
     };
     match &mut unit {
-        FrozenUnit::Struct { fields: f, parameters, .. } => {
+        FrozenUnit::Struct {
+            fields: f,
+            parameters,
+            ..
+        } => {
             fields(f);
             no_depth(parameters);
         }
         FrozenUnit::Error { fields: f, .. } => fields(f),
-        FrozenUnit::TypeAlias { target, parameters, .. } => {
+        FrozenUnit::TypeAlias {
+            target, parameters, ..
+        } => {
             *target = target.without_bounds();
             no_depth(parameters);
         }
         FrozenUnit::Constant { ty, .. } => *ty = ty.without_bounds(),
         FrozenUnit::Protocol { functions, .. } => {
             for function in functions {
-                if let FrozenUnit::Function { arguments, _return, .. } = function {
+                if let FrozenUnit::Function {
+                    arguments, _return, ..
+                } = function
+                {
                     for argument in arguments {
                         argument.ty = argument.ty.without_bounds();
                     }
@@ -765,7 +928,12 @@ pub fn markdown(columns: &[Column], evidence: &BTreeMap<(String, Feature), Vec<S
     }
     out.push('\n');
     for &feature in Feature::ALL {
-        let _ = write!(out, "| {} <br><sub>`{}`</sub> |", feature.title(), feature.id());
+        let _ = write!(
+            out,
+            "| {} <br><sub>`{}`</sub> |",
+            feature.title(),
+            feature.id()
+        );
         for c in columns {
             let s = support_for(c.support, feature);
             let mut cell = match s.state {
@@ -787,8 +955,16 @@ pub fn markdown(columns: &[Column], evidence: &BTreeMap<(String, Feature), Vec<S
                 let _ = write!(cell, " ({tracking})");
             }
             // The first few; the JSON has them all.
-            if let Some(fixtures) = evidence.get(&(c.generator.to_string(), feature)).filter(|f| !f.is_empty()) {
-                let mut shown = fixtures.iter().take(3).map(|f| format!("`{f}`")).collect::<Vec<_>>().join(", ");
+            if let Some(fixtures) = evidence
+                .get(&(c.generator.to_string(), feature))
+                .filter(|f| !f.is_empty())
+            {
+                let mut shown = fixtures
+                    .iter()
+                    .take(3)
+                    .map(|f| format!("`{f}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 if fixtures.len() > 3 {
                     let _ = write!(shown, " +{} more", fixtures.len() - 3);
                 }
@@ -803,7 +979,10 @@ pub fn markdown(columns: &[Column], evidence: &BTreeMap<(String, Feature), Vec<S
 
 /// The matrix as JSON: `{ "features": [...], "generators": [...] }`, each
 /// generator's `support` keyed by feature id.
-pub fn json(columns: &[Column], evidence: &BTreeMap<(String, Feature), Vec<String>>) -> serde_json::Value {
+pub fn json(
+    columns: &[Column],
+    evidence: &BTreeMap<(String, Feature), Vec<String>>,
+) -> serde_json::Value {
     let features: Vec<serde_json::Value> = Feature::ALL
         .iter()
         .map(|f| serde_json::json!({ "id": f.id(), "title": f.title(), "description": f.description() }))
@@ -864,18 +1043,29 @@ mod tests {
     }
 
     fn array(element: TypeRef, length: Option<u64>) -> TypeRef {
-        TypeRef::Array { element: Box::new(element), length, max: None }
+        TypeRef::Array {
+            element: Box::new(element),
+            length,
+            max: None,
+        }
     }
 
     #[test]
     fn bounds_and_chars_are_uses_and_bounds_strip() {
         let char_ = TypeRef::Primitive(PrimitiveType::Char);
-        let bounded = |element: TypeRef, max: u64| TypeRef::Array { element: Box::new(element), length: None, max: Some(max) };
+        let bounded = |element: TypeRef, max: u64| TypeRef::Array {
+            element: Box::new(element),
+            length: None,
+            max: Some(max),
+        };
         let schemas = vec![(
             "api".to_string(),
             vec![FrozenUnit::Struct {
                 docstring: None,
-                parameters: vec![FrozenUnit::Property { name: "max_depth".into(), value: ConfigValue::Integer(8) }],
+                parameters: vec![FrozenUnit::Property {
+                    name: "max_depth".into(),
+                    value: ConfigValue::Integer(8),
+                }],
                 name: "S".into(),
                 fields: vec![
                     field("name", bounded(char_.clone(), 64), false),
@@ -888,13 +1078,23 @@ mod tests {
             }],
         )];
         let uses = used(&schemas, &Options::default());
-        assert_eq!(ids(&uses), ["structs", "bounds", "arrays", "bounds", "chars"]);
-        assert!(uses.iter().any(|u| u.feature == Feature::Bounds && u.owner == "struct 'S', `@max_depth`"));
+        assert_eq!(
+            ids(&uses),
+            ["structs", "bounds", "arrays", "bounds", "chars"]
+        );
+        assert!(uses
+            .iter()
+            .any(|u| u.feature == Feature::Bounds && u.owner == "struct 'S', `@max_depth`"));
         // A string isn't an array: neither `arrays` nor `fixed-arrays` for it.
-        assert!(!uses.iter().any(|u| u.owner.ends_with("'code'") && u.feature != Feature::Bounds));
+        assert!(!uses
+            .iter()
+            .any(|u| u.owner.ends_with("'code'") && u.feature != Feature::Bounds));
 
         let (stripped, _) = strip(Feature::Bounds, &schemas, &Options::default()).unwrap();
-        assert_eq!(ids(&used(&stripped, &Options::default())), ["structs", "arrays", "chars"]);
+        assert_eq!(
+            ids(&used(&stripped, &Options::default())),
+            ["structs", "arrays", "chars"]
+        );
     }
 
     fn ids(uses: &[FeatureUse]) -> Vec<&'static str> {
@@ -922,7 +1122,11 @@ mod tests {
                 fields: vec![
                     field("big", array(u8_.clone(), Some(64)), false),
                     field("nested", array(array(u8_.clone(), Some(64)), None), false),
-                    field("either", TypeRef::Union(vec![u8_.clone(), TypeRef::Named("T".into())]), true),
+                    field(
+                        "either",
+                        TypeRef::Union(vec![u8_.clone(), TypeRef::Named("T".into())]),
+                        true,
+                    ),
                 ],
                 span: (0, 100),
             }],
@@ -930,7 +1134,15 @@ mod tests {
         let uses = used(&schemas, &Options::default());
         assert_eq!(
             ids(&uses),
-            ["structs", "fixed-arrays", "arrays", "fixed-arrays", "large-fixed-arrays-nested", "optional-fields", "unions"]
+            [
+                "structs",
+                "fixed-arrays",
+                "arrays",
+                "fixed-arrays",
+                "large-fixed-arrays-nested",
+                "optional-fields",
+                "unions"
+            ]
         );
         let union = uses.iter().find(|u| u.feature == Feature::Unions).unwrap();
         assert_eq!(union.owner, "struct 'S', field 'either'");
@@ -939,11 +1151,17 @@ mod tests {
 
     #[test]
     fn validate_on_decode_is_only_a_use_with_validators() {
-        let options = Options { validate_on_decode: ValidateOnDecode::Collect, ..Options::default() };
+        let options = Options {
+            validate_on_decode: ValidateOnDecode::Collect,
+            ..Options::default()
+        };
         assert!(used(&[("api".into(), vec![])], &options).is_empty());
 
         let schemas = [("api".to_string(), checked_alias())];
-        assert_eq!(ids(&used(&schemas, &options)), ["type-aliases", "validators", "validate-on-decode"]);
+        assert_eq!(
+            ids(&used(&schemas, &options)),
+            ["type-aliases", "validators", "validate-on-decode"]
+        );
 
         // Stripped, neither is left.
         let (schemas, options) = strip(Feature::Validators, &schemas, &options).unwrap();
@@ -959,17 +1177,32 @@ mod tests {
             functions: vec![],
             span: (0, 1),
         };
-        let asynchronous = Options { async_api: true, ..Options::default() };
+        let asynchronous = Options {
+            async_api: true,
+            ..Options::default()
+        };
         // A lockstep client/server protocol has no async form.
-        let datagram1 = FrozenUnit::Property { name: "framing".into(), value: ConfigValue::Str("datagram".into()) };
+        let datagram1 = FrozenUnit::Property {
+            name: "framing".into(),
+            value: ConfigValue::Str("datagram".into()),
+        };
         let lockstep = [("api".to_string(), vec![protocol("Chat", vec![datagram1])])];
-        assert_eq!(ids(&used(&lockstep, &asynchronous)), ["protocols", "format-packed"]);
+        assert_eq!(
+            ids(&used(&lockstep, &asynchronous)),
+            ["protocols", "format-packed"]
+        );
 
         // A plain one is on a connection by default.
         let schemas = [("api".to_string(), vec![protocol("Chat", vec![])])];
-        assert_eq!(ids(&used(&schemas, &asynchronous)), ["protocols", "connections", "async", "format-packed"]);
+        assert_eq!(
+            ids(&used(&schemas, &asynchronous)),
+            ["protocols", "connections", "async", "format-packed"]
+        );
         let (schemas, options) = strip(Feature::Async, &schemas, &asynchronous).unwrap();
-        assert_eq!(ids(&used(&schemas, &options)), ["protocols", "connections", "format-packed"]);
+        assert_eq!(
+            ids(&used(&schemas, &options)),
+            ["protocols", "connections", "format-packed"]
+        );
     }
 
     #[test]
@@ -981,22 +1214,37 @@ mod tests {
             functions: vec![],
             span: (0, 1),
         };
-        let msgpack = Options { wire_format: Some("msgpack@1".into()), ..Options::default() };
+        let msgpack = Options {
+            wire_format: Some("msgpack@1".into()),
+            ..Options::default()
+        };
         let plain = [("api".to_string(), vec![protocol(vec![])])];
         assert!(ids(&used(&plain, &msgpack)).contains(&"format-msgpack"));
         // JSON-RPC carries JSON, and a package without protocols encodes
         // nothing.
-        let jsonrpc = FrozenUnit::Property { name: "framing".into(), value: ConfigValue::Str("jsonrpc".into()) };
+        let jsonrpc = FrozenUnit::Property {
+            name: "framing".into(),
+            value: ConfigValue::Str("jsonrpc".into()),
+        };
         let rpc = [("api".to_string(), vec![protocol(vec![jsonrpc])])];
-        assert!(!ids(&used(&rpc, &msgpack)).iter().any(|id| id.starts_with("format-")));
-        assert!(!ids(&used(&[("api".to_string(), vec![])], &msgpack)).iter().any(|id| id.starts_with("format-")));
+        assert!(!ids(&used(&rpc, &msgpack))
+            .iter()
+            .any(|id| id.starts_with("format-")));
+        assert!(!ids(&used(&[("api".to_string(), vec![])], &msgpack))
+            .iter()
+            .any(|id| id.starts_with("format-")));
     }
 
     /// `@validators = [V()]` on `type Name = string`.
     fn checked_alias() -> Vec<FrozenUnit> {
         vec![FrozenUnit::TypeAlias {
             docstring: None,
-            parameters: vec![FrozenUnit::ValidatorRef { name: "V".into(), args: vec![], span: (3, 4), arg_spans: vec![] }],
+            parameters: vec![FrozenUnit::ValidatorRef {
+                name: "V".into(),
+                args: vec![],
+                span: (3, 4),
+                arg_spans: vec![],
+            }],
             name: "Name".into(),
             target: TypeRef::Primitive(PrimitiveType::String),
             span: (0, 9),
@@ -1005,10 +1253,23 @@ mod tests {
 
     #[test]
     fn a_refusal_names_every_use() {
-        const TABLE: SupportTable = &[(Feature::Unions, Support::unsupported("no sum types yet").tracked("core#1"))];
+        const TABLE: SupportTable = &[(
+            Feature::Unions,
+            Support::unsupported("no sum types yet").tracked("core#1"),
+        )];
         let uses = vec![
-            FeatureUse { feature: Feature::Unions, namespace: "api".into(), owner: "struct 'A', field 'x'".into(), span: None },
-            FeatureUse { feature: Feature::Unions, namespace: "api".into(), owner: "type alias 'B'".into(), span: None },
+            FeatureUse {
+                feature: Feature::Unions,
+                namespace: "api".into(),
+                owner: "struct 'A', field 'x'".into(),
+                span: None,
+            },
+            FeatureUse {
+                feature: Feature::Unions,
+                namespace: "api".into(),
+                owner: "type alias 'B'".into(),
+                span: None,
+            },
         ];
         let at = LangVersion::parse("1.70.0").unwrap();
         let refused = unsupported_uses(&uses, TABLE, &at);
@@ -1021,7 +1282,10 @@ mod tests {
 
     #[test]
     fn below_its_gate_a_feature_is_refused_naming_the_version_to_declare() {
-        const TABLE: SupportTable = &[(Feature::Connections, Support::supported().from("1.75.0", "`async fn` in traits"))];
+        const TABLE: SupportTable = &[(
+            Feature::Connections,
+            Support::supported().from("1.75.0", "`async fn` in traits"),
+        )];
         let uses = vec![FeatureUse {
             feature: Feature::Connections,
             namespace: String::new(),
@@ -1041,14 +1305,32 @@ mod tests {
 
     #[test]
     fn the_matrix_shows_a_gate() {
-        const TABLE: SupportTable = &[(Feature::Connections, Support::supported().from("1.75.0", "`async fn` in traits"))];
-        let versions = Versions { floor: "1.70.0", changes: &["1.75.0"], verified_up_to: "1.90.0", forward_compatible: true };
-        let columns = [Column { generator: "rust", versions, support: TABLE }];
+        const TABLE: SupportTable = &[(
+            Feature::Connections,
+            Support::supported().from("1.75.0", "`async fn` in traits"),
+        )];
+        let versions = Versions {
+            floor: "1.70.0",
+            changes: &["1.75.0"],
+            verified_up_to: "1.90.0",
+            forward_compatible: true,
+        };
+        let columns = [Column {
+            generator: "rust",
+            versions,
+            support: TABLE,
+        }];
         let table = markdown(&columns, &BTreeMap::new());
         assert!(table.contains("| rust ≥ 1.70.0 |"), "{table}");
-        assert!(table.contains("✅ supported from 1.75.0 (❌ below: `async fn` in traits)"), "{table}");
+        assert!(
+            table.contains("✅ supported from 1.75.0 (❌ below: `async fn` in traits)"),
+            "{table}"
+        );
         let json = json(&columns, &BTreeMap::new());
-        assert_eq!(json["generators"][0]["support"]["connections"]["since"]["version"], "1.75.0");
+        assert_eq!(
+            json["generators"][0]["support"]["connections"]["since"]["version"],
+            "1.75.0"
+        );
         assert_eq!(json["generators"][0]["versions"]["changes"][0], "1.75.0");
     }
 }

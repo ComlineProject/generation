@@ -52,7 +52,7 @@ layout = "{{language}}/{{namespace}}.{{ext}}"
 mode = "code"
 external_std = false
 package_versions = "latest"
-validate_on_decode = "off"
+validate_on_decode = { off = "checked by the gateway" }
 async = false
 encodings = { "com.acme.lines@1" = "acme::LinesFraming", "jsonrpc@1" = { type = "Rpc", package = "rpc", version = "^1" } }
 
@@ -174,6 +174,10 @@ fn the_schema_rejects_what_the_parser_or_resolver_rejects() {
         "[generate]\nmode = \"dylib\"\n",
         "[[generate.target]]\nmode = \"library\"\n",
         "[generate]\nvalidate_on_decode = \"always\"\n",
+        // Off is a give-up with its reason, never bare.
+        "[generate]\nvalidate_on_decode = \"off\"\n",
+        "[generate]\nvalidate_on_decode = { off = \"\" }\n",
+        "[generate]\nvalidate_on_decode = { off = \"why\", also = 1 }\n",
         // The wrong type.
         "[generate]\nasync = \"yes\"\n",
         "[[generate.target]]\ntimeout = 0\n",
