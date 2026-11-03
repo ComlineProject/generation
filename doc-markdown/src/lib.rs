@@ -52,8 +52,17 @@ use comline_codegen::doc_model::*;
 pub const MODEL_VERSIONS: &[u32] = &[1];
 
 /// This renderer, as it registers.
-pub const RENDERER: Renderer =
-    Renderer { id: "markdown", model_versions: MODEL_VERSIONS, version: concat!(env!("CARGO_PKG_VERSION"), "+", env!("COMLINE_RENDERER_HASH")), sites: true, render };
+pub const RENDERER: Renderer = Renderer {
+    id: "markdown",
+    model_versions: MODEL_VERSIONS,
+    version: concat!(
+        env!("CARGO_PKG_VERSION"),
+        "+",
+        env!("COMLINE_RENDERER_HASH")
+    ),
+    sites: true,
+    render,
+};
 
 /// Register the Markdown renderer.
 pub fn register(registry: &mut Registry) {
@@ -63,7 +72,10 @@ pub fn register(registry: &mut Registry) {
 /// [`RENDERER`]'s entry point.
 pub fn render(req: &RenderRequest) -> Result<Vec<GeneratedFile>> {
     if !MODEL_VERSIONS.contains(&req.model_version) {
-        return Err(eyre!("documentation model {} isn't one this renderer reads ({MODEL_VERSIONS:?})", req.model_version));
+        return Err(eyre!(
+            "documentation model {} isn't one this renderer reads ({MODEL_VERSIONS:?})",
+            req.model_version
+        ));
     }
     if !req.options.versions.is_empty() {
         return Ok(vec![file("index.md", site_index(&req.options.versions)?)]);
@@ -78,11 +90,14 @@ fn site_index(versions: &[SiteVersion]) -> Result<String> {
     let mut groups: Vec<(&str, Vec<&SiteVersion>)> = vec![];
     for version in versions.iter().rev() {
         if name.is_empty() {
-            let model: DocModel =
-                serde_json::from_str(&version.model).map_err(|e| eyre!("version `{}`'s model doesn't parse: {e}", version.id))?;
+            let model: DocModel = serde_json::from_str(&version.model)
+                .map_err(|e| eyre!("version `{}`'s model doesn't parse: {e}", version.id))?;
             name = model.package.name;
         }
-        match groups.iter_mut().find(|(release, _)| *release == version.release) {
+        match groups
+            .iter_mut()
+            .find(|(release, _)| *release == version.release)
+        {
             Some((_, members)) => members.push(version),
             None => groups.push((&version.release, vec![version])),
         }
@@ -100,7 +115,10 @@ fn site_index(versions: &[SiteVersion]) -> Result<String> {
                 VersionKind::Dev => "dev build",
                 VersionKind::Unreleased => "the working tree's changes since the last build",
             };
-            out.push_str(&format!("- [{}]({}/index.md): {what}\n", version.id, version.id));
+            out.push_str(&format!(
+                "- [{}]({}/index.md): {what}\n",
+                version.id, version.id
+            ));
         }
         out.push('\n');
     }
@@ -110,15 +128,25 @@ fn site_index(versions: &[SiteVersion]) -> Result<String> {
 /// The version a site's index points at: the newest release, else the
 /// newest dev build, else the unreleased state.
 pub fn latest(versions: &[SiteVersion]) -> Option<&SiteVersion> {
-    [VersionKind::Release, VersionKind::Dev, VersionKind::Unreleased]
-        .into_iter()
-        .find_map(|kind| versions.iter().rev().find(|v| v.kind == kind))
+    [
+        VersionKind::Release,
+        VersionKind::Dev,
+        VersionKind::Unreleased,
+    ]
+    .into_iter()
+    .find_map(|kind| versions.iter().rev().find(|v| v.kind == kind))
 }
 
 /// The pages for the model `json`.
 pub fn render_json(json: &str, options: &RenderOptions) -> Result<Vec<GeneratedFile>> {
-    let model: DocModel = serde_json::from_str(json).map_err(|e| eyre!("the documentation model doesn't parse: {e}"))?;
-    Ok(Pages { model: &model, links: &options.links, notes: &options.notes }.all())
+    let model: DocModel = serde_json::from_str(json)
+        .map_err(|e| eyre!("the documentation model doesn't parse: {e}"))?;
+    Ok(Pages {
+        model: &model,
+        links: &options.links,
+        notes: &options.notes,
+    }
+    .all())
 }
 
 struct Pages<'a> {
@@ -149,7 +177,11 @@ fn annotation(a: &Annotation) -> String {
 /// in it.
 fn described_table(out: &mut String, head: [&str; 2], rows: &[(String, String, String)]) {
     if rows.iter().any(|r| !r.2.trim().is_empty()) {
-        let _ = write!(out, "| {} | {} | Description |\n|---|---|---|\n", head[0], head[1]);
+        let _ = write!(
+            out,
+            "| {} | {} | Description |\n|---|---|---|\n",
+            head[0], head[1]
+        );
         for (a, b, c) in rows {
             let _ = writeln!(out, "| {a} | {b} | {c} |");
         }
@@ -185,7 +217,10 @@ impl Pages<'_> {
     /// The dependencies documented here: those `[doc] links` gives no
     /// published docs.
     fn unlinked(&self) -> impl Iterator<Item = &Dependency> {
-        self.model.dependencies.iter().filter(|d| dependency_link(self.links, &d.package).is_none())
+        self.model
+            .dependencies
+            .iter()
+            .filter(|d| dependency_link(self.links, &d.package).is_none())
     }
 
     /// This version's notes, as a quote; empty without any.
@@ -218,7 +253,12 @@ impl Pages<'_> {
             out.push_str("## Modules\n\n| Module | Summary |\n|---|---|\n");
             for module in &self.model.modules {
                 let text = module.docs.as_deref().map(summary).unwrap_or("");
-                out.push_str(&format!("| [`{}`]({}) | {} |\n", module.path, page_of(&module.path), cell(text)));
+                out.push_str(&format!(
+                    "| [`{}`]({}) | {} |\n",
+                    module.path,
+                    page_of(&module.path),
+                    cell(text)
+                ));
             }
             out.push('\n');
         }
@@ -230,12 +270,22 @@ impl Pages<'_> {
                     .modules
                     .iter()
                     .map(|m| match link {
-                        Some(base) => format!("[`{}`]({})", m.path, external_url(base, &m.path, None)),
-                        None => format!("[`{}`]({})", m.path, dependency_page(&d.package, &m.path, "md")),
+                        Some(base) => {
+                            format!("[`{}`]({})", m.path, external_url(base, &m.path, None))
+                        }
+                        None => format!(
+                            "[`{}`]({})",
+                            m.path,
+                            dependency_page(&d.package, &m.path, "md")
+                        ),
                     })
                     .collect();
                 let package = match link {
-                    Some(base) => format!("[`{}`]({}/) (published docs)", d.package, base.trim_end_matches('/')),
+                    Some(base) => format!(
+                        "[`{}`]({}/) (published docs)",
+                        d.package,
+                        base.trim_end_matches('/')
+                    ),
                     None => format!("`{}`", d.package),
                 };
                 out.push_str(&format!("| {package} | {} |\n", modules.join(", ")));
@@ -251,21 +301,36 @@ impl Pages<'_> {
     fn nav(&self) -> String {
         let quote = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
         let mut out = String::from("# The pages, as an mkdocs / zensical `nav`.\nnav:\n");
-        out.push_str(&format!("  - {}: index.md\n", quote(&self.model.package.name)));
+        out.push_str(&format!(
+            "  - {}: index.md\n",
+            quote(&self.model.package.name)
+        ));
         for module in &self.model.modules {
-            out.push_str(&format!("  - {}: {}\n", quote(&module.path), page_of(&module.path)));
+            out.push_str(&format!(
+                "  - {}: {}\n",
+                quote(&module.path),
+                page_of(&module.path)
+            ));
         }
         if !self.model.dependencies.is_empty() {
             out.push_str("  - Dependencies:\n");
             for d in &self.model.dependencies {
                 match dependency_link(self.links, &d.package) {
                     Some(base) => {
-                        out.push_str(&format!("    - {}: {}\n", quote(&d.package), quote(&format!("{}/", base.trim_end_matches('/')))));
+                        out.push_str(&format!(
+                            "    - {}: {}\n",
+                            quote(&d.package),
+                            quote(&format!("{}/", base.trim_end_matches('/')))
+                        ));
                     }
                     None => {
                         out.push_str(&format!("    - {}:\n", quote(&d.package)));
                         for m in &d.modules {
-                            out.push_str(&format!("      - {}: {}\n", quote(&m.path), dependency_page(&d.package, &m.path, "md")));
+                            out.push_str(&format!(
+                                "      - {}: {}\n",
+                                quote(&m.path),
+                                dependency_page(&d.package, &m.path, "md")
+                            ));
                         }
                     }
                 }
@@ -295,7 +360,9 @@ impl Pages<'_> {
     /// A unit's value, for the module table's "Value" column: a constant's.
     fn value_cell(&self, unit: &Unit) -> Option<String> {
         match unit {
-            Unit::Constant { value: Some(value), .. } => Some(format!("`{value}`")),
+            Unit::Constant {
+                value: Some(value), ..
+            } => Some(format!("`{value}`")),
             _ => None,
         }
     }
@@ -311,8 +378,10 @@ impl Pages<'_> {
         let units: Vec<&Unit> = module.units.iter().filter(|u| u.name().is_some()).collect();
         if !units.is_empty() {
             // A "Type" and a "Value" column, each only when some unit has one.
-            let cells: Vec<(Option<String>, Option<String>)> =
-                units.iter().map(|u| (self.type_cell(page, u), self.value_cell(u))).collect();
+            let cells: Vec<(Option<String>, Option<String>)> = units
+                .iter()
+                .map(|u| (self.type_cell(page, u), self.value_cell(u)))
+                .collect();
             let typed = cells.iter().any(|(t, _)| t.is_some());
             let valued = cells.iter().any(|(_, v)| v.is_some());
             let mut head = String::from("| Item | Summary |");
@@ -327,7 +396,12 @@ impl Pages<'_> {
             for (unit, (ty, value)) in units.iter().zip(&cells) {
                 let name = unit.name().unwrap_or_default();
                 let text = unit.docs().map(|d| summary(&d.text)).unwrap_or("");
-                out.push_str(&format!("| {} [`{name}`](#{}) | {} |", unit.kind(), anchor(name), cell(text)));
+                out.push_str(&format!(
+                    "| {} [`{name}`](#{}) | {} |",
+                    unit.kind(),
+                    anchor(name),
+                    cell(text)
+                ));
                 if typed {
                     out.push_str(&format!(" {} |", cell(ty.as_deref().unwrap_or(""))));
                 }
@@ -346,7 +420,12 @@ impl Pages<'_> {
 
     fn unit(&self, out: &mut String, page: &str, unit: &Unit) {
         let name = unit.name().unwrap_or_default();
-        let _ = write!(out, "<a id=\"{}\"></a>\n\n## {} `{name}`\n\n", anchor(name), unit.kind());
+        let _ = write!(
+            out,
+            "<a id=\"{}\"></a>\n\n## {} `{name}`\n\n",
+            anchor(name),
+            unit.kind()
+        );
         let docs = unit.docs();
         if let Some(docs) = docs {
             if !docs.text.trim().is_empty() {
@@ -367,25 +446,45 @@ impl Pages<'_> {
                 }
                 out.push('\n');
             }
-            Unit::Error { ordinal, message, fields, .. } => {
+            Unit::Error {
+                ordinal,
+                message,
+                fields,
+                ..
+            } => {
                 let _ = write!(out, "Ordinal `{ordinal}`. Message: `{message}`\n\n");
                 self.fields(out, page, "Field", fields, docs);
             }
-            Unit::Validator { targets, params, asserts, .. } => {
+            Unit::Validator {
+                targets,
+                params,
+                asserts,
+                ..
+            } => {
                 let targets: Vec<String> = targets.iter().map(|t| self.ty(page, t)).collect();
                 let _ = write!(out, "Applies to: {}\n\n", targets.join(", "));
                 self.fields(out, page, "Parameter", params, docs);
                 if !asserts.is_empty() {
                     out.push_str("| Assert | Message |\n|---|---|\n");
                     for a in asserts {
-                        let _ = writeln!(out, "| `{}` | {} |", cell(&a.condition), cell(&a.message));
+                        let _ =
+                            writeln!(out, "| `{}` | {} |", cell(&a.condition), cell(&a.message));
                     }
                     out.push('\n');
                 }
             }
-            Unit::Constant { name, ty, value, .. } => {
-                let value = value.as_ref().map(|v| format!(" = {v}")).unwrap_or_default();
-                let _ = write!(out, "```comline\nconst {name}: {}{value}\n```\n\n", type_text(ty));
+            Unit::Constant {
+                name, ty, value, ..
+            } => {
+                let value = value
+                    .as_ref()
+                    .map(|v| format!(" = {v}"))
+                    .unwrap_or_default();
+                let _ = write!(
+                    out,
+                    "```comline\nconst {name}: {}{value}\n```\n\n",
+                    type_text(ty)
+                );
             }
             Unit::TypeAlias { target, .. } => {
                 let _ = write!(out, "Alias of {}\n\n", self.ty(page, target));
@@ -399,7 +498,9 @@ impl Pages<'_> {
                     out.push('\n');
                 }
             }
-            Unit::Protocol { functions, wire, .. } => {
+            Unit::Protocol {
+                functions, wire, ..
+            } => {
                 for function in functions {
                     self.function(out, page, name, function);
                 }
@@ -411,7 +512,14 @@ impl Pages<'_> {
         }
     }
 
-    fn fields(&self, out: &mut String, page: &str, what: &str, fields: &[Field], parent: Option<&Doc>) {
+    fn fields(
+        &self,
+        out: &mut String,
+        page: &str,
+        what: &str,
+        fields: &[Field],
+        parent: Option<&Doc>,
+    ) {
         if fields.is_empty() {
             return;
         }
@@ -476,13 +584,17 @@ impl Pages<'_> {
         match ty {
             Type::Primitive { name } => format!("`{name}`"),
             Type::Unit => "`()`".to_string(),
-            Type::Named { name, target } => match target.as_ref().and_then(|t| self.link(page, t)) {
-                Some(url) => format!("[`{name}`]({url})"),
-                None => format!("`{name}`"),
-            },
-            Type::Array { element, length, max } => {
-                format!("{}`{}`", self.ty(page, element), array_suffix(*length, *max))
+            Type::Named { name, target } => {
+                match target.as_ref().and_then(|t| self.link(page, t)) {
+                    Some(url) => format!("[`{name}`]({url})"),
+                    None => format!("`{name}`"),
+                }
             }
+            Type::Array {
+                element,
+                length,
+                max,
+            } => array_type(&self.ty(page, element), &array_suffix(*length, *max)),
             Type::Union { members } => {
                 let members: Vec<String> = members.iter().map(|m| self.ty(page, m)).collect();
                 format!("union({})", members.join(" "))
@@ -493,7 +605,11 @@ impl Pages<'_> {
     fn link(&self, page: &str, target: &UnitRef) -> Option<String> {
         if target.package == self.model.package.name {
             let to = page_of(&target.schema);
-            let to = if to == page { String::new() } else { relative(page, &to) };
+            let to = if to == page {
+                String::new()
+            } else {
+                relative(page, &to)
+            };
             return Some(format!("{to}#{}", anchor(&target.name)));
         }
         if let Some(base) = dependency_link(self.links, &target.package) {
@@ -502,13 +618,22 @@ impl Pages<'_> {
         // An unlinked dependency's page, when the package reaches the unit.
         let documented = self.model.dependencies.iter().any(|d| {
             d.package == target.package
-                && d.modules.iter().any(|m| m.path == target.schema && m.units.iter().any(|u| u.name() == Some(target.name.as_str())))
+                && d.modules.iter().any(|m| {
+                    m.path == target.schema
+                        && m.units
+                            .iter()
+                            .any(|u| u.name() == Some(target.name.as_str()))
+                })
         });
         if !documented {
             return None;
         }
         let to = dependency_page(&target.package, &target.schema, "md");
-        let to = if to == page { String::new() } else { relative(page, &to) };
+        let to = if to == page {
+            String::new()
+        } else {
+            relative(page, &to)
+        };
         Some(format!("{to}#{}", anchor(&target.name)))
     }
 
@@ -550,7 +675,11 @@ impl Pages<'_> {
             return;
         }
         let entries = entries(log);
-        for (title, severity) in [("Breaking", "major"), ("Added", "minor"), ("Changed", "patch")] {
+        for (title, severity) in [
+            ("Breaking", "major"),
+            ("Added", "minor"),
+            ("Changed", "patch"),
+        ] {
             let list: Vec<&Entry> = entries.iter().filter(|e| e.severity == severity).collect();
             if list.is_empty() {
                 continue;
@@ -570,7 +699,11 @@ fn wire_summary(out: &mut String, p: &ProtocolSummary) {
     for row in p.choices() {
         let mut value = format!("`{}`", row.value);
         if !row.params.is_empty() {
-            let params: Vec<String> = row.params.iter().map(|(k, v)| format!("{k} = {v}")).collect();
+            let params: Vec<String> = row
+                .params
+                .iter()
+                .map(|(k, v)| format!("{k} = {v}"))
+                .collect();
             let _ = write!(value, " ({})", params.join(", "));
         }
         let from = match &row.source {
@@ -592,7 +725,12 @@ fn wire_summary(out: &mut String, p: &ProtocolSummary) {
             Accepted::NotAccepted => "**not accepted**".to_string(),
             Accepted::None => String::new(),
         };
-        let _ = writeln!(out, "| {} | {state} | {} | {accepted} |", row.guarantee, cell(&row.causes));
+        let _ = writeln!(
+            out,
+            "| {} | {state} | {} | {accepted} |",
+            row.guarantee,
+            cell(&row.causes)
+        );
     }
     if let Some(reason) = p.unverified_reason() {
         let _ = writeln!(out, "\n`@unverified`: \"{reason}\"");
@@ -634,7 +772,10 @@ fn entry(out: &mut String, e: &Entry, href: Option<&str>) {
 }
 
 fn file(path: &str, contents: String) -> GeneratedFile {
-    GeneratedFile { path: PathBuf::from(path), contents }
+    GeneratedFile {
+        path: PathBuf::from(path),
+        contents,
+    }
 }
 
 /// One trailing newline.
@@ -643,4 +784,34 @@ fn finish(mut out: String) -> String {
         out.pop();
     }
     out
+}
+
+/// An array type in Markdown: one code span when the element is one
+/// (`` `char[max 64]` ``), since two touching spans (`` `char``[max 64]` ``)
+/// read as a single span holding the backticks. A linked element or a union
+/// keeps the suffix as its own span.
+fn array_type(element: &str, suffix: &str) -> String {
+    match element.strip_suffix('`') {
+        Some(open) => format!("{open}{suffix}`"),
+        None => format!("{element}`{suffix}`"),
+    }
+}
+
+#[cfg(test)]
+mod array_type_tests {
+    use super::array_type;
+
+    #[test]
+    fn a_code_span_element_and_its_suffix_are_one_span() {
+        assert_eq!(array_type("`char`", "[max 8192]"), "`char[max 8192]`");
+        assert_eq!(
+            array_type(&array_type("`u8`", "[4]"), "[max 10]"),
+            "`u8[4][max 10]`"
+        );
+        assert_eq!(array_type("[`Item`](#item)", "[]"), "[`Item`](#item)`[]`");
+        assert_eq!(
+            array_type("union(`u8` `char`)", "[]"),
+            "union(`u8` `char`)`[]`"
+        );
+    }
 }

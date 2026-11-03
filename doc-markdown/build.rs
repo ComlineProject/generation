@@ -7,7 +7,9 @@
 use std::path::{Path, PathBuf};
 
 fn files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -44,7 +46,11 @@ fn main() {
         }
     };
     for path in &paths {
-        let name = path.strip_prefix(&root).unwrap_or(path).to_string_lossy().replace('\\', "/");
+        let name = path
+            .strip_prefix(&root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
         feed(name.as_bytes());
         feed(&[0]);
         // Line endings normalized, so a checkout's settings don't move it.
