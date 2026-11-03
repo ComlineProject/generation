@@ -40,7 +40,7 @@
             "type": "string"
           },
           "default": {},
-          "description": "Where each dependency's documentation lives, by the name the package\ngives the dependency (or `std`): `links = { std = \"https://...\" }`. A\ntype from a dependency listed here links into its docs; one that\nisn't is plain text.",
+          "description": "Where each dependency's documentation lives, by the name the package\ngives the dependency (or `std`): `links = { std = \"https://...\" }`. A\ntype from a dependency listed here links into its docs; one that\nisn't links to the pages renderers write for it under `deps/`.",
           "type": "object"
         },
         "out": {
