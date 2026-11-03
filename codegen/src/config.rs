@@ -247,11 +247,12 @@ pub struct Generate {
     /// knows how (today, Rust's) acts on it. Defaults on in `lib` mode, off in
     /// `code` mode.
     pub external_std: Option<bool>,
-    /// Whether decoding a value runs its `@validators` checks: `off` (the
-    /// default), `collect` (fail with every failure) or `first` (fail with
-    /// the first). Shared by every target unless overridden.
-    #[schemars(schema_with = "validate_on_decode_schema", extend("default" = "off"))]
-    pub validate_on_decode: Option<String>,
+    /// Whether decoding a value runs its `@validators` checks: `collect`
+    /// (the default: fail with every failure) or `first` (fail with the
+    /// first). Not running them is a give-up that carries its reason:
+    /// `{ off = "why" }`. Shared by every target unless overridden.
+    #[schemars(schema_with = "validate_on_decode_schema", extend("default" = "collect"))]
+    pub validate_on_decode: Option<ValidateOnDecodeSetting>,
     /// `true`: protocols on a connection get async handlers and senders
     /// (Rust's `AsyncConnection`), shared by every target unless overridden.
     /// A generator whose output is async anyway ignores it. Default `false`.
@@ -375,13 +376,14 @@ pub struct Target {
     /// Whether this target references `comline_std` as its own package.
     /// Overrides `[generate] external_std`.
     pub external_std: Option<bool>,
-    /// Whether this target's decoding runs `@validators` checks: `off`,
-    /// `collect` or `first`. Overrides `[generate] validate_on_decode`.
+    /// Whether this target's decoding runs `@validators` checks: `collect`,
+    /// `first`, or `{ off = "why" }`. Overrides `[generate]
+    /// validate_on_decode`.
     // `default` only so the schema knows the key is optional: an
     // `Option` is already `None` when left out.
     #[serde(default)]
     #[schemars(schema_with = "validate_on_decode_schema")]
-    pub validate_on_decode: Option<String>,
+    pub validate_on_decode: Option<ValidateOnDecodeSetting>,
     /// Whether this target's protocols on a connection get async handlers and
     /// senders. Overrides `[generate] async`.
     #[serde(rename = "async")]
@@ -404,9 +406,74 @@ fn mode_schema(_: &mut SchemaGenerator) -> Schema {
     json_schema!({ "type": "string", "enum": MODES })
 }
 
-/// `validate_on_decode`: one of [`ValidateOnDecode::NAMES`].
+/// `validate_on_decode` as written in `comline.toml`: a mode that checks
+/// (`"collect"`, `"first"`), or not checking, given up with a reason
+/// (`{ off = "why" }`). A bare `"off"` is refused: turning validators off is
+/// a give-up, and a give-up says why (core#98).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(untagged)]
+pub enum ValidateOnDecodeSetting {
+    Mode(String),
+    GiveUp(ValidateOnDecodeOff),
+}
+
+/// `{ off = "why" }`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ValidateOnDecodeOff {
+    pub off: String,
+}
+
+/// The modes `validate_on_decode` takes by name.
+pub const VALIDATE_ON_DECODE_MODES: [&str; 2] = ["collect", "first"];
+
+/// `validate_on_decode`: one of [`VALIDATE_ON_DECODE_MODES`], or `{ off = "why" }`.
 fn validate_on_decode_schema(_: &mut SchemaGenerator) -> Schema {
-    json_schema!({ "type": "string", "enum": ValidateOnDecode::NAMES })
+    json_schema!({
+        "oneOf": [
+            { "type": "string", "enum": VALIDATE_ON_DECODE_MODES },
+            {
+                "type": "object",
+                "description": "Decoding doesn't run the checks: a give-up, with its reason.",
+                "properties": { "off": { "type": "string", "minLength": 1 } },
+                "required": ["off"],
+                "additionalProperties": false
+            }
+        ]
+    })
+}
+
+/// Resolve one `validate_on_decode`: the mode, and the reason when it's
+/// given up. `from` says where it was written, for the error.
+fn validate_on_decode(
+    setting: &ValidateOnDecodeSetting,
+    language: &str,
+    from: &str,
+) -> Result<(ValidateOnDecode, Option<String>)> {
+    match setting {
+        ValidateOnDecodeSetting::GiveUp(ValidateOnDecodeOff { off }) => {
+            if off.trim().is_empty() {
+                return Err(miette!(
+                    "`validate_on_decode = {{ off = \"\" }}` for target `{language}` ({from}) - \
+                     turning validators off needs a reason: `{{ off = \"why\" }}`"
+                ));
+            }
+            Ok((ValidateOnDecode::Off, Some(off.clone())))
+        }
+        ValidateOnDecodeSetting::Mode(name) if name == "off" => Err(miette!(
+            "`validate_on_decode = \"off\"` for target `{language}` ({from}) - not running \
+             validators is a give-up and needs its reason: write \
+             `validate_on_decode = {{ off = \"why\" }}` in {FILE_NAME}"
+        )),
+        ValidateOnDecodeSetting::Mode(name) => match name.as_str() {
+            "collect" => Ok((ValidateOnDecode::Collect, None)),
+            "first" => Ok((ValidateOnDecode::First, None)),
+            _ => Err(miette!(
+                "`validate_on_decode = \"{name}\"` for target `{language}` ({from}) - expected \
+                 `collect`, `first` or `{{ off = \"why\" }}`"
+            )),
+        },
+    }
 }
 
 /// An empty `language` is "left out", not a value to suggest.
@@ -553,6 +620,9 @@ pub struct ResolvedTarget {
     pub external_std: bool,
     /// See [`Generate::validate_on_decode`].
     pub validate_on_decode: ValidateOnDecode,
+    /// Why `validate_on_decode` is off: set exactly when it is, from
+    /// `{ off = "why" }`. A given-up guarantee, for the CLI to show.
+    pub validate_on_decode_off: Option<String>,
     /// See [`Generate::async_api`].
     pub async_api: bool,
     /// [`Generate::encodings`] with the target's over them, by canonical
@@ -779,21 +849,32 @@ pub fn resolve(
             cfg.generate.external_std,
             default_external_std(&mode),
         );
-        let validate_on_decode = pick(
-            ov.validate_on_decode,
+        // Same precedence; a flag or env var is one of the checking modes
+        // (a give-up's reason is written in comline.toml).
+        let (validate_on_decode, validate_on_decode_off) = match (
+            ov.validate_on_decode.filter(|_| apply_flag),
             &env_validate_on_decode,
             &t.validate_on_decode,
             &cfg.generate.validate_on_decode,
-            ValidateOnDecode::Off.name(),
-        );
-        let validate_on_decode = ValidateOnDecode::parse(&validate_on_decode).ok_or_else(|| {
-            miette!(
-                "`validate_on_decode = \"{validate_on_decode}\"` for target `{}` - expected one of \
-                 {}",
-                t.language,
-                ValidateOnDecode::NAMES.map(|n| format!("`{n}`")).join(", ")
-            )
-        })?;
+        ) {
+            (Some(flag), _, _, _) => validate_on_decode(
+                &ValidateOnDecodeSetting::Mode(flag.to_string()),
+                &t.language,
+                "`--validate-on-decode`",
+            )?,
+            (None, Some(env), _, _) => validate_on_decode(
+                &ValidateOnDecodeSetting::Mode(env.clone()),
+                &t.language,
+                "`COMLINE_GENERATE_VALIDATE_ON_DECODE`",
+            )?,
+            (None, None, Some(target), _) => {
+                validate_on_decode(target, &t.language, "its `[[generate.target]]`")?
+            }
+            (None, None, None, Some(section)) => {
+                validate_on_decode(section, &t.language, "`[generate]`")?
+            }
+            (None, None, None, None) => (ValidateOnDecode::default(), None),
+        };
 
         let declared_version = declared
             .iter()
@@ -861,6 +942,7 @@ pub fn resolve(
             flatten: t.flatten,
             external_std,
             validate_on_decode,
+            validate_on_decode_off,
             async_api: t.async_api.or(cfg.generate.async_api).unwrap_or(false),
             encodings: merge_encodings(&cfg.generate.encodings, &t.encodings),
         });
@@ -1025,11 +1107,25 @@ mod tests {
              changelog_from = \"0.1.0\"\nlinks = { std = \"https://x/std\" }\nversions = { last = 3 }\n",
         );
         assert_eq!(cfg.doc.out.as_deref(), Some("site/api"));
-        assert_eq!(cfg.doc.formats, Some(vec!["json".to_string(), "html".to_string()]));
-        assert_eq!(cfg.doc.versions, Some(DocVersions::Select(DocVersionSelect { last: Some(3), ..Default::default() })));
-        assert_eq!(parse("[doc]\nversions = \"all\"\n").doc.versions, Some(DocVersions::All(AllVersions::All)));
         assert_eq!(
-            parse("[doc]\nversions = { since = \"0.3.0\", releases_only = true }\n").doc.versions,
+            cfg.doc.formats,
+            Some(vec!["json".to_string(), "html".to_string()])
+        );
+        assert_eq!(
+            cfg.doc.versions,
+            Some(DocVersions::Select(DocVersionSelect {
+                last: Some(3),
+                ..Default::default()
+            }))
+        );
+        assert_eq!(
+            parse("[doc]\nversions = \"all\"\n").doc.versions,
+            Some(DocVersions::All(AllVersions::All))
+        );
+        assert_eq!(
+            parse("[doc]\nversions = { since = \"0.3.0\", releases_only = true }\n")
+                .doc
+                .versions,
             Some(DocVersions::Select(DocVersionSelect {
                 since: Some("0.3.0".into()),
                 releases_only: true,
@@ -1263,16 +1359,17 @@ mod tests {
     }
 
     #[test]
-    fn validate_on_decode_defaults_to_off() {
+    fn validate_on_decode_defaults_to_collect() {
         let cfg = parse("[[generate.target]]\nlanguage = \"rust\"\nlang_version = \"1.85.0\"\n");
         let resolved = resolve(&cfg, &[], Path::new("/x"), &Overrides::default()).unwrap();
-        assert_eq!(resolved[0].validate_on_decode, ValidateOnDecode::Off);
+        assert_eq!(resolved[0].validate_on_decode, ValidateOnDecode::Collect);
+        assert_eq!(resolved[0].validate_on_decode_off, None);
     }
 
     #[test]
     fn validate_on_decode_target_wins_over_section_and_the_flag_over_both() {
         let cfg = parse(
-            "[generate]\nvalidate_on_decode = \"collect\"\n\n\
+            "[generate]\nvalidate_on_decode = { off = \"a hot path\" }\n\n\
              [[generate.target]]\nlanguage = \"rust\"\nlang_version = \"1.85.0\"\n\
              validate_on_decode = \"first\"\n",
         );
@@ -1280,11 +1377,53 @@ mod tests {
         assert_eq!(resolved[0].validate_on_decode, ValidateOnDecode::First);
 
         let ov = Overrides {
-            validate_on_decode: Some("off"),
+            validate_on_decode: Some("collect"),
             ..Default::default()
         };
         let resolved = resolve(&cfg, &[], Path::new("/x"), &ov).unwrap();
+        assert_eq!(resolved[0].validate_on_decode, ValidateOnDecode::Collect);
+    }
+
+    #[test]
+    fn validate_on_decode_off_carries_its_reason() {
+        let cfg = parse(
+            "[generate]\nvalidate_on_decode = { off = \"checked upstream\" }\n\n\
+             [[generate.target]]\nlanguage = \"rust\"\nlang_version = \"1.85.0\"\n",
+        );
+        let resolved = resolve(&cfg, &[], Path::new("/x"), &Overrides::default()).unwrap();
         assert_eq!(resolved[0].validate_on_decode, ValidateOnDecode::Off);
+        assert_eq!(
+            resolved[0].validate_on_decode_off.as_deref(),
+            Some("checked upstream")
+        );
+    }
+
+    #[test]
+    fn a_bare_off_or_an_empty_reason_is_refused_with_the_fix() {
+        for (written, expected) in [
+            (
+                "\"off\"",
+                "write `validate_on_decode = { off = \"why\" }` in comline.toml",
+            ),
+            ("{ off = \" \" }", "turning validators off needs a reason"),
+        ] {
+            let cfg = parse(&format!(
+                "[generate]\nvalidate_on_decode = {written}\n\n\
+                 [[generate.target]]\nlanguage = \"rust\"\nlang_version = \"1.85.0\"\n"
+            ));
+            let error = resolve(&cfg, &[], Path::new("/x"), &Overrides::default()).unwrap_err();
+            assert!(error.to_string().contains(expected), "{error}");
+        }
+        let cfg = parse("[[generate.target]]\nlanguage = \"rust\"\nlang_version = \"1.85.0\"\n");
+        let ov = Overrides {
+            validate_on_decode: Some("off"),
+            ..Default::default()
+        };
+        let error = resolve(&cfg, &[], Path::new("/x"), &ov).unwrap_err();
+        assert!(
+            error.to_string().contains("`--validate-on-decode`"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -1331,7 +1470,8 @@ mod tests {
         let error = resolve(&cfg, &[], Path::new("/x"), &Overrides::default()).unwrap_err();
         assert_eq!(
             error.to_string(),
-            "`validate_on_decode = \"always\"` for target `rust` - expected one of `off`, `collect`, `first`"
+            "`validate_on_decode = \"always\"` for target `rust` (`[generate]`) - expected `collect`, \
+             `first` or `{ off = \"why\" }`"
         );
     }
 

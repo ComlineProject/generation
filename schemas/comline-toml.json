@@ -215,14 +215,31 @@
           "type": "array"
         },
         "validate_on_decode": {
-          "default": "off",
-          "description": "Whether decoding a value runs its `@validators` checks: `off` (the\ndefault), `collect` (fail with every failure) or `first` (fail with\nthe first). Shared by every target unless overridden.",
-          "enum": [
-            "off",
-            "collect",
-            "first"
-          ],
-          "type": "string"
+          "default": "collect",
+          "description": "Whether decoding a value runs its `@validators` checks: `collect`\n(the default: fail with every failure) or `first` (fail with the\nfirst). Not running them is a give-up that carries its reason:\n`{ off = \"why\" }`. Shared by every target unless overridden.",
+          "oneOf": [
+            {
+              "enum": [
+                "collect",
+                "first"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Decoding doesn't run the checks: a give-up, with its reason.",
+              "properties": {
+                "off": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "off"
+              ],
+              "type": "object"
+            }
+          ]
         }
       },
       "type": "object"
@@ -294,13 +311,30 @@
           "type": "integer"
         },
         "validate_on_decode": {
-          "description": "Whether this target's decoding runs `@validators` checks: `off`,\n`collect` or `first`. Overrides `[generate] validate_on_decode`.",
-          "enum": [
-            "off",
-            "collect",
-            "first"
-          ],
-          "type": "string"
+          "description": "Whether this target's decoding runs `@validators` checks: `collect`,\n`first`, or `{ off = \"why\" }`. Overrides `[generate]\nvalidate_on_decode`.",
+          "oneOf": [
+            {
+              "enum": [
+                "collect",
+                "first"
+              ],
+              "type": "string"
+            },
+            {
+              "additionalProperties": false,
+              "description": "Decoding doesn't run the checks: a give-up, with its reason.",
+              "properties": {
+                "off": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "off"
+              ],
+              "type": "object"
+            }
+          ]
         }
       },
       "type": "object"

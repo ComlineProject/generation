@@ -27,10 +27,12 @@ use crate::symbols::SymbolTable;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ValidateOnDecode {
-    /// Emit the checks; never run them on the caller's behalf.
-    #[default]
+    /// Emit the checks; never run them on the caller's behalf. A give-up:
+    /// `comline.toml` asks for it with a reason, `{ off = "..." }`.
     Off,
-    /// Decoding fails with every failed check.
+    /// Decoding fails with every failed check. The default: validators are
+    /// enforced unless a consumer gives that up (core#98).
+    #[default]
     Collect,
     /// Decoding fails with the first failed check.
     First,
@@ -126,7 +128,11 @@ impl<'a> Validation<'a> {
             .iter()
             .map(|(ns, units)| (ns.as_str(), SymbolTable::new(units, schemas)))
             .collect();
-        Self { schemas, tables, needs: RefCell::new(HashMap::new()) }
+        Self {
+            schemas,
+            tables,
+            needs: RefCell::new(HashMap::new()),
+        }
     }
 
     /// What to check on a value of type `ty`, written in schema `ns`, whose
@@ -160,18 +166,29 @@ impl<'a> Validation<'a> {
             TypeRef::Named(name) => match self.resolve(ns, name) {
                 Some((alias_ns, FrozenUnit::TypeAlias { target, .. })) => {
                     let expanded = self.expand_at(alias_ns, target, depth + 1);
-                    if crate::bounds::has_bounds(&expanded) { expanded } else { ty.clone() }
+                    if crate::bounds::has_bounds(&expanded) {
+                        expanded
+                    } else {
+                        ty.clone()
+                    }
                 }
                 _ => ty.clone(),
             },
-            TypeRef::Array { element, length, max } => TypeRef::Array {
+            TypeRef::Array {
+                element,
+                length,
+                max,
+            } => TypeRef::Array {
                 element: Box::new(self.expand_at(ns, element, depth + 1)),
                 length: *length,
                 max: *max,
             },
-            TypeRef::Union(members) => {
-                TypeRef::Union(members.iter().map(|m| self.expand_at(ns, m, depth + 1)).collect())
-            }
+            TypeRef::Union(members) => TypeRef::Union(
+                members
+                    .iter()
+                    .map(|m| self.expand_at(ns, m, depth + 1))
+                    .collect(),
+            ),
             other => other.clone(),
         }
     }
@@ -182,7 +199,8 @@ impl<'a> Validation<'a> {
         let Some((decl_ns, unit)) = self.resolve(ns, name) else {
             return false;
         };
-        let (FrozenUnit::Struct { name, fields, .. } | FrozenUnit::Error { name, fields, .. }) = unit
+        let (FrozenUnit::Struct { name, fields, .. } | FrozenUnit::Error { name, fields, .. }) =
+            unit
         else {
             return false;
         };
@@ -215,8 +233,12 @@ impl<'a> Validation<'a> {
         let mut chain: Vec<(&'a str, &'a [FrozenUnit])> = Vec::new();
         let (mut cur_ns, mut cur): (&str, &TypeRef) = (ns, ty);
         while let TypeRef::Named(name) = cur {
-            let Some((alias_ns, FrozenUnit::TypeAlias { parameters, target, .. })) =
-                self.resolve(cur_ns, name)
+            let Some((
+                alias_ns,
+                FrozenUnit::TypeAlias {
+                    parameters, target, ..
+                },
+            )) = self.resolve(cur_ns, name)
             else {
                 break;
             };
@@ -233,7 +255,12 @@ impl<'a> Validation<'a> {
         }
         checks.extend(self.checks(ns, parameters, at)?);
 
-        let mut plan = Plan { base: cur.clone(), checks, elements: None, nested: false };
+        let mut plan = Plan {
+            base: cur.clone(),
+            checks,
+            elements: None,
+            nested: false,
+        };
         match cur {
             TypeRef::Array { element, .. } if depth < MAX_DEPTH => {
                 let elements = self.plan_at(cur_ns, element, &[], at, depth + 1)?;
@@ -256,10 +283,17 @@ impl<'a> Validation<'a> {
             };
             let Some((
                 validator_ns,
-                FrozenUnit::Validator { name: declared, properties, expression_block, .. },
+                FrozenUnit::Validator {
+                    name: declared,
+                    properties,
+                    expression_block,
+                    ..
+                },
             )) = self.resolve(ns, name)
             else {
-                return Err(eyre!("{at}: validator '{name}' isn't declared in any schema being generated"));
+                return Err(eyre!(
+                    "{at}: validator '{name}' isn't declared in any schema being generated"
+                ));
             };
             let asserts = match &**expression_block {
                 FrozenUnit::ExpressionBlock { asserts } => asserts.as_slice(),
@@ -268,7 +302,12 @@ impl<'a> Validation<'a> {
 
             let mut params = Vec::new();
             for property in properties {
-                let FrozenUnit::Field { name: prop, default, .. } = property else {
+                let FrozenUnit::Field {
+                    name: prop,
+                    default,
+                    ..
+                } = property
+                else {
                     continue;
                 };
                 let given = args.iter().find_map(|arg| match arg {
@@ -284,7 +323,12 @@ impl<'a> Validation<'a> {
                 params.push((prop.as_str(), value));
             }
 
-            checks.push(Check { validator: declared, namespace: validator_ns, asserts, params });
+            checks.push(Check {
+                validator: declared,
+                namespace: validator_ns,
+                asserts,
+                params,
+            });
         }
         Ok(checks)
     }
@@ -325,20 +369,28 @@ impl<'a> Validation<'a> {
     /// in a loop; the depth bound keeps IR that skipped it from hanging here.
     fn reference(&self, ns: &str, reference: &str, depth: usize) -> Result<Value> {
         if depth == MAX_DEPTH {
-            return Err(eyre!("`{reference}` names constants more than {MAX_DEPTH} deep"));
+            return Err(eyre!(
+                "`{reference}` names constants more than {MAX_DEPTH} deep"
+            ));
         }
         if let Some((ty, bound)) = reference.split_once("::") {
             if let (Some(p), "MIN" | "MAX") = (PrimitiveType::from_name(ty), bound) {
-                let (min, max) =
-                    p.integer_range().ok_or_else(|| eyre!("`{ty}` has no `{bound}`"))?;
+                let (min, max) = p
+                    .integer_range()
+                    .ok_or_else(|| eyre!("`{ty}` has no `{bound}`"))?;
                 return Ok(Value::Integer(if bound == "MIN" { min } else { max }));
             }
         }
         match self.resolve(ns, reference) {
-            Some((const_ns, FrozenUnit::Constant { value: Some(value), .. })) => {
-                self.literal(const_ns, value, depth + 1)
-            }
-            _ => Err(eyre!("`{reference}` isn't a constant in any schema being generated")),
+            Some((
+                const_ns,
+                FrozenUnit::Constant {
+                    value: Some(value), ..
+                },
+            )) => self.literal(const_ns, value, depth + 1),
+            _ => Err(eyre!(
+                "`{reference}` isn't a constant in any schema being generated"
+            )),
         }
     }
 
@@ -364,7 +416,11 @@ impl<'a> Validation<'a> {
             | FrozenUnit::Constant { name: n, .. } => n == name,
             // A re-export slot names another schema's error; it isn't the
             // declaration.
-            FrozenUnit::Error { name: n, imported_from: None, .. } => n == name,
+            FrozenUnit::Error {
+                name: n,
+                imported_from: None,
+                ..
+            } => n == name,
             _ => false,
         })?;
         Some((ns.as_str(), unit))
@@ -383,20 +439,30 @@ mod tests {
 
     fn schemas(user: &str) -> Vec<(String, Vec<FrozenUnit>)> {
         vec![
-            ("std/validators".to_string(), IncrementalInterpreter::from_source(STD)),
+            (
+                "std/validators".to_string(),
+                IncrementalInterpreter::from_source(STD),
+            ),
             ("app".to_string(), IncrementalInterpreter::from_source(user)),
         ]
     }
 
-    fn field<'a>(units: &'a [FrozenUnit], strukt: &str, field: &str) -> (&'a TypeRef, &'a [FrozenUnit]) {
+    fn field<'a>(
+        units: &'a [FrozenUnit],
+        strukt: &str,
+        field: &str,
+    ) -> (&'a TypeRef, &'a [FrozenUnit]) {
         units
             .iter()
             .find_map(|u| match u {
                 FrozenUnit::Struct { name, fields, .. } if name == strukt => {
                     fields.iter().find_map(|f| match f {
-                        FrozenUnit::Field { name, ty, parameters, .. } if name == field => {
-                            Some((ty, parameters.as_slice()))
-                        }
+                        FrozenUnit::Field {
+                            name,
+                            ty,
+                            parameters,
+                            ..
+                        } if name == field => Some((ty, parameters.as_slice())),
                         _ => None,
                     })
                 }
@@ -405,7 +471,12 @@ mod tests {
             .expect("the field")
     }
 
-    fn plan_of<'a>(model: &Validation<'a>, units: &'a [FrozenUnit], strukt: &str, name: &str) -> Plan<'a> {
+    fn plan_of<'a>(
+        model: &Validation<'a>,
+        units: &'a [FrozenUnit],
+        strukt: &str,
+        name: &str,
+    ) -> Plan<'a> {
         let (ty, parameters) = field(units, strukt, name);
         model.plan("app", ty, parameters, name).expect("resolves")
     }
@@ -418,8 +489,13 @@ mod tests {
         );
         let model = Validation::new(&schemas);
         let plan = plan_of(&model, &schemas[1].1, "S", "name");
-        let [check] = plan.checks.as_slice() else { panic!("{plan:?}") };
-        assert_eq!((check.validator, check.namespace), ("StringBounds", "std/validators"));
+        let [check] = plan.checks.as_slice() else {
+            panic!("{plan:?}")
+        };
+        assert_eq!(
+            (check.validator, check.namespace),
+            ("StringBounds", "std/validators")
+        );
         assert_eq!(check.param("min_chars"), Some(&Value::Integer(3)));
         assert_eq!(check.param("max_chars"), Some(&Value::Integer(1024)));
         assert_eq!(check.asserts.len(), 1);
@@ -435,10 +511,18 @@ mod tests {
         );
         let model = Validation::new(&schemas);
         let plan = plan_of(&model, &schemas[1].1, "S", "name");
-        let mins: Vec<_> = plan.checks.iter().map(|c| c.param("min_chars").cloned()).collect();
+        let mins: Vec<_> = plan
+            .checks
+            .iter()
+            .map(|c| c.param("min_chars").cloned())
+            .collect();
         assert_eq!(
             mins,
-            [Some(Value::Integer(1)), Some(Value::Integer(2)), Some(Value::Integer(3))]
+            [
+                Some(Value::Integer(1)),
+                Some(Value::Integer(2)),
+                Some(Value::Integer(3))
+            ]
         );
     }
 
@@ -454,7 +538,11 @@ mod tests {
         assert!(plan.checks.is_empty());
         let elements = plan.elements.expect("element checks");
         assert_eq!(elements.checks.len(), 1);
-        assert_eq!(elements.base, TypeRef::Primitive(PrimitiveType::String), "through the alias");
+        assert_eq!(
+            elements.base,
+            TypeRef::Primitive(PrimitiveType::String),
+            "through the alias"
+        );
     }
 
     #[test]
@@ -471,7 +559,12 @@ mod tests {
         assert!(plan_of(&model, units, "Post", "plain").is_empty());
         // Recursive through `Post[]`, and terminates.
         assert!(model.needs_validation("app", "Post"));
-        assert!(plan_of(&model, units, "Post", "replies").elements.expect("elements").nested);
+        assert!(
+            plan_of(&model, units, "Post", "replies")
+                .elements
+                .expect("elements")
+                .nested
+        );
         assert!(!model.needs_validation("app", "Plain"));
     }
 
@@ -506,7 +599,11 @@ mod tests {
         let model = Validation::new(&schemas);
         let value = |name: &str| {
             let value = schemas[1].1.iter().find_map(|u| match u {
-                FrozenUnit::Constant { name: n, value: Some(value), .. } if n == name => Some(value),
+                FrozenUnit::Constant {
+                    name: n,
+                    value: Some(value),
+                    ..
+                } if n == name => Some(value),
                 _ => None,
             });
             model.value("app", value.expect("the constant"))
@@ -523,7 +620,9 @@ mod tests {
         let schemas = schemas("struct S {\n    @validators = [Nope()]\n    name: string\n}\n");
         let model = Validation::new(&schemas);
         let (ty, parameters) = field(&schemas[1].1, "S", "name");
-        let error = model.plan("app", ty, parameters, "struct 'S', field 'name'").unwrap_err();
+        let error = model
+            .plan("app", ty, parameters, "struct 'S', field 'name'")
+            .unwrap_err();
         assert_eq!(
             error.to_string(),
             "struct 'S', field 'name': validator 'Nope' isn't declared in any schema being generated"
@@ -533,9 +632,12 @@ mod tests {
     #[test]
     fn validate_on_decode_names_round_trip() {
         for name in ValidateOnDecode::NAMES {
-            assert_eq!(ValidateOnDecode::parse(name).map(ValidateOnDecode::name), Some(name));
+            assert_eq!(
+                ValidateOnDecode::parse(name).map(ValidateOnDecode::name),
+                Some(name)
+            );
         }
         assert_eq!(ValidateOnDecode::parse("sometimes"), None);
-        assert_eq!(ValidateOnDecode::default(), ValidateOnDecode::Off);
+        assert_eq!(ValidateOnDecode::default(), ValidateOnDecode::Collect);
     }
 }

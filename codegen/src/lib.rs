@@ -121,7 +121,10 @@ pub struct Resolved {
 impl Resolved {
     /// The boundary this target generates as.
     pub fn boundary(&self) -> &'static str {
-        self.generator.versions.boundary_for(&self.version).expect("resolved at or above the floor")
+        self.generator
+            .versions
+            .boundary_for(&self.version)
+            .expect("resolved at or above the floor")
     }
 
     /// Whether generating for this version is verified (see
@@ -144,7 +147,11 @@ pub enum Unresolved {
     /// The version isn't dotted numbers.
     BadVersion { language: String, version: String },
     /// The version is older than every generator's floor.
-    BelowFloor { language: String, version: String, floor: &'static str },
+    BelowFloor {
+        language: String,
+        version: String,
+        floor: &'static str,
+    },
 }
 
 impl fmt::Display for Unresolved {
@@ -194,18 +201,29 @@ impl Registry {
     }
 
     /// The generator for a declared `language#version`.
-    pub fn resolve(&self, language: &str, version: &str) -> std::result::Result<Resolved, Unresolved> {
+    pub fn resolve(
+        &self,
+        language: &str,
+        version: &str,
+    ) -> std::result::Result<Resolved, Unresolved> {
         let generators = self
             .langs
             .get(language)
-            .ok_or_else(|| Unresolved::UnknownLanguage { language: language.to_string() })?;
-        let declared = LangVersion::parse(version)
-            .ok_or_else(|| Unresolved::BadVersion { language: language.to_string(), version: version.to_string() })?;
+            .ok_or_else(|| Unresolved::UnknownLanguage {
+                language: language.to_string(),
+            })?;
+        let declared = LangVersion::parse(version).ok_or_else(|| Unresolved::BadVersion {
+            language: language.to_string(),
+            version: version.to_string(),
+        })?;
         generators
             .iter()
             .rev()
             .find(|g| LangVersion::parse(g.versions.floor).is_some_and(|floor| floor <= declared))
-            .map(|g| Resolved { generator: *g, version: declared })
+            .map(|g| Resolved {
+                generator: *g,
+                version: declared,
+            })
             .ok_or_else(|| Unresolved::BelowFloor {
                 language: language.to_string(),
                 version: version.to_string(),
@@ -216,7 +234,9 @@ impl Registry {
     /// The generator for `(name, version)` and its file extension, if one
     /// handles that version.
     pub fn find(&self, name: &str, version: &str) -> Option<(GeneratorFn, &'static str)> {
-        self.resolve(name, version).ok().map(|r| (r.generator.generate, r.generator.ext))
+        self.resolve(name, version)
+            .ok()
+            .map(|r| (r.generator.generate, r.generator.ext))
     }
 
     /// Every generator this registry has, sorted by language and floor.
@@ -229,7 +249,12 @@ impl Registry {
         self.langs
             .values()
             .flatten()
-            .map(|g| Target { name: g.language, ext: g.ext, version: g.versions.floor, versions: g.versions })
+            .map(|g| Target {
+                name: g.language,
+                ext: g.ext,
+                version: g.versions.floor,
+                versions: g.versions,
+            })
             .collect()
     }
 }
@@ -248,7 +273,12 @@ mod tests {
             ext,
             generate: noop,
             support: &[],
-            versions: Versions { floor, changes: &[], verified_up_to: floor, forward_compatible: true },
+            versions: Versions {
+                floor,
+                changes: &[],
+                verified_up_to: floor,
+                forward_compatible: true,
+            },
         }
     }
 
@@ -262,8 +292,19 @@ mod tests {
 
     #[test]
     fn targets_is_flattened_and_sorted() {
-        let targets: Vec<(&str, &str)> = registry().targets().iter().map(|t| (t.name, t.version)).collect();
-        assert_eq!(targets, [("rust", "1.60.0"), ("rust", "1.70.0"), ("typescript", "5.0")]);
+        let targets: Vec<(&str, &str)> = registry()
+            .targets()
+            .iter()
+            .map(|t| (t.name, t.version))
+            .collect();
+        assert_eq!(
+            targets,
+            [
+                ("rust", "1.60.0"),
+                ("rust", "1.70.0"),
+                ("typescript", "5.0")
+            ]
+        );
     }
 
     #[test]
@@ -274,13 +315,27 @@ mod tests {
     #[test]
     fn a_declared_version_gets_the_newest_floor_at_or_below_it() {
         let registry = registry();
-        let floor = |v| registry.resolve("rust", v).map(|r| r.generator.versions.floor);
+        let floor = |v| {
+            registry
+                .resolve("rust", v)
+                .map(|r| r.generator.versions.floor)
+        };
         assert_eq!(floor("1.70.0"), Ok("1.70.0"));
         assert_eq!(floor("1.70"), Ok("1.70.0"));
         assert_eq!(floor("1.82.1"), Ok("1.70.0"));
         assert_eq!(floor("1.65"), Ok("1.60.0"));
-        assert_eq!(registry.resolve("rust", "1.82.1").unwrap().version.to_string(), "1.82.1");
-        assert_eq!(registry.resolve("typescript", "5.4").unwrap().generator.ext, "ts");
+        assert_eq!(
+            registry
+                .resolve("rust", "1.82.1")
+                .unwrap()
+                .version
+                .to_string(),
+            "1.82.1"
+        );
+        assert_eq!(
+            registry.resolve("typescript", "5.4").unwrap().generator.ext,
+            "ts"
+        );
     }
 
     #[test]
@@ -294,7 +349,10 @@ mod tests {
             registry.resolve("rust", "latest").unwrap_err().to_string(),
             "`rust#latest`: `latest` isn't a version - expected dotted numbers, like `1.70.0`"
         );
-        assert_eq!(registry.resolve("go", "1.21").unwrap_err().to_string(), "this build of comline has no go generator");
+        assert_eq!(
+            registry.resolve("go", "1.21").unwrap_err().to_string(),
+            "this build of comline has no go generator"
+        );
     }
 
     #[test]
@@ -302,8 +360,14 @@ mod tests {
         let req = |v: &str| GenerateRequest {
             mode: Mode::Code,
             schemas: vec![],
-            package: PackageMeta { name: "p".into(), version: "0.0.0".into() },
-            target: TargetLanguage { language: "rust".into(), version: v.into() },
+            package: PackageMeta {
+                name: "p".into(),
+                version: "0.0.0".into(),
+            },
+            target: TargetLanguage {
+                language: "rust".into(),
+                version: v.into(),
+            },
             wire_format: comline_core::schema::idl::annotations::DEFAULT_FORMAT.into(),
             external_std: false,
             validate_on_decode: Default::default(),

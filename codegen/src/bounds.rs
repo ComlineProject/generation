@@ -15,7 +15,9 @@ use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenUnit};
 /// array's length (`u8[4]`) isn't one: its type already holds it.
 pub fn has_bounds(ty: &TypeRef) -> bool {
     match ty {
-        TypeRef::Array { element, .. } if **element == TypeRef::Primitive(PrimitiveType::Char) => true,
+        TypeRef::Array { element, .. } if **element == TypeRef::Primitive(PrimitiveType::Char) => {
+            true
+        }
         TypeRef::Array { max: Some(_), .. } => true,
         TypeRef::Array { element, .. } => has_bounds(element),
         TypeRef::Union(members) => members.iter().any(has_bounds),
@@ -27,9 +29,10 @@ pub fn has_bounds(ty: &TypeRef) -> bool {
 /// itself may nest, the outermost value being level 1.
 pub fn max_depth(parameters: &[FrozenUnit]) -> Option<u64> {
     parameters.iter().find_map(|p| match p {
-        FrozenUnit::Property { name, value: ConfigValue::Integer(d) } if name == "max_depth" => {
-            u64::try_from(*d).ok()
-        }
+        FrozenUnit::Property {
+            name,
+            value: ConfigValue::Integer(d),
+        } if name == "max_depth" => u64::try_from(*d).ok(),
         _ => None,
     })
 }
@@ -40,7 +43,11 @@ mod tests {
     use crate::validation::Validation;
 
     fn array(element: TypeRef, length: Option<u64>, max: Option<u64>) -> TypeRef {
-        TypeRef::Array { element: Box::new(element), length, max }
+        TypeRef::Array {
+            element: Box::new(element),
+            length,
+            max,
+        }
     }
 
     const CHAR: TypeRef = TypeRef::Primitive(PrimitiveType::Char);
@@ -49,15 +56,33 @@ mod tests {
     fn strings_and_maximums_are_bounds_and_fixed_lengths_are_not() {
         assert!(has_bounds(&array(CHAR, None, Some(8))));
         assert!(has_bounds(&array(CHAR, Some(2), None)));
-        assert!(has_bounds(&array(TypeRef::Primitive(PrimitiveType::U8), None, Some(8))));
-        assert!(has_bounds(&array(array(CHAR, None, Some(8)), Some(3), None)));
-        assert!(!has_bounds(&array(TypeRef::Primitive(PrimitiveType::U8), Some(4), None)));
+        assert!(has_bounds(&array(
+            TypeRef::Primitive(PrimitiveType::U8),
+            None,
+            Some(8)
+        )));
+        assert!(has_bounds(&array(
+            array(CHAR, None, Some(8)),
+            Some(3),
+            None
+        )));
+        assert!(!has_bounds(&array(
+            TypeRef::Primitive(PrimitiveType::U8),
+            Some(4),
+            None
+        )));
         assert!(!has_bounds(&TypeRef::Primitive(PrimitiveType::String)));
         assert!(!has_bounds(&TypeRef::Named("Name".into())));
     }
 
     fn alias(name: &str, target: TypeRef) -> FrozenUnit {
-        FrozenUnit::TypeAlias { docstring: None, parameters: vec![], name: name.into(), target, span: (0, 0) }
+        FrozenUnit::TypeAlias {
+            docstring: None,
+            parameters: vec![],
+            name: name.into(),
+            target,
+            span: (0, 0),
+        }
     }
 
     #[test]
@@ -79,12 +104,18 @@ mod tests {
             model.expand_bounds("a", &array(TypeRef::Named("Name".into()), Some(2), None)),
             array(array(CHAR, None, Some(32)), Some(2), None)
         );
-        assert_eq!(model.expand_bounds("a", &TypeRef::Named("Id".into())), TypeRef::Named("Id".into()));
+        assert_eq!(
+            model.expand_bounds("a", &TypeRef::Named("Id".into())),
+            TypeRef::Named("Id".into())
+        );
     }
 
     #[test]
     fn a_depth_limit_is_read() {
-        let p = vec![FrozenUnit::Property { name: "max_depth".into(), value: ConfigValue::Integer(16) }];
+        let p = vec![FrozenUnit::Property {
+            name: "max_depth".into(),
+            value: ConfigValue::Integer(16),
+        }];
         assert_eq!(max_depth(&p), Some(16));
         assert_eq!(max_depth(&[]), None);
     }
