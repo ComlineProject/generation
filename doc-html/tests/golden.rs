@@ -11,7 +11,7 @@ use comline_codegen::protocol::{self, RenderOptions, RenderRequest, Request, Res
 
 fn options() -> RenderOptions {
     RenderOptions {
-        links: BTreeMap::from([("std".to_string(), "https://comlineproject.github.io/docs/std/".to_string())]),
+        links: BTreeMap::from([("std".to_string(), "https://comlineproject.github.io/docs/reference/schema/std/".to_string())]),
         ..Default::default()
     }
 }
@@ -49,7 +49,7 @@ fn dependency_types_link_to_their_docs() {
     let files = comline_doc_html::render_json(&model(), &RenderOptions::default()).unwrap();
     let get = |p: &str| &files.iter().find(|f| f.path.to_str() == Some(p)).unwrap().contents;
     let api = get("api.html");
-    assert!(api.contains("<a href=\"https://comlineproject.github.io/docs/std/http/#httpmethod\"><code>HttpMethod</code></a>"), "{api}");
+    assert!(api.contains("<a href=\"https://comlineproject.github.io/docs/reference/schema/std/http/#httpmethod\"><code>HttpMethod</code></a>"), "{api}");
     assert!(api.contains("<a href=\"deps/localdeps/greeting.html#greeting\"><code>Greeting</code></a>"), "{api}");
     assert!(api.contains("<a href=\"types.html#customer\"><code>Customer</code></a>"));
     // The sidebar: own modules, then an open Dependencies section whose packages are collapsed.

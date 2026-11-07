@@ -77,7 +77,7 @@ formats = ["html", "markdown", "json"]
 versions = { last = 5, since = "0.3.0", releases_only = true }
 renderer = "render.wasm"
 timeout = 30
-links = { std = "https://comlineproject.github.io/docs/std/" }
+links = { std = "https://comlineproject.github.io/docs/reference/schema/std/" }
 changelog_from = "0.3.0"
 "#;
 

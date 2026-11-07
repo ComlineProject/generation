@@ -351,8 +351,8 @@ impl DocModel {
 
 /// Where `std`'s published documentation is, when `[doc] links` names no
 /// other: the hosted docs, a module at `<base>/<module>/` and a unit at
-/// its lowercase anchor (`std/http/#httpmethod`).
-pub const STD_DOCS: &str = "https://comlineproject.github.io/docs/std/";
+/// its lowercase anchor (`reference/schema/std/http/#httpmethod`).
+pub const STD_DOCS: &str = "https://comlineproject.github.io/docs/reference/schema/std/";
 
 /// The base URL of `package`'s published documentation: `[doc] links`'
 /// entry for it, else [`STD_DOCS`] for `std`. A dependency without one is
