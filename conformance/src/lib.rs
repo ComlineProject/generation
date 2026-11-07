@@ -118,6 +118,8 @@ pub fn corpus() -> Vec<Fixture> {
         large_fixed_arrays_nested(),
         framing_jsonrpc(),
         handshake_none(),
+        framing_datagram3(),
+        handshake_comline2(),
         connections(),
         connections_async(),
         connections_jsonrpc(),
@@ -783,6 +785,116 @@ fn framing_jsonrpc() -> Fixture {
             span: (0, 0),
         }],
     )
+}
+
+/// A protocol on `datagram@3`, which calls by wire number: two functions
+/// whose numbers (from the facts the harness supplies) aren't their positions.
+fn framing_datagram3() -> Fixture {
+    Fixture::one(
+        "framing_datagram3",
+        "conformance",
+        vec![FrozenUnit::Protocol {
+            docstring: "Calls by wire number".to_string(),
+            parameters: vec![FrozenUnit::Property {
+                name: "framing".to_string(),
+                value: ConfigValue::Str("datagram@3".to_string()),
+            }],
+            name: "Counter".to_string(),
+            functions: vec![
+                function("add", vec![arg("n", PrimitiveType::U32)], Some("u32"), vec![]),
+                function("reset", vec![], None, vec![]),
+            ],
+            span: (0, 0),
+        }],
+    )
+}
+
+/// `comline@2` on `datagram@3`, in the dictionary form with a parameter.
+fn handshake_comline2() -> Fixture {
+    Fixture::one(
+        "handshake_comline2",
+        "conformance",
+        vec![FrozenUnit::Protocol {
+            docstring: "Checks compatibility by facts".to_string(),
+            parameters: vec![
+                FrozenUnit::Property {
+                    name: "framing".to_string(),
+                    value: ConfigValue::Str("datagram@3".to_string()),
+                },
+                FrozenUnit::Property {
+                    name: "handshake".to_string(),
+                    value: ConfigValue::Dict(vec![
+                        ("name".to_string(), ConfigValue::Str("comline@2".to_string())),
+                        ("newer_consumer".to_string(), ConfigValue::Name("refuse".to_string())),
+                    ]),
+                },
+            ],
+            name: "Chat".to_string(),
+            functions: vec![
+                function("send", vec![arg("text", PrimitiveType::U32)], Some("u32"), vec![]),
+                function("leave", vec![], None, vec![]),
+            ],
+            span: (0, 0),
+        }],
+    )
+}
+
+/// The facts a package's history would give `schemas` (`comline_core::compat`):
+/// what `comline generate` supplies for a package that needs them. Here the
+/// numbers run backwards from the declaration order, so a golden shows them
+/// apart from positions; the hashes are fixed stand-ins.
+pub fn facts_for(schemas: &[(String, Vec<FrozenUnit>)], wire_format: &str) -> comline_codegen::facts::PackageFacts {
+    use comline_codegen::facts::{EncodingFacts, FunctionFacts, PackageFacts, ProtocolFacts};
+    let mut protocols = vec![];
+    let mut encodings: Vec<EncodingFacts> = vec![];
+    let mut add = |kind: &str, name: &str, params: std::collections::BTreeMap<String, String>| {
+        let e = comline_core::compat::encoding(kind, name, params);
+        if !encodings.iter().any(|x| x.param_hash == e.param_hash) {
+            encodings.push(EncodingFacts { kind: e.kind, name: e.name, params: e.params, param_hash: e.param_hash });
+        }
+    };
+    add("format", &comline_codegen::encodings::canonical(wire_format), Default::default());
+    let mut number = 0u16;
+    for (namespace, units) in schemas {
+        for unit in units {
+            let FrozenUnit::Protocol { name, parameters, functions, .. } = unit else { continue };
+            add("framing", &comline_codegen::connections::framing_name(parameters), Default::default());
+            let handshake = comline_codegen::connections::handshake_value(parameters);
+            add("handshake", &handshake.name, handshake.wire_params());
+            let names: Vec<&str> = functions
+                .iter()
+                .filter_map(|f| match f {
+                    FrozenUnit::Function { name, .. } => Some(name.as_str()),
+                    _ => None,
+                })
+                .collect();
+            let count = names.len() as u16;
+            protocols.push(ProtocolFacts {
+                path: format!("{namespace}::{name}"),
+                namespace: namespace.clone(),
+                name: name.clone(),
+                line: "0.1.0".to_string(),
+                number,
+                shape_hash: "5a".repeat(32),
+                functions: names
+                    .iter()
+                    .enumerate()
+                    .map(|(i, f)| FunctionFacts {
+                        name: f.to_string(),
+                        since: "0.1.0".to_string(),
+                        number: count - 1 - i as u16,
+                    })
+                    .collect(),
+            });
+            number += 1;
+        }
+    }
+    PackageFacts {
+        id: Some("0123456789abcdef0123456789abcdef".to_string()),
+        version: "0.1.0".to_string(),
+        protocols,
+        encodings,
+    }
 }
 
 /// A protocol that runs no handshake, marked `@unverified` with the set core
