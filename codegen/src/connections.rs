@@ -2,7 +2,7 @@
 //! on the wire, and the hash a connection's handshake checks.
 //!
 //! A protocol runs on a `Connection` (the runtime's, calls in both
-//! directions) when it uses `datagram@2`, the default, or when the client
+//! directions) when it uses `datagram@2`, the default, or `datagram@3`, or when the client
 //! provides it (`@provider = Client` or `Multiple`), which core only allows
 //! with a framing that tells requests from replies. JSON-RPC's frames look the same
 //! either way, so once any JSON-RPC protocol in the package runs on a
@@ -19,14 +19,16 @@
 //! a protocol's number is its position among the package's protocols, in
 //! the order the request lists the schemas. Both ends were generated from
 //! the same IR, which the handshake checks with [`connection_ir_hash`], so
-//! they agree. `comline@2` will hand numbers out at the handshake instead.
+//! they agree. A protocol that needs the package's facts (`datagram@3`,
+//! which calls by wire number, or `comline@2`) carries its wire number
+//! instead: see [`crate::facts::addressing`].
 
 use crate::protocol::EncodingMapping;
 use std::collections::BTreeMap;
 
 use comline_core::schema::idl::annotations::{
-    FramingValue, MethodNames, DEFAULT_FRAMING, DEFAULT_HANDSHAKE, FRAMING_DATAGRAM2,
-    FRAMING_JSONRPC,
+    FramingValue, HandshakeValue, MethodNames, DEFAULT_FRAMING,
+    FRAMING_DATAGRAM2, FRAMING_JSONRPC,
 };
 use comline_core::schema::ir::frozen::schema_ir_hash;
 use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenUnit};
@@ -88,11 +90,26 @@ pub fn framing_name(parameters: &[FrozenUnit]) -> String {
 }
 
 /// A protocol's handshake by name, canonical: `comline@1` (the default),
-/// `none`, or a namespaced one as declared.
+/// `comline@2`, `none`, or a namespaced one as declared. Either form of
+/// `@handshake`: the name, or a dictionary with its parameters.
 pub fn handshake_name(parameters: &[FrozenUnit]) -> String {
-    property(parameters, "handshake")
-        .map(crate::encodings::canonical)
-        .unwrap_or_else(|| DEFAULT_HANDSHAKE.to_string())
+    match property(parameters, "handshake") {
+        Some(name) => crate::encodings::canonical(name),
+        None => crate::encodings::canonical(&HandshakeValue::of_protocol(parameters).name),
+    }
+}
+
+/// A protocol's handshake with its parameters, as [`HandshakeValue`] reads
+/// it: a parameter written as its default is the same as one left out.
+pub fn handshake_value(parameters: &[FrozenUnit]) -> HandshakeValue {
+    match property(parameters, "handshake") {
+        Some(name) => HandshakeValue::named(&crate::encodings::canonical(name)),
+        None => {
+            let mut value = HandshakeValue::of_protocol(parameters);
+            value.name = crate::encodings::canonical(&value.name);
+            value
+        }
+    }
 }
 
 /// Whether a protocol with these parameters, in a package of `schemas`,
@@ -100,6 +117,7 @@ pub fn handshake_name(parameters: &[FrozenUnit]) -> String {
 pub fn on_connection(schemas: &[(String, Vec<FrozenUnit>)], parameters: &[FrozenUnit]) -> bool {
     let name = framing_name(parameters);
     name == FRAMING_DATAGRAM2
+        || name == crate::facts::FRAMING_DATAGRAM3
         || Provider::of(parameters) != Provider::Server
         || (name == FRAMING_JSONRPC && jsonrpc_on_connection(schemas))
 }
@@ -202,8 +220,11 @@ pub struct Provided {
 pub struct PackageConnection {
     /// Canonical: `datagram@2`, `jsonrpc`, or a namespaced framing.
     pub framing: String,
-    /// Canonical: `comline@1` or `none`.
+    /// Canonical: `comline@1`, `comline@2` or `none`.
     pub handshake: String,
+    /// The handshake with its parameters, which every protocol on the
+    /// connection shares.
+    pub handshake_value: HandshakeValue,
     /// What the accepting side provides (`@provider = Server`, the default,
     /// and `Multiple`).
     pub server: Vec<Provided>,
@@ -226,6 +247,7 @@ pub fn package_connection(
     };
     let framing_name = self::framing_name(first_parameters);
     let handshake_name = self::handshake_name(first_parameters);
+    let handshake_value = self::handshake_value(first_parameters);
     for (namespace, name, parameters, _) in &on[1..] {
         let (f, h) = (
             self::framing_name(parameters),
@@ -241,6 +263,12 @@ pub fn package_connection(
             return Err(format!(
                 "`{first_ns}::{first}` runs the `{handshake_name}` handshake and `{namespace}::{name}` the `{h}` \
                  one, so there's no one connection to serve them on"
+            ));
+        }
+        if self::handshake_value(parameters) != handshake_value {
+            return Err(format!(
+                "`{first_ns}::{first}` and `{namespace}::{name}` give the `{handshake_name}` handshake different \
+                 parameters, so there's no one connection to serve them on"
             ));
         }
     }
@@ -276,6 +304,7 @@ pub fn package_connection(
     Ok(Some(PackageConnection {
         framing: framing_name,
         handshake: handshake_name,
+        handshake_value,
         server: side([Provider::Server, Provider::Multiple]),
         client: side([Provider::Client, Provider::Multiple]),
     }))
@@ -626,6 +655,45 @@ mod tests {
             ],
         )];
         assert!(check(&lockstep, &Default::default()).is_ok());
+    }
+
+    #[test]
+    fn a_dictionary_handshake_is_read_by_its_name() {
+        let dict = |entries: Vec<(&str, &str)>| {
+            property(
+                "handshake",
+                ConfigValue::Dict(
+                    entries
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), ConfigValue::Str(v.to_string())))
+                        .collect(),
+                ),
+            )
+        };
+        let params = vec![dict(vec![("name", "comline@2"), ("newer_consumer", "refuse")])];
+        assert_eq!(handshake_name(&params), "comline@2");
+        assert_eq!(handshake_value(&params).param("newer_consumer"), Some("refuse"));
+        assert_eq!(handshake_name(&[dict(vec![("name", "comline@2")])]), "comline@2");
+        assert_eq!(handshake_name(&[property("handshake", ConfigValue::Str("comline@2".into()))]), "comline@2");
+        assert_eq!(handshake_name(&[]), "comline@1");
+
+        // One connection, one set of parameters.
+        let schemas = vec![(
+            "app".to_string(),
+            vec![
+                protocol("A", vec![framing("datagram@3"), dict(vec![("name", "comline@2")])]),
+                protocol("B", vec![framing("datagram@3"), dict(vec![("name", "comline@2"), ("scope", "package")])]),
+            ],
+        )];
+        let err = package_connection(&schemas).unwrap_err();
+        assert!(err.contains("different parameters"), "{err}");
+    }
+
+    #[test]
+    fn datagram3_puts_a_protocol_on_a_connection() {
+        let parameters = vec![framing("datagram@3")];
+        let schemas = vec![("app".to_string(), vec![protocol("P", parameters.clone())])];
+        assert!(on_connection(&schemas, &parameters));
     }
 
     #[test]

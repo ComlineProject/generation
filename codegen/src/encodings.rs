@@ -293,8 +293,10 @@ mod tests {
             keys,
             [
                 "comline@1",
+                "comline@2",
                 "datagram",
                 "datagram@2",
+                "datagram@3",
                 "json@1",
                 "jsonrpc",
                 "msgpack@1",

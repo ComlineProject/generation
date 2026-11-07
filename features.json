@@ -101,6 +101,16 @@
       "title": "no handshake"
     },
     {
+      "description": "`@framing = \"datagram@3\"` (or as the package default): calls addressed by wire numbers",
+      "id": "framing-datagram3",
+      "title": "`datagram@3` framing"
+    },
+    {
+      "description": "`@handshake = \"comline@2\"` (or as the package default): compatibility checked by each version's facts, calls the peer lacks failing locally",
+      "id": "handshake-comline2",
+      "title": "`comline@2` handshake"
+    },
+    {
       "description": "protocols on a connection, with calls in both directions: `datagram@2` (the default), or `@provider = Client` / `Multiple`",
       "id": "connections",
       "title": "connections"
@@ -190,6 +200,8 @@
             "validators",
             "validators_on_decode",
             "handshake_none",
+            "framing_datagram3",
+            "handshake_comline2",
             "connections",
             "connections_async",
             "connections_jsonrpc",
@@ -277,8 +289,20 @@
             "validators",
             "validators_on_decode",
             "handshake_none",
+            "framing_datagram3",
+            "handshake_comline2",
             "connections",
             "connections_async"
+          ],
+          "since": null,
+          "state": "supported",
+          "tracking": null
+        },
+        "framing-datagram3": {
+          "note": null,
+          "proven_by": [
+            "framing_datagram3",
+            "handshake_comline2"
           ],
           "since": null,
           "state": "supported",
@@ -289,6 +313,15 @@
           "proven_by": [
             "framing_jsonrpc",
             "connections_jsonrpc"
+          ],
+          "since": null,
+          "state": "supported",
+          "tracking": null
+        },
+        "handshake-comline2": {
+          "note": null,
+          "proven_by": [
+            "handshake_comline2"
           ],
           "since": null,
           "state": "supported",
@@ -373,6 +406,8 @@
             "validators_on_decode",
             "framing_jsonrpc",
             "handshake_none",
+            "framing_datagram3",
+            "handshake_comline2",
             "connections",
             "connections_async",
             "connections_jsonrpc",
@@ -521,6 +556,8 @@
             "validators",
             "validators_on_decode",
             "handshake_none",
+            "framing_datagram3",
+            "handshake_comline2",
             "connections",
             "connections_async",
             "connections_jsonrpc",
@@ -607,8 +644,20 @@
             "validators",
             "validators_on_decode",
             "handshake_none",
+            "framing_datagram3",
+            "handshake_comline2",
             "connections",
             "connections_async"
+          ],
+          "since": null,
+          "state": "supported",
+          "tracking": null
+        },
+        "framing-datagram3": {
+          "note": null,
+          "proven_by": [
+            "framing_datagram3",
+            "handshake_comline2"
           ],
           "since": null,
           "state": "supported",
@@ -619,6 +668,15 @@
           "proven_by": [
             "framing_jsonrpc",
             "connections_jsonrpc"
+          ],
+          "since": null,
+          "state": "supported",
+          "tracking": null
+        },
+        "handshake-comline2": {
+          "note": null,
+          "proven_by": [
+            "handshake_comline2"
           ],
           "since": null,
           "state": "supported",
@@ -704,6 +762,8 @@
             "validators_on_decode",
             "framing_jsonrpc",
             "handshake_none",
+            "framing_datagram3",
+            "handshake_comline2",
             "connections",
             "connections_async",
             "connections_jsonrpc",

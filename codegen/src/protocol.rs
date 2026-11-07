@@ -236,6 +236,13 @@ pub struct GenerateRequest {
     /// encodings are declared in `config.idp` (core#120).
     #[serde(default)]
     pub encodings: BTreeMap<String, EncodingMapping>,
+    /// The package version's facts (`comline_core::compat`): wire numbers,
+    /// lines, shape and parameter hashes, the package id. Only for a
+    /// package with a protocol that needs them (`datagram@3`, which calls
+    /// by wire number, or `comline@2`: [`crate::facts::needed`]), and `None`
+    /// otherwise, which leaves the request as it was before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub facts: Option<crate::facts::PackageFacts>,
 }
 
 impl GenerateRequest {
@@ -654,6 +661,7 @@ mod tests {
                     ..Default::default()
                 },
             )]),
+            facts: None,
         }
     }
 
@@ -859,6 +867,7 @@ mod tests {
             decoded,
             GenerateRequest {
                 encodings: BTreeMap::new(),
+                facts: None,
                 ..r
             }
         );

@@ -57,6 +57,8 @@ pub enum Feature {
     ValidateOnDecode,
     FramingJsonRpc,
     HandshakeNone,
+    FramingDatagram3,
+    HandshakeComline2,
     Connections,
     Async,
     FormatPacked,
@@ -89,6 +91,8 @@ impl Feature {
         Feature::ValidateOnDecode,
         Feature::FramingJsonRpc,
         Feature::HandshakeNone,
+        Feature::FramingDatagram3,
+        Feature::HandshakeComline2,
         Feature::Connections,
         Feature::Async,
         Feature::FormatPacked,
@@ -121,6 +125,8 @@ impl Feature {
             Feature::ValidateOnDecode => "validate-on-decode",
             Feature::FramingJsonRpc => "framing-jsonrpc",
             Feature::HandshakeNone => "handshake-none",
+            Feature::FramingDatagram3 => "framing-datagram3",
+            Feature::HandshakeComline2 => "handshake-comline2",
             Feature::Connections => "connections",
             Feature::Async => "async",
             Feature::FormatPacked => "format-packed",
@@ -159,6 +165,8 @@ impl Feature {
             Feature::ValidateOnDecode => "`validate_on_decode`",
             Feature::FramingJsonRpc => "JSON-RPC framing",
             Feature::HandshakeNone => "no handshake",
+            Feature::FramingDatagram3 => "`datagram@3` framing",
+            Feature::HandshakeComline2 => "`comline@2` handshake",
             Feature::Connections => "connections",
             Feature::Async => "`async`",
             Feature::FormatPacked => "the `packed@1` format",
@@ -195,6 +203,13 @@ impl Feature {
             Feature::ValidateOnDecode => "`[generate] validate_on_decode`: decoding runs the checks",
             Feature::FramingJsonRpc => "`@framing = \"jsonrpc\"` (or as the package default)",
             Feature::HandshakeNone => "`@handshake = \"none\"` (or as the package default)",
+            Feature::FramingDatagram3 => {
+                "`@framing = \"datagram@3\"` (or as the package default): calls addressed by wire numbers"
+            }
+            Feature::HandshakeComline2 => {
+                "`@handshake = \"comline@2\"` (or as the package default): compatibility checked by each \
+                 version's facts, calls the peer lacks failing locally"
+            }
             Feature::Connections => {
                 "protocols on a connection, with calls in both directions: `datagram@2` (the default), \
                  or `@provider = Client` / `Multiple`"
@@ -480,6 +495,12 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                     // Core has already applied the package's default here.
                     if annotation(parameters, "handshake") == Some(HANDSHAKE_NONE) {
                         push(Feature::HandshakeNone, owner.clone(), Some(*span));
+                    }
+                    if framing == crate::facts::FRAMING_DATAGRAM3 {
+                        push(Feature::FramingDatagram3, owner.clone(), Some(*span));
+                    }
+                    if crate::connections::handshake_name(parameters) == crate::facts::HANDSHAKE_COMLINE2 {
+                        push(Feature::HandshakeComline2, owner.clone(), Some(*span));
                     }
                     if crate::connections::on_connection(schemas, parameters) {
                         push(Feature::Connections, owner.clone(), Some(*span));
