@@ -336,7 +336,7 @@ mod tests {
         let overrides = BTreeMap::from([("jsonrpc@1".to_string(), mapping("mine::Rpc"))]);
         let overridden =
             resolve("rust", official::units(), &[], &overrides, &BTreeSet::new()).unwrap();
-        assert_eq!(overridden["jsonrpc"], mapping("mine::Rpc"));
+        assert_eq!(overridden["jsonrpc"].type_path, "mine::Rpc");
         assert!(!overridden.contains_key("jsonrpc@1"));
     }
 
