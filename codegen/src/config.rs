@@ -304,13 +304,13 @@ impl EncodingEntry {
         match self {
             EncodingEntry::Type(ty) => crate::protocol::EncodingMapping {
                 type_path: ty.clone(),
-                package: None,
-                version: None,
+                ..Default::default()
             },
             EncodingEntry::Full(t) => crate::protocol::EncodingMapping {
                 type_path: t.ty.clone(),
                 package: t.package.clone(),
                 version: t.version.clone(),
+                ..Default::default()
             },
         }
     }

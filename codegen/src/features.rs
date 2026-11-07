@@ -348,6 +348,8 @@ pub struct Options {
     /// The package's `wire.format`, canonical; `None` is the default.
     pub wire_format: Option<String>,
     pub async_api: bool,
+    /// The mappings, for what their framings state.
+    pub encodings: BTreeMap<String, crate::protocol::EncodingMapping>,
 }
 
 impl Options {
@@ -358,6 +360,7 @@ impl Options {
             validate_on_decode: req.validate_on_decode,
             wire_format: Some(req.wire_format.clone()),
             async_api: req.async_api,
+            encodings: req.encodings.clone(),
         }
     }
 }
@@ -471,9 +474,9 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                     // Core has already applied the package's `wire.framing`.
                     if crate::connections::framing(parameters).name == FRAMING_JSONRPC {
                         push(Feature::FramingJsonRpc, owner.clone(), Some(*span));
-                    } else {
-                        formatted = true;
                     }
+                    let framing = crate::connections::framing_name(parameters);
+                    formatted |= !crate::encodings::writes_json(&options.encodings, &framing);
                     // Core has already applied the package's default here.
                     if annotation(parameters, "handshake") == Some(HANDSHAKE_NONE) {
                         push(Feature::HandshakeNone, owner.clone(), Some(*span));

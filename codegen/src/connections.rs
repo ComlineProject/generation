@@ -21,6 +21,9 @@
 //! the same IR, which the handshake checks with [`connection_ir_hash`], so
 //! they agree. `comline@2` will hand numbers out at the handshake instead.
 
+use crate::protocol::EncodingMapping;
+use std::collections::BTreeMap;
+
 use comline_core::schema::idl::annotations::{
     FramingValue, MethodNames, DEFAULT_FRAMING, DEFAULT_HANDSHAKE, FRAMING_DATAGRAM2,
     FRAMING_JSONRPC,
@@ -109,7 +112,7 @@ fn jsonrpc_on_connection(schemas: &[(String, Vec<FrozenUnit>)]) -> bool {
     })
 }
 
-/// The method JSON-RPC calls `function` of `protocol` (declared in the
+/// The method a framing that names its calls calls `function` of `protocol` (declared in the
 /// schema `namespace`) by: `send`, or `chat.Chat/send` when qualified.
 pub fn method_name(namespace: &str, protocol: &str, function: &str, names: MethodNames) -> String {
     match names {
@@ -123,11 +126,14 @@ pub fn method_name(namespace: &str, protocol: &str, function: &str, names: Metho
     }
 }
 
-/// Refuses JSON-RPC protocols on one connection whose bare method names one
-/// side couldn't tell apart: two protocols the same side provides, both
-/// with a function of the same name.
-pub fn check(schemas: &[(String, Vec<FrozenUnit>)]) -> Result<()> {
-    let problems = bare_name_clashes(schemas);
+/// Refuses protocols on one connection whose bare method names one side
+/// couldn't tell apart: two protocols the same side provides, both with a
+/// function of the same name, on a framing that names its calls.
+pub fn check(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    encodings: &BTreeMap<String, EncodingMapping>,
+) -> Result<()> {
+    let problems = bare_name_clashes(schemas, encodings);
     if !problems.is_empty() {
         bail!("{}", problems.join("\n"));
     }
@@ -135,7 +141,10 @@ pub fn check(schemas: &[(String, Vec<FrozenUnit>)]) -> Result<()> {
 }
 
 /// [`check`]'s problems, one sentence each.
-pub fn bare_name_clashes(schemas: &[(String, Vec<FrozenUnit>)]) -> Vec<String> {
+pub fn bare_name_clashes(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    encodings: &BTreeMap<String, EncodingMapping>,
+) -> Vec<String> {
     let mut problems = Vec::new();
     // Each side looks a method up among the protocols it provides.
     for (side, provides) in [
@@ -144,8 +153,9 @@ pub fn bare_name_clashes(schemas: &[(String, Vec<FrozenUnit>)]) -> Vec<String> {
     ] {
         let mut seen: Vec<(&str, String)> = Vec::new();
         for (namespace, name, parameters, functions) in protocols(schemas) {
-            let framing = framing(parameters);
-            let bare = framing.name == FRAMING_JSONRPC && framing.method_names == MethodNames::Bare;
+            let framing = framing_name(parameters);
+            let bare = crate::encodings::names_calls(encodings, &framing)
+                && MethodNames::of_protocol(parameters) == MethodNames::Bare;
             if !bare
                 || !provides.contains(&Provider::of(parameters))
                 || !on_connection(schemas, parameters)
@@ -160,8 +170,8 @@ pub fn bare_name_clashes(schemas: &[(String, Vec<FrozenUnit>)]) -> Vec<String> {
                 match seen.iter().find(|(f, _)| *f == function) {
                     Some((_, other)) if *other != protocol => problems.push(format!(
                         "protocols `{other}` and `{protocol}` both have a function `{function}`, and the {side} \
-                         provides both on one JSON-RPC connection, where bare method names can't tell them \
-                         apart - use `@framing = {{ name = \"jsonrpc\", method_names = qualified }}` on either"
+                         provides both on one `{framing}` connection, where bare method names can't tell them \
+                         apart - use `@framing = {{ name = \"{framing}\", method_names = qualified }}` on either"
                     )),
                     Some(_) => {}
                     None => seen.push((function, protocol.clone())),
@@ -546,6 +556,25 @@ mod tests {
     }
 
     #[test]
+    fn bare_names_clash_on_any_framing_that_names_its_calls() {
+        let lines = "com.acme.lines@1";
+        let on_lines = |name, functions: &[&str]| {
+            with_functions(name, vec![provider("Client"), framing(lines)], functions)
+        };
+        let clash = vec![("app".to_string(), vec![on_lines("Chat", &["send"]), on_lines("Admin", &["send"])])];
+        let facts = |calls: &str| {
+            BTreeMap::from([(
+                lines.to_string(),
+                EncodingMapping { calls: Some(calls.to_string()), ..Default::default() },
+            )])
+        };
+        let problems = bare_name_clashes(&clash, &facts("by_name"));
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].contains("one `com.acme.lines@1` connection"), "{problems:?}");
+        assert!(bare_name_clashes(&clash, &facts("by_index")).is_empty());
+    }
+
+    #[test]
     fn bare_names_one_side_could_confuse_are_refused() {
         let chat = |parameters| with_functions("Chat", parameters, &["send", "count"]);
         let admin = |parameters| with_functions("Admin", parameters, &["send"]);
@@ -564,7 +593,7 @@ mod tests {
                 events.clone(),
             ],
         )];
-        let problems = bare_name_clashes(&clash);
+        let problems = bare_name_clashes(&clash, &Default::default());
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert!(
             problems[0].contains("`app::Chat` and `app::Admin` both have a function `send`"),
@@ -574,7 +603,7 @@ mod tests {
             problems[0].contains("the server provides both"),
             "{problems:?}"
         );
-        assert!(check(&clash).is_err());
+        assert!(check(&clash, &Default::default()).is_err());
 
         // Qualifying either is enough; `Events` is the client's, so its
         // `send` never meets the server's.
@@ -586,7 +615,7 @@ mod tests {
                 events.clone(),
             ],
         )];
-        assert!(check(&fine).is_ok());
+        assert!(check(&fine, &Default::default()).is_ok());
 
         // Off a connection there's one protocol per server, so nothing clashes.
         let lockstep = vec![(
@@ -596,7 +625,7 @@ mod tests {
                 admin(vec![framing("jsonrpc")]),
             ],
         )];
-        assert!(check(&lockstep).is_ok());
+        assert!(check(&lockstep, &Default::default()).is_ok());
     }
 
     #[test]

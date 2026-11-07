@@ -66,6 +66,7 @@ fn options(fx: &Fixture) -> Options {
         validate_on_decode: fx.validate_on_decode,
         wire_format: fx.wire_format.map(str::to_string),
         async_api: fx.async_api,
+        ..Default::default()
     }
 }
 
