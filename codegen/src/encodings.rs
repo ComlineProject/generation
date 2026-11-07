@@ -214,6 +214,7 @@ mod tests {
             profile_hash: String::new(),
             map,
             establishes: Vec::new(),
+            grammar: None,
             has_vectors: false,
         }
     }
