@@ -959,7 +959,7 @@ fn moved_default_framing(written: &str) -> miette::Report {
         "`default_framing` moved from {FILE_NAME} to config.idp\n  \
          help: drop it here, and declare the package's framing in config.idp:\n      \
          wire = {{ framing = \"{framing}\" }}\n  \
-         Protocols with no `@framing` default to `datagram@2` without it."
+         Protocols with no `@framing` default to `datagram@3` without it."
     )
 }
 

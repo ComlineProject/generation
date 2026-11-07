@@ -2,7 +2,7 @@
 //! on the wire, and the hash a connection's handshake checks.
 //!
 //! A protocol runs on a `Connection` (the runtime's, calls in both
-//! directions) when it uses `datagram@2`, the default, or `datagram@3`, or when the client
+//! directions) when it uses `datagram@3`, the default, or `datagram@2`, or when the client
 //! provides it (`@provider = Client` or `Multiple`), which core only allows
 //! with a framing that tells requests from replies. JSON-RPC's frames look the same
 //! either way, so once any JSON-RPC protocol in the package runs on a
@@ -27,8 +27,8 @@ use crate::protocol::EncodingMapping;
 use std::collections::BTreeMap;
 
 use comline_core::schema::idl::annotations::{
-    FramingValue, HandshakeValue, MethodNames, DEFAULT_FRAMING,
-    FRAMING_DATAGRAM2, FRAMING_JSONRPC,
+    FramingValue, HandshakeValue, MethodNames, FRAMING_DATAGRAM2, FRAMING_JSONRPC,
+    IMPLICIT_FRAMING,
 };
 use comline_core::schema::ir::frozen::schema_ir_hash;
 use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenUnit};
@@ -56,11 +56,13 @@ impl Provider {
 }
 
 /// A protocol's framing: its `@framing` in either form, else `datagram@2`.
-/// Core has already written the package's `wire.framing` into every
-/// protocol without its own, so this is the whole resolution.
+/// Core has already written the package's `wire.framing`, or its own
+/// default (`datagram@3`), into every protocol without its own, unless it's
+/// `datagram@2`, what an absent one means
+/// ([`IMPLICIT_FRAMING`]), so this is the whole resolution.
 pub fn framing(parameters: &[FrozenUnit]) -> FramingValue {
     FramingValue::of_protocol(parameters)
-        .or_else(|| FramingValue::named(DEFAULT_FRAMING))
+        .or_else(|| FramingValue::named(IMPLICIT_FRAMING))
         .expect("the default framing is a known one")
 }
 
@@ -86,10 +88,11 @@ pub fn framing_name(parameters: &[FrozenUnit]) -> String {
     });
     written
         .map(crate::encodings::canonical)
-        .unwrap_or_else(|| DEFAULT_FRAMING.to_string())
+        .unwrap_or_else(|| IMPLICIT_FRAMING.to_string())
 }
 
-/// A protocol's handshake by name, canonical: `comline@1` (the default),
+/// A protocol's handshake by name, canonical: `comline@1` (what an absent
+/// one means: core freezes `comline@2`, its default, in),
 /// `comline@2`, `none`, or a namespaced one as declared. Either form of
 /// `@handshake`: the name, or a dictionary with its parameters.
 pub fn handshake_name(parameters: &[FrozenUnit]) -> String {

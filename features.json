@@ -111,7 +111,7 @@
       "title": "`comline@2` handshake"
     },
     {
-      "description": "protocols on a connection, with calls in both directions: `datagram@2` (the default), or `@provider = Client` / `Multiple`",
+      "description": "protocols on a connection, with calls in both directions: `datagram@3` (the default) or `datagram@2`, or `@provider = Client` / `Multiple`",
       "id": "connections",
       "title": "connections"
     },
