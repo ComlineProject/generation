@@ -264,8 +264,9 @@ impl GenerateRequest {
     }
 }
 
-/// Where one encoding's implementation lives in the target's language.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Where one encoding's implementation lives in the target's language, and
+/// what a framing's profile states that decides what's generated for it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EncodingMapping {
     /// The type implementing it: `comline_runtime::framing::Datagram2Framing`.
     pub type_path: String,
@@ -275,6 +276,12 @@ pub struct EncodingMapping {
     /// That package's version requirement.
     #[serde(default)]
     pub version: Option<String>,
+    /// The grammar a framing writes a payload into (`json`), if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grammar: Option<String>,
+    /// How a framing's frames say what they call (`by_name`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calls: Option<String>,
 }
 
 /// What a generator answers.
@@ -644,6 +651,7 @@ mod tests {
                     type_path: "x::Datagram2".into(),
                     package: Some("x".into()),
                     version: None,
+                    ..Default::default()
                 },
             )]),
         }

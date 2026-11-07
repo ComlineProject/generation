@@ -26,7 +26,7 @@ use crate::protocol::{EncodingMapping, GenerateRequest};
 // External Uses
 use comline_core::encodings::{official, EncodingKind};
 use comline_core::package::config::ir::frozen::FrozenUnit as ConfigUnit;
-use comline_core::schema::idl::annotations::{FORMAT_JSON, FRAMING_JSONRPC, HANDSHAKE_NONE};
+use comline_core::schema::idl::annotations::{FORMAT_JSON, HANDSHAKE_NONE};
 use comline_core::schema::ir::frozen::unit::FrozenUnit;
 use eyre::{bail, Result};
 
@@ -49,13 +49,17 @@ pub fn canonical(name: &str) -> String {
 
 /// Every encoding a package uses, canonical: its wire format, and each
 /// protocol's framing and handshake (`none` is no handshake, so not one).
-/// A JSON-RPC protocol carries JSON whatever the wire format is, so it uses
-/// `json@1` too.
-pub fn used(schemas: &[(String, Vec<FrozenUnit>)], wire_format: &str) -> BTreeSet<String> {
+/// A protocol on a framing that writes JSON (`writes_json`) carries it whatever
+/// the wire format is, so it uses `json@1` too.
+pub fn used(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    wire_format: &str,
+    writes_json: &dyn Fn(&str) -> bool,
+) -> BTreeSet<String> {
     let mut used = BTreeSet::from([canonical(wire_format)]);
     for (_, _, parameters, _) in connections::protocols(schemas) {
         let framing = connections::framing_name(parameters);
-        if framing == FRAMING_JSONRPC {
+        if writes_json(&framing) {
             used.insert(FORMAT_JSON.to_string());
         }
         used.insert(framing);
@@ -97,12 +101,21 @@ pub fn resolve(
                     type_path: m.ty.clone(),
                     package: m.package.clone(),
                     version: m.version.clone(),
+                    ..Default::default()
                 },
             );
         }
     }
     for (name, mapping) in overrides {
         resolved.insert(canonical(name), mapping.clone());
+    }
+    for unit in official.iter().chain(declared) {
+        if let ConfigUnit::Encoding { name, grammar, calls, .. } = unit {
+            if let Some(mapping) = resolved.get_mut(&canonical(name)) {
+                mapping.grammar = grammar.clone();
+                mapping.calls = calls.clone();
+            }
+        }
     }
     let missing: Vec<&String> = used
         .iter()
@@ -129,7 +142,8 @@ pub fn resolve(
 /// encoding, naming it and the target's language; after this, a generator
 /// may look any used encoding up and rely on finding it.
 pub fn check(req: &GenerateRequest) -> Result<()> {
-    let missing: Vec<String> = used(&req.schemas, &req.wire_format)
+    let writes_json = |framing: &str| writes_json(&req.encodings, framing);
+    let missing: Vec<String> = used(&req.schemas, &req.wire_format, &writes_json)
         .into_iter()
         .filter(|name| !req.encodings.contains_key(name))
         .map(|name| {
@@ -144,6 +158,25 @@ pub fn check(req: &GenerateRequest) -> Result<()> {
         bail!("{}", missing.join("\n"));
     }
     Ok(())
+}
+
+/// Whether the framing `name` writes its payloads as JSON, so a protocol on it
+/// encodes with JSON whatever the package's format is.
+pub fn writes_json(encodings: &BTreeMap<String, EncodingMapping>, name: &str) -> bool {
+    let grammar = match official::profile(EncodingKind::Framing, name) {
+        Some(profile) => profile.grammar(),
+        None => encodings.get(name).and_then(|mapping| mapping.grammar.clone()),
+    };
+    grammar.as_deref() == Some("json")
+}
+
+/// Whether the framing `name` calls by a method's name.
+pub fn names_calls(encodings: &BTreeMap<String, EncodingMapping>, name: &str) -> bool {
+    let calls = match official::profile(EncodingKind::Framing, name) {
+        Some(profile) => profile.stated("calls"),
+        None => encodings.get(name).and_then(|mapping| mapping.calls.clone()),
+    };
+    calls.as_deref() == Some("by_name")
 }
 
 /// The type a used encoding maps to. Only for a name [`check`] has
@@ -177,7 +210,14 @@ pub fn fill(
     declared: &[ConfigUnit],
     overrides: &BTreeMap<String, EncodingMapping>,
 ) -> Result<()> {
-    let used = used(&req.schemas, &req.wire_format);
+    let writes_json = |framing: &str| {
+        let frozen = official.iter().chain(declared).find_map(|unit| match unit {
+            ConfigUnit::Encoding { name, grammar, .. } if canonical(name) == framing => Some(grammar),
+            _ => None,
+        });
+        frozen.is_some_and(|grammar| grammar.as_deref() == Some("json"))
+    };
+    let used = used(&req.schemas, &req.wire_format, &writes_json);
     req.encodings = resolve(&req.target.language, official, declared, overrides, &used)?;
     Ok(())
 }
@@ -191,8 +231,7 @@ mod tests {
     fn mapping(ty: &str) -> EncodingMapping {
         EncodingMapping {
             type_path: ty.into(),
-            package: None,
-            version: None,
+            ..Default::default()
         }
     }
 
@@ -215,6 +254,8 @@ mod tests {
             map,
             establishes: Vec::new(),
             grammar: None,
+            calls: None,
+            directions: None,
             has_vectors: false,
         }
     }
@@ -344,12 +385,45 @@ mod tests {
     }
 
     #[test]
+    fn a_framing_writing_json_uses_json_and_its_facts_reach_the_mapping() {
+        let schemas = vec![("app".to_string(), vec![protocol("com.acme.lines@1")])];
+        for (grammar, uses_json) in [(Some("json"), true), (None, false)] {
+            let mut unit = declared("com.acme.lines@1", EncodingKind::Framing, Some("Lines"));
+            if let ConfigUnit::Encoding { grammar: g, calls, .. } = &mut unit {
+                *g = grammar.map(str::to_string);
+                *calls = Some("by_name".to_string());
+            }
+            let units = [unit];
+            let writes_json = |framing: &str| {
+                framing == "com.acme.lines@1" && grammar == Some("json")
+            };
+            assert_eq!(used(&schemas, "packed@1", &writes_json).contains("json@1"), uses_json);
+
+            // An override changes the type, not what the profile states.
+            let overrides = BTreeMap::from([("com.acme.lines@1".to_string(), mapping("Mine"))]);
+            let resolved = resolve("rust", &[], &units, &overrides, &BTreeSet::new()).unwrap();
+            assert_eq!(writes_json_of(&resolved), uses_json);
+            assert!(names_calls(&resolved, "com.acme.lines@1"));
+            assert_eq!(resolved["com.acme.lines@1"].type_path, "Mine");
+        }
+        fn writes_json_of(resolved: &BTreeMap<String, EncodingMapping>) -> bool {
+            super::writes_json(resolved, "com.acme.lines@1")
+        }
+        // An official framing's come from its profile, mapped or not.
+        assert!(writes_json(&BTreeMap::new(), "jsonrpc"));
+        assert!(names_calls(&BTreeMap::new(), "jsonrpc"));
+        assert!(!writes_json(&BTreeMap::new(), "datagram@2"));
+        assert!(!names_calls(&BTreeMap::new(), "datagram@2"));
+    }
+
+    #[test]
     fn used_names_the_format_framings_and_handshakes() {
         let schemas = vec![(
             "app".to_string(),
             vec![protocol("com.acme.lines@1"), protocol("json-rpc")],
         )];
-        let used: Vec<String> = used(&schemas, "packed@1").into_iter().collect();
+        let writes_json = |framing: &str| writes_json(&BTreeMap::new(), framing);
+        let used: Vec<String> = used(&schemas, "packed@1", &writes_json).into_iter().collect();
         assert_eq!(
             used,
             [
