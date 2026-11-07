@@ -211,8 +211,8 @@ impl Feature {
                  version's facts, calls the peer lacks failing locally"
             }
             Feature::Connections => {
-                "protocols on a connection, with calls in both directions: `datagram@2` (the default), \
-                 or `@provider = Client` / `Multiple`"
+                "protocols on a connection, with calls in both directions: `datagram@3` (the default) \
+                 or `datagram@2`, or `@provider = Client` / `Multiple`"
             }
             Feature::Async => "`[generate] async`: connection protocols get async handlers and senders",
             Feature::FormatPacked => "`wire.format = \"packed@1\"`, the default: fixed-width fields, no tags",
