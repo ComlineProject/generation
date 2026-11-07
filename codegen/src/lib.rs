@@ -12,6 +12,7 @@ pub mod config;
 pub mod connections;
 pub mod doc_model;
 pub mod encodings;
+pub mod facts;
 pub mod features;
 pub mod modules;
 pub mod naming;
@@ -373,6 +374,7 @@ mod tests {
             validate_on_decode: Default::default(),
             async_api: false,
             encodings: Default::default(),
+            facts: None,
         };
         assert!(req("1.81").at_least("1.81.0"));
         assert!(req("1.90.0").at_least("1.81.0"));
