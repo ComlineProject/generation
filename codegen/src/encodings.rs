@@ -71,6 +71,29 @@ pub fn used(
     used
 }
 
+/// [`used`], each framing judged by what its declaration froze: its
+/// `grammar` (a profile's `payload`), whether the official package, the
+/// package itself or a dependency declares it. `official` is
+/// [`official::units`], `declared` the frozen configs of the package and its
+/// dependencies (anything but [`ConfigUnit::Encoding`] is skipped). A
+/// framing nothing in view declares writes no JSON. What [`fill`] uses, so
+/// an editor calling this expects what `comline generate` will.
+pub fn used_as_declared(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    wire_format: &str,
+    official: &[ConfigUnit],
+    declared: &[ConfigUnit],
+) -> BTreeSet<String> {
+    let writes_json = |framing: &str| {
+        let frozen = official.iter().chain(declared).find_map(|unit| match unit {
+            ConfigUnit::Encoding { name, grammar, .. } if canonical(name) == framing => Some(grammar),
+            _ => None,
+        });
+        frozen.is_some_and(|grammar| grammar.as_deref() == Some("json"))
+    };
+    used(schemas, wire_format, &writes_json)
+}
+
 /// Resolve every encoding's mapping onto `language`, by canonical name.
 ///
 /// `official` is the official package's declarations
@@ -210,14 +233,7 @@ pub fn fill(
     declared: &[ConfigUnit],
     overrides: &BTreeMap<String, EncodingMapping>,
 ) -> Result<()> {
-    let writes_json = |framing: &str| {
-        let frozen = official.iter().chain(declared).find_map(|unit| match unit {
-            ConfigUnit::Encoding { name, grammar, .. } if canonical(name) == framing => Some(grammar),
-            _ => None,
-        });
-        frozen.is_some_and(|grammar| grammar.as_deref() == Some("json"))
-    };
-    let used = used(&req.schemas, &req.wire_format, &writes_json);
+    let used = used_as_declared(&req.schemas, &req.wire_format, official, declared);
     req.encodings = resolve(&req.target.language, official, declared, overrides, &used)?;
     Ok(())
 }
@@ -400,6 +416,9 @@ mod tests {
                 framing == "com.acme.lines@1" && grammar == Some("json")
             };
             assert_eq!(used(&schemas, "packed@1", &writes_json).contains("json@1"), uses_json);
+            // Judged by the declaration's frozen facts, wherever it's declared.
+            let as_declared = used_as_declared(&schemas, "packed@1", official::units(), &units);
+            assert_eq!(as_declared.contains("json@1"), uses_json);
 
             // An override changes the type, not what the profile states.
             let overrides = BTreeMap::from([("com.acme.lines@1".to_string(), mapping("Mine"))]);
