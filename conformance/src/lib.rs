@@ -706,7 +706,9 @@ fn validated_schemas() -> Vec<(String, Vec<FrozenUnit>)> {
     vec![
         (
             "std/validators".to_string(),
-            IncrementalInterpreter::from_source(std_validators),
+            // Std's source is embedded as checked out; on Windows a git checkout
+            // may have turned its newlines into CRLF, which the IR hash sees.
+            IncrementalInterpreter::from_source(&std_validators.replace("\r\n", "\n")),
         ),
         (
             "conformance".to_string(),
