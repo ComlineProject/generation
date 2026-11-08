@@ -17,6 +17,22 @@ jobs:
       - run: cargo build --verbose
       - run: cargo test --verbose
 
+  # The same build and test on the other platforms (core#9). The Linux x86_64
+  # job above keeps its name; these are additional checks.
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup update stable && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --verbose
+      - run: cargo test --verbose
+
   # `comline-codegen` takes core's IR only, with no parser, so it (and so a
   # generator binary) builds for WASI and the browser.
   wasm:
