@@ -25,8 +25,8 @@ pub const HELLO: &[u8] = &[
 
 /// The `comline@2` handshake, with [`HELLO`] and the parameters the package
 /// states: `scope = protocol`, `newer_consumer = refuse`, `same_version_differs = refuse`, `exchange = offer`.
-pub fn handshake() -> comline_runtime::comline2::Comline2Handshake {
-    use comline_runtime::comline2 as c2;
+pub fn handshake() -> comline_runtime::handshake::comline2::Comline2Handshake {
+    use comline_runtime::handshake::comline2 as c2;
     let hello = match c2::Message::decode(HELLO) {
         Ok(c2::Message::Hello(hello)) => hello,
         _ => unreachable!("HELLO is a Hello message"),
@@ -51,7 +51,7 @@ fn protocol_path(number: u16) -> &'static str {
 /// the connection's extensions.
 #[derive(Debug, Clone)]
 pub struct Negotiation {
-    pub negotiated: comline_runtime::comline2::Negotiated,
+    pub negotiated: comline_runtime::handshake::comline2::Negotiated,
     /// The last call that wasn't made because the peer can't take it.
     pub unavailable: Option<Unavailable>,
 }
@@ -82,7 +82,7 @@ impl ::core::error::Error for Unavailable {}
 
 /// What the connection's `comline@2` handshake agreed, if `accept` / `connect`
 /// opened it.
-pub fn negotiated<P: comline_runtime::contract::Peer>(peer: &mut P) -> Option<comline_runtime::comline2::Negotiated> {
+pub fn negotiated<P: comline_runtime::contract::Peer>(peer: &mut P) -> Option<comline_runtime::handshake::comline2::Negotiated> {
     let extensions = peer.extensions();
     extensions.get::<Negotiation>().map(|n| n.negotiated.clone())
 }
@@ -118,7 +118,7 @@ pub fn check_call<P: comline_runtime::contract::Peer>(peer: &mut P, protocol: u1
         Err(error) => error,
     };
     let refused = n.negotiated.protocols.iter().find(|p| p.number == protocol).and_then(|p| match p.state {
-        comline_runtime::comline2::ProtocolState::Refused { reason } => Some(reason),
+        comline_runtime::handshake::comline2::ProtocolState::Refused { reason } => Some(reason),
         _ => None,
     });
     // A protocol this end doesn't have isn't refused by the peer: it's unknown.
