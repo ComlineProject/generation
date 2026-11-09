@@ -15,7 +15,7 @@ pub struct Services<Chat> {
 
 impl<Chat: crate::conformance::Chat> Services<Chat> {
     /// Provide every protocol on `conn`: the peer's calls to them come here.
-    pub fn provide_on<T: comline_runtime::async_connection::AsyncTransport>(self, conn: &mut comline_runtime::async_connection::AsyncConnection<T, Format>) {
+    pub fn provide_on<T: comline_runtime::transport::AsyncTransport>(self, conn: &mut comline_runtime::connection::AsyncConnection<T, Format>) {
         crate::conformance::ChatAsyncDispatcher(self.chat).provide_on(conn);
     }
 }
@@ -28,7 +28,7 @@ pub struct ClientServices<Events> {
 
 impl<Events: crate::conformance::Events> ClientServices<Events> {
     /// Provide every protocol on `conn`: the peer's calls to them come here.
-    pub fn provide_on<T: comline_runtime::async_connection::AsyncTransport>(self, conn: &mut comline_runtime::async_connection::AsyncConnection<T, Format>) {
+    pub fn provide_on<T: comline_runtime::transport::AsyncTransport>(self, conn: &mut comline_runtime::connection::AsyncConnection<T, Format>) {
         crate::conformance::EventsAsyncDispatcher(self.events).provide_on(conn);
     }
 }
@@ -37,22 +37,22 @@ impl<Events: crate::conformance::Events> ClientServices<Events> {
 /// every protocol in `services` on it. The connection comes back not yet
 /// running, so the caller can take a `handle()` to call the client with
 /// before it runs.
-pub async fn accept<T: comline_runtime::async_connection::AsyncTransport, Chat: crate::conformance::Chat>(transport: T, services: Services<Chat>) -> Result<comline_runtime::async_connection::AsyncConnection<T, Format>, comline_runtime::contract::RuntimeError> {
-    let mut conn = comline_runtime::async_connection::AsyncConnection::accept(transport, Format::default(), CONNECTION_IR_HASH).await?;
+pub async fn accept<T: comline_runtime::transport::AsyncTransport, Chat: crate::conformance::Chat>(transport: T, services: Services<Chat>) -> Result<comline_runtime::connection::AsyncConnection<T, Format>, comline_runtime::contract::RuntimeError> {
+    let mut conn = comline_runtime::connection::AsyncConnection::accept(transport, Format::default(), CONNECTION_IR_HASH).await?;
     services.provide_on(&mut conn);
     Ok(conn)
 }
 
 /// [`accept`], then serve every call until the peer leaves.
-pub async fn serve<T: comline_runtime::async_connection::AsyncTransport, Chat: crate::conformance::Chat>(transport: T, services: Services<Chat>) -> Result<(), comline_runtime::contract::RuntimeError> {
+pub async fn serve<T: comline_runtime::transport::AsyncTransport, Chat: crate::conformance::Chat>(transport: T, services: Services<Chat>) -> Result<(), comline_runtime::contract::RuntimeError> {
     accept(transport, services).await?.run().await
 }
 
 /// Dial over `transport`: run the handshake, then provide every protocol in
 /// `services`, which the server calls. Call the server's protocols through
 /// their senders.
-pub async fn connect<T: comline_runtime::async_connection::AsyncTransport, Events: crate::conformance::Events>(transport: T, services: ClientServices<Events>) -> Result<comline_runtime::async_connection::AsyncConnection<T, Format>, comline_runtime::contract::RuntimeError> {
-    let mut conn = comline_runtime::async_connection::AsyncConnection::connect(transport, Format::default(), CONNECTION_IR_HASH).await?;
+pub async fn connect<T: comline_runtime::transport::AsyncTransport, Events: crate::conformance::Events>(transport: T, services: ClientServices<Events>) -> Result<comline_runtime::connection::AsyncConnection<T, Format>, comline_runtime::contract::RuntimeError> {
+    let mut conn = comline_runtime::connection::AsyncConnection::connect(transport, Format::default(), CONNECTION_IR_HASH).await?;
     services.provide_on(&mut conn);
     Ok(conn)
 }
