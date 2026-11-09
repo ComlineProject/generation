@@ -275,7 +275,7 @@ impl GenerateRequest {
 /// what a framing's profile states that decides what's generated for it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EncodingMapping {
-    /// The type implementing it: `comline_runtime::framing::Datagram2Framing`.
+    /// The type implementing it: `comline_runtime::contract::Datagram2Framing`.
     pub type_path: String,
     /// The package it comes from, for a `lib` build's manifest.
     #[serde(default)]
