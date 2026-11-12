@@ -38,7 +38,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - uses: ComlineProject/observatory/.github/actions/report-rust-coverage@8d21b1fbe68f8b639676153ce1a308eaafdcc6a7 # v1
+      - uses: ComlineProject/observatory/.github/actions/report-rust-coverage@6544a11bdfb9e4def0a64d6cff1cf8c3df464951 # v1
         with:
           output: reports/generation.coverage.json
           args: --workspace
@@ -69,7 +69,7 @@ jobs:
           pattern: report-*
           path: reports
           merge-multiple: true
-      - uses: ComlineProject/observatory/.github/actions/publish-report@8d21b1fbe68f8b639676153ce1a308eaafdcc6a7 # v1
+      - uses: ComlineProject/observatory/.github/actions/publish-report@6544a11bdfb9e4def0a64d6cff1cf8c3df464951 # v1
         with:
           reports: reports/generation.coverage.json
           readme: .github/reports-branch.md

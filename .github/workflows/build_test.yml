@@ -26,7 +26,7 @@ jobs:
     name: rust
     permissions:
       contents: read
-    uses: ComlineProject/.github/.github/workflows/rust-ci.yml@797d473553d7f2fc50895bb2573acb83ac63c7cb # main, no release tag yet
+    uses: ComlineProject/.github/.github/workflows/rust-ci.yml@807dd25bcbf848275f5f2bc5dcdd15070dcc321b # main, no release tag yet
 
   # `comline-codegen` takes core's IR only, with no parser, so it (and so a
   # generator binary) builds for WASI and the browser. In the wasm CI image
