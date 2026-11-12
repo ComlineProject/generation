@@ -43,6 +43,7 @@ use eyre::{eyre, Result};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::docs;
 use crate::features::{Support, SupportTable};
 use crate::validation::ValidateOnDecode;
 use crate::versions::{LangVersion, Versions};
@@ -357,6 +358,17 @@ pub struct LanguageInfo {
     pub versions: VersionsInfo,
     /// Its support, one entry per feature it states.
     pub support: Vec<SupportInfo>,
+    /// Its documentation pages, by [`crate::docs::Topic::id`] to URL; empty
+    /// for none (and for a generator that predates them).
+    #[serde(default)]
+    pub docs: BTreeMap<String, String>,
+}
+
+impl LanguageInfo {
+    /// This generator's page for `topic`, if it has one.
+    pub fn doc(&self, topic: docs::Topic) -> Option<&str> {
+        self.docs.get(topic.id()).map(String::as_str)
+    }
 }
 
 /// [`Versions`], owned.
@@ -419,6 +431,11 @@ impl From<&Generator> for LanguageInfo {
             ext: g.ext.to_string(),
             versions: g.versions.into(),
             support: SupportInfo::table(g.support),
+            docs: g
+                .docs
+                .iter()
+                .map(|(topic, url)| (topic.id().to_string(), url.to_string()))
+                .collect(),
         }
     }
 }
@@ -700,6 +717,11 @@ mod tests {
 
     const TOY_SUPPORT: SupportTable = &[(crate::features::Feature::Structs, Support::supported())];
 
+    const TOY_DOCS: crate::docs::DocsTable = &[(
+        crate::docs::Topic::Connections,
+        "https://toy.example/connections#generated",
+    )];
+
     fn registry() -> Registry {
         let mut registry = Registry::new();
         registry.register(Generator {
@@ -707,6 +729,7 @@ mod tests {
             ext: "toy",
             generate: toy,
             support: TOY_SUPPORT,
+            docs: TOY_DOCS,
             versions: Versions {
                 floor: "2.0",
                 changes: &[],
@@ -794,6 +817,53 @@ mod tests {
         })
         .unwrap();
         assert_eq!(decode::<Description>(&bytes).unwrap().renderers, vec![]);
+    }
+
+    #[test]
+    fn an_older_language_has_no_docs() {
+        #[derive(Serialize)]
+        struct OldLanguage {
+            id: String,
+            ext: String,
+            versions: VersionsInfo,
+            support: Vec<SupportInfo>,
+        }
+        #[derive(Serialize)]
+        struct Old {
+            languages: Vec<OldLanguage>,
+            protocols: (u32, u32),
+            ir_formats: Vec<u32>,
+        }
+        let bytes = encode(&Old {
+            languages: vec![OldLanguage {
+                id: "toy".into(),
+                ext: "toy".into(),
+                versions: Versions {
+                    floor: "2.0",
+                    changes: &[],
+                    verified_up_to: "2.0",
+                    forward_compatible: true,
+                }
+                .into(),
+                support: vec![],
+            }],
+            protocols: (0, 0),
+            ir_formats: vec![3],
+        })
+        .unwrap();
+        let language = &decode::<Description>(&bytes).unwrap().languages[0];
+        assert!(language.docs.is_empty());
+        assert_eq!(language.doc(docs::Topic::Connections), None);
+    }
+
+    #[test]
+    fn a_generators_docs_travel_by_topic() {
+        let description = describe(&registry());
+        assert_eq!(
+            description.languages[0].doc(docs::Topic::Connections),
+            Some("https://toy.example/connections#generated")
+        );
+        round_trip(Response::Describe(description));
     }
 
     fn round_trip<T: Serialize + DeserializeOwned + PartialEq + std::fmt::Debug>(value: T) {
