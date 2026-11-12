@@ -39,7 +39,7 @@ export interface Gateway {
 export const GATEWAY_CALLS = ["ping"] as const;
 
 /**
- * **Unverified:** gives up schema agreement and encoding agreement (handshake `none`).
+ * **Unverified:** gives up schema agreement and encoding agreement.
  * Reason given: the gateway predates Comline
  */
 export class GatewayDispatcher implements Dispatch {
@@ -85,7 +85,7 @@ export class GatewayDispatcher implements Dispatch {
 }
 
 /**
- * **Unverified:** gives up schema agreement and encoding agreement (handshake `none`).
+ * **Unverified:** gives up schema agreement and encoding agreement.
  * Reason given: the gateway predates Comline
  */
 /** Calls protocol `Gateway` on the other end of a connection: the peer a `Connection` reaches, or the one a handler was given. */
