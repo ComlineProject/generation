@@ -5,7 +5,7 @@
 //! Core computes them from the package's history (`comline_core::compat`),
 //! which a generator never sees: it reads frozen IR only, without core's
 //! compiler. These types mirror core's `PackageFacts`, field for field and
-//! with the same JSON, so `comline generate` hands them over as they are.
+//! with the same JSON, so `comline generation` hands them over as they are.
 //!
 //! **Numbers are never guessed.** A protocol that needs them and has none in
 //! the facts is refused ([`check`]): falling back to its position would make
@@ -162,7 +162,7 @@ pub fn addressing(
             facts.functions.iter().find(|ff| ff.name == *f).map(|ff| ff.number).ok_or_else(|| {
                 eyre!(
                     "protocol `{namespace}::{name}`, function `{f}`: the facts have no wire number for it, so they \
-                     are older than the schema; run `comline build`, then generate again"
+                     are older than the schema; run `comline build`, then run `comline generation` again"
                 )
             })
         })
@@ -181,7 +181,7 @@ fn missing(req_facts: Option<&PackageFacts>, namespace: &str, name: &str, parame
     );
     match req_facts {
         None => eyre!(
-            "{why}, and the request carries no facts: `comline generate` supplies them from the package's build \
+            "{why}, and the request carries no facts: `comline generation` supplies them from the package's build \
              history (run `comline build` first)"
         ),
         Some(_) => eyre!(
@@ -305,7 +305,7 @@ pub struct HelloProtocol {
 pub fn hello(req: &GenerateRequest, connection: &PackageConnection) -> Result<(Vec<u8>, Vec<HelloProtocol>)> {
     let facts = req.facts.as_ref().ok_or_else(|| {
         eyre!(
-            "the package's connection runs `comline@2`, and the request carries no facts: `comline generate` \
+            "the package's connection runs `comline@2`, and the request carries no facts: `comline generation` \
              supplies them from the package's build history (run `comline build` first)"
         )
     })?;

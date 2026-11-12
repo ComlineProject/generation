@@ -359,7 +359,7 @@
       "description": "Which package versions to generate bindings for: `latest` (the working tree, the default), `all` (every committed version), or one version or a list of them, each a version string or commit hash."
     }
   },
-  "description": "`comline.toml`: where `comline generate` writes code, and how. Which\nlanguages are generated comes from `config.idp`'s\n`code_generation.languages`; this file says where each one lands.",
+  "description": "`comline.toml`: where `comline generation` writes code, and how. Which\nlanguages are generated comes from `config.idp`'s\n`code_generation.languages`; this file says where each one lands.",
   "properties": {
     "doc": {
       "allOf": [

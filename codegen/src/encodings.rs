@@ -77,7 +77,7 @@ pub fn used(
 /// [`official::units`], `declared` the frozen configs of the package and its
 /// dependencies (anything but [`ConfigUnit::Encoding`] is skipped). A
 /// framing nothing in view declares writes no JSON. What [`fill`] uses, so
-/// an editor calling this expects what `comline generate` will.
+/// an editor calling this expects what `comline generation` will.
 pub fn used_as_declared(
     schemas: &[(String, Vec<FrozenUnit>)],
     wire_format: &str,

@@ -842,7 +842,7 @@ fn handshake_comline2() -> Fixture {
 }
 
 /// The facts a package's history would give `schemas` (`comline_core::compat`):
-/// what `comline generate` supplies for a package that needs them. Here the
+/// what `comline generation` supplies for a package that needs them. Here the
 /// numbers run backwards from the declaration order, so a golden shows them
 /// apart from positions; the hashes are fixed stand-ins.
 pub fn facts_for(schemas: &[(String, Vec<FrozenUnit>)], wire_format: &str) -> comline_codegen::facts::PackageFacts {

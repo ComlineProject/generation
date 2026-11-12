@@ -113,7 +113,7 @@ fn request_for(
         validate_on_decode: options.validate_on_decode,
         async_api: options.async_api,
         encodings: comline_codegen::encodings::official_for(lang),
-        // Only a package that needs them gets facts, as from `comline generate`.
+        // Only a package that needs them gets facts, as from `comline generation`.
         facts: comline_codegen::facts::needed(schemas, &comline_codegen::encodings::official_for(lang)).then(|| {
             comline_conformance::facts_for(schemas, options.wire_format.as_deref().unwrap_or(DEFAULT_FORMAT))
         }),

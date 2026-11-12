@@ -112,7 +112,7 @@ impl<'de> Deserialize<'de> for VersionSpec {
     }
 }
 
-/// `comline.toml`: where `comline generate` writes code, and how. Which
+/// `comline.toml`: where `comline generation` writes code, and how. Which
 /// languages are generated comes from `config.idp`'s
 /// `code_generation.languages`; this file says where each one lands.
 // An absent file parses as `Self::default`.
@@ -340,7 +340,7 @@ pub struct Target {
     /// package declares under `code_generation.languages` in `config.idp`.
     /// With `generator`, it also picks among the languages that generator
     /// offers, and may be left out when it offers one.
-    // `comline generate` fills it in from the generator before [`resolve`].
+    // `comline generation` fills it in from the generator before [`resolve`].
     #[serde(default)]
     #[schemars(transform = no_default)]
     pub language: String,
@@ -581,7 +581,7 @@ pub struct DeclaredLang {
     pub lang_version: String,
 }
 
-/// CLI flag overrides for `comline generate`.
+/// CLI flag overrides for `comline generation`.
 #[derive(Debug, Default)]
 pub struct Overrides<'a> {
     pub target: Option<&'a str>,
@@ -631,7 +631,7 @@ pub struct ResolvedTarget {
 }
 
 /// Merge `comline.toml`, the congregation's declared languages and CLI flags
-/// into the concrete set of targets `generate` should emit.
+/// into the concrete set of targets `comline generation` should emit.
 ///
 /// **The declared languages are the set.** `config.idp`'s
 /// `code_generation.languages` says which languages this package is generated
