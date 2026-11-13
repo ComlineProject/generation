@@ -2,13 +2,27 @@
 //! on the wire, and the hash a connection's handshake checks.
 //!
 //! A protocol runs on a `Connection` (the runtime's, calls in both
-//! directions) when it uses `datagram@3`, the default, or `datagram@2`, or when the client
-//! provides it (`@provider = Client` or `Multiple`), which core only allows
-//! with a framing that tells requests from replies. JSON-RPC's frames look the same
-//! either way, so once any JSON-RPC protocol in the package runs on a
-//! connection, every JSON-RPC protocol does: the server's API shares the
-//! connection its calls to the client use. The rest keep the lockstep
-//! `Client` / `Server`.
+//! directions) by what its framing's frames are, not by the framing's name:
+//!
+//! - By default when the framing's frames go both ways (`directions: both`)
+//!   and name the protocol (`protocol: named`): `datagram@3`, the default, and
+//!   `datagram@2`.
+//! - Otherwise when the client provides it (`@provider = Client` or
+//!   `Multiple`), which core only allows with a framing that tells requests
+//!   from replies.
+//! - On a framing whose frames go both ways but don't name the protocol
+//!   (`jsonrpc@1`), the frames look the same for every protocol. So once any
+//!   protocol on that framing is client-provided, every protocol on it shares
+//!   the connection: the server's API shares the connection its calls to the
+//!   client use.
+//!
+//! The rest keep the lockstep `Client` / `Server`.
+//!
+//! The facts are the official framings' (`comline_core::encodings::official`).
+//! A framing of a package's own has none here yet: the IR doesn't carry them.
+//! Its protocols run on a connection only when each is client-provided
+//! itself, and one that is takes no other protocol on its framing along,
+//! since nothing says its frames go both ways without naming the protocol.
 //!
 //! JSON-RPC names a call by its method, not by protocol and number: the
 //! function's name (`bare`, the default), or `namespace.Protocol/function`
@@ -26,9 +40,9 @@
 use crate::protocol::EncodingMapping;
 use std::collections::BTreeMap;
 
+use comline_core::encodings::{official, EncodingKind};
 use comline_core::schema::idl::annotations::{
-    FramingValue, HandshakeValue, MethodNames, FRAMING_DATAGRAM2, FRAMING_JSONRPC,
-    IMPLICIT_FRAMING,
+    FramingValue, HandshakeValue, MethodNames, IMPLICIT_FRAMING,
 };
 use comline_core::schema::ir::frozen::schema_ir_hash;
 use comline_core::schema::ir::frozen::unit::{ConfigValue, FrozenUnit};
@@ -116,21 +130,77 @@ pub fn handshake_value(parameters: &[FrozenUnit]) -> HandshakeValue {
 }
 
 /// Whether a protocol with these parameters, in a package of `schemas`,
-/// runs on a connection.
+/// runs on a connection: the client provides it, or its framing's frames go
+/// both ways and name the protocol, or they go both ways without naming it
+/// and some protocol on the framing is client-provided (see the module).
 pub fn on_connection(schemas: &[(String, Vec<FrozenUnit>)], parameters: &[FrozenUnit]) -> bool {
+    if Provider::of(parameters) != Provider::Server {
+        return true;
+    }
     let name = framing_name(parameters);
-    name == FRAMING_DATAGRAM2
-        || name == crate::facts::FRAMING_DATAGRAM3
-        || Provider::of(parameters) != Provider::Server
-        || (name == FRAMING_JSONRPC && jsonrpc_on_connection(schemas))
+    // A framing with no official profile states no facts here: it's a
+    // connection only for a protocol the client provides.
+    let Some(profile) = official::profile(EncodingKind::Framing, &name) else {
+        return false;
+    };
+    if profile.both_directions() != Some(true) {
+        return false;
+    }
+    profile.names_protocol() == Some(true) || client_provided_on(schemas, &name)
 }
 
-/// Whether any JSON-RPC protocol in `schemas` runs on a connection, which
-/// puts all of them on it.
-fn jsonrpc_on_connection(schemas: &[(String, Vec<FrozenUnit>)]) -> bool {
+/// Whether any protocol in `schemas` on the framing `name` is client-provided,
+/// which puts all of them on a connection when the framing's frames don't name
+/// the protocol.
+fn client_provided_on(schemas: &[(String, Vec<FrozenUnit>)], name: &str) -> bool {
     protocols(schemas).any(|(_, _, parameters, _)| {
-        framing_name(parameters) == FRAMING_JSONRPC && Provider::of(parameters) != Provider::Server
+        framing_name(parameters) == name && Provider::of(parameters) != Provider::Server
     })
+}
+
+/// Why a framing keeps a protocol that isn't client-provided off a
+/// connection, as [`why_lockstep`] reads it. Each variant's text is the
+/// sentence to show the person who wrote the schemas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lockstep {
+    /// Its frames go one way (`directions: one`), so the server can't call the
+    /// client on it: no protocol on it runs on a connection.
+    OneDirection,
+    /// Its frames go both ways but don't name the protocol, so it's a
+    /// connection only once some protocol on it is client-provided, and none
+    /// is: every protocol on it is the server's, one call at a time.
+    UnnamedServerProvided,
+    /// It's a framing of the package's own, so it states no facts here: a
+    /// protocol on it runs on a connection only when it's client-provided.
+    Unknown,
+}
+
+/// Why the framing `name` (any spelling) keeps its protocols off a connection
+/// unless the client provides them, for a note on one that has none; `None`
+/// for a framing that doesn't (frames both ways, naming the protocol:
+/// `datagram@2`, `datagram@3`), where a protocol is on a connection already.
+pub fn why_lockstep(name: &str) -> Option<Lockstep> {
+    let Some(profile) = official::profile(EncodingKind::Framing, name) else {
+        return Some(Lockstep::Unknown);
+    };
+    match (profile.both_directions(), profile.names_protocol()) {
+        (Some(true), Some(true)) => None,
+        (Some(true), _) => Some(Lockstep::UnnamedServerProvided),
+        (Some(false), _) => Some(Lockstep::OneDirection),
+        // An official framing's profile states `directions`; one that
+        // doesn't is no more known than a custom framing.
+        (None, _) => Some(Lockstep::Unknown),
+    }
+}
+
+/// A framing's name for a message, any spelling: an official one's title in
+/// the catalog (`JSON-RPC`, `datagram@2`), else its canonical name in
+/// backticks (`com.acme.lines@1`).
+pub fn framing_title(name: &str) -> String {
+    match official::title(EncodingKind::Framing, name) {
+        Some(title) => title.to_string(),
+        None => format!("`{}`", crate::encodings::canonical(name)),
+    }
 }
 
 /// The method a framing that names its calls calls `function` of `protocol` (declared in the
@@ -593,16 +663,25 @@ mod tests {
         let on_lines = |name, functions: &[&str]| {
             with_functions(name, vec![provider("Client"), framing(lines)], functions)
         };
-        let clash = vec![("app".to_string(), vec![on_lines("Chat", &["send"]), on_lines("Admin", &["send"])])];
+        let clash = vec![(
+            "app".to_string(),
+            vec![on_lines("Chat", &["send"]), on_lines("Admin", &["send"])],
+        )];
         let facts = |calls: &str| {
             BTreeMap::from([(
                 lines.to_string(),
-                EncodingMapping { calls: Some(calls.to_string()), ..Default::default() },
+                EncodingMapping {
+                    calls: Some(calls.to_string()),
+                    ..Default::default()
+                },
             )])
         };
         let problems = bare_name_clashes(&clash, &facts("by_name"));
         assert_eq!(problems.len(), 1, "{problems:?}");
-        assert!(problems[0].contains("one `com.acme.lines@1` connection"), "{problems:?}");
+        assert!(
+            problems[0].contains("one `com.acme.lines@1` connection"),
+            "{problems:?}"
+        );
         assert!(bare_name_clashes(&clash, &facts("by_index")).is_empty());
     }
 
@@ -673,19 +752,40 @@ mod tests {
                 ),
             )
         };
-        let params = vec![dict(vec![("name", "comline@2"), ("newer_consumer", "refuse")])];
+        let params = vec![dict(vec![
+            ("name", "comline@2"),
+            ("newer_consumer", "refuse"),
+        ])];
         assert_eq!(handshake_name(&params), "comline@2");
-        assert_eq!(handshake_value(&params).param("newer_consumer"), Some("refuse"));
-        assert_eq!(handshake_name(&[dict(vec![("name", "comline@2")])]), "comline@2");
-        assert_eq!(handshake_name(&[property("handshake", ConfigValue::Str("comline@2".into()))]), "comline@2");
+        assert_eq!(
+            handshake_value(&params).param("newer_consumer"),
+            Some("refuse")
+        );
+        assert_eq!(
+            handshake_name(&[dict(vec![("name", "comline@2")])]),
+            "comline@2"
+        );
+        assert_eq!(
+            handshake_name(&[property("handshake", ConfigValue::Str("comline@2".into()))]),
+            "comline@2"
+        );
         assert_eq!(handshake_name(&[]), "comline@1");
 
         // One connection, one set of parameters.
         let schemas = vec![(
             "app".to_string(),
             vec![
-                protocol("A", vec![framing("datagram@3"), dict(vec![("name", "comline@2")])]),
-                protocol("B", vec![framing("datagram@3"), dict(vec![("name", "comline@2"), ("scope", "package")])]),
+                protocol(
+                    "A",
+                    vec![framing("datagram@3"), dict(vec![("name", "comline@2")])],
+                ),
+                protocol(
+                    "B",
+                    vec![
+                        framing("datagram@3"),
+                        dict(vec![("name", "comline@2"), ("scope", "package")]),
+                    ],
+                ),
             ],
         )];
         let err = package_connection(&schemas).unwrap_err();
@@ -697,6 +797,119 @@ mod tests {
         let parameters = vec![framing("datagram@3")];
         let schemas = vec![("app".to_string(), vec![protocol("P", parameters.clone())])];
         assert!(on_connection(&schemas, &parameters));
+    }
+
+    /// What each official framing's facts decide, one protocol on it alone:
+    /// `directions` and `protocol` read from core's profiles.
+    #[test]
+    fn the_official_framings_are_judged_by_their_facts() {
+        let alone = |framing_name: &str, provider_name: Option<&str>| {
+            let mut parameters = vec![framing(framing_name)];
+            parameters.extend(provider_name.map(provider));
+            let schemas = vec![("app".to_string(), vec![protocol("P", parameters.clone())])];
+            on_connection(&schemas, &parameters)
+        };
+        // Both ways and named: a connection by default.
+        assert!(alone("datagram@2", None));
+        assert!(alone("datagram@3", None));
+        // One way: only a client-provided protocol (which core would refuse).
+        assert!(!alone("datagram@1", None));
+        assert!(!alone("datagram", None));
+        assert!(alone("datagram@1", Some("Client")));
+        // Both ways, unnamed: only when some protocol on it is client-provided.
+        assert!(!alone("jsonrpc@1", None));
+        assert!(!alone("json-rpc", None));
+        assert!(alone("jsonrpc@1", Some("Client")));
+        assert!(alone("jsonrpc", Some("Multiple")));
+    }
+
+    /// Frames that go both ways without naming the protocol look the same for
+    /// every protocol, so one client-provided protocol takes the rest of its
+    /// framing along, and no other framing's.
+    #[test]
+    fn an_unnamed_framing_shares_its_connection_by_facts() {
+        let on = |name: &str, others: Vec<FrozenUnit>| {
+            let schemas = vec![
+                ("a".to_string(), vec![protocol("A", vec![framing(name)])]),
+                ("b".to_string(), vec![protocol("B", others)]),
+            ];
+            on_connection(&schemas, &[framing(name)])
+        };
+        assert!(on(
+            "jsonrpc@1",
+            vec![framing("json-rpc"), provider("Client")]
+        ));
+        assert!(!on("jsonrpc@1", vec![framing("json-rpc")]));
+        // One way, so nothing is shared.
+        assert!(!on(
+            "datagram@1",
+            vec![framing("datagram"), provider("Client")]
+        ));
+        // Another framing's client-provided protocol doesn't spread here.
+        assert!(!on(
+            "jsonrpc@1",
+            vec![framing("datagram@3"), provider("Client")]
+        ));
+    }
+
+    /// A framing of a package's own states no facts here, so it behaves as it
+    /// did before they were read: its protocol is on a connection when it's
+    /// client-provided, and nothing spreads to another protocol on it.
+    #[test]
+    fn a_custom_framing_is_on_a_connection_only_for_a_client_provider() {
+        let lines = "com.acme.lines@1";
+        let alone = |parameters: Vec<FrozenUnit>| {
+            let schemas = vec![("app".to_string(), vec![protocol("P", parameters.clone())])];
+            on_connection(&schemas, &parameters)
+        };
+        assert!(!alone(vec![framing(lines)]));
+        assert!(!alone(vec![framing(lines), provider("Server")]));
+        assert!(alone(vec![framing(lines), provider("Client")]));
+        assert!(alone(vec![framing(lines), provider("Multiple")]));
+
+        // Two on one custom framing, one client-provided: only that one.
+        let served = vec![framing(lines)];
+        let dialled = vec![framing(lines), provider("Client")];
+        let schemas = vec![(
+            "app".to_string(),
+            vec![
+                protocol("Served", served.clone()),
+                protocol("Dialled", dialled.clone()),
+            ],
+        )];
+        assert!(!on_connection(&schemas, &served));
+        assert!(on_connection(&schemas, &dialled));
+        let c = package_connection(&schemas).unwrap().unwrap();
+        let fields = |side: &[Provided]| side.iter().map(|p| p.field.clone()).collect::<Vec<_>>();
+        // `Served` stays the lockstep server's: not on the connection.
+        assert_eq!(fields(&c.server), Vec::<String>::new());
+        assert_eq!(fields(&c.client), ["dialled"]);
+        assert_eq!(c.framing, lines);
+    }
+
+    #[test]
+    fn why_a_framing_is_lockstep_is_read_from_its_facts() {
+        assert_eq!(why_lockstep("datagram@1"), Some(Lockstep::OneDirection));
+        assert_eq!(why_lockstep("datagram"), Some(Lockstep::OneDirection));
+        assert_eq!(
+            why_lockstep("jsonrpc@1"),
+            Some(Lockstep::UnnamedServerProvided)
+        );
+        assert_eq!(
+            why_lockstep("json-rpc"),
+            Some(Lockstep::UnnamedServerProvided)
+        );
+        assert_eq!(why_lockstep("datagram@2"), None);
+        assert_eq!(why_lockstep("datagram@3"), None);
+        assert_eq!(why_lockstep("com.acme.lines@1"), Some(Lockstep::Unknown));
+    }
+
+    #[test]
+    fn a_framing_is_named_by_its_title_or_its_name_in_backticks() {
+        assert_eq!(framing_title("jsonrpc@1"), "JSON-RPC");
+        assert_eq!(framing_title("json-rpc"), "JSON-RPC");
+        assert_eq!(framing_title("datagram@3"), "datagram@3");
+        assert_eq!(framing_title("com.acme.lines@1"), "`com.acme.lines@1`");
     }
 
     #[test]

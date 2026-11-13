@@ -225,6 +225,7 @@ fn arg(name: &str, prim: PrimitiveType) -> FrozenArgument {
         name: name.to_string(),
         ty: TypeRef::Primitive(prim),
         span: (0, 0),
+        parameters: vec![],
     }
 }
 
