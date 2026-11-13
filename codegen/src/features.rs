@@ -388,8 +388,58 @@ pub struct FeatureUse {
     pub namespace: String,
     /// What uses it, for messages: "struct 'User', field 'tags'".
     pub owner: String,
+    /// The names, outermost first, of the unit that uses it within its
+    /// schema: `["User", "tags"]`, `["Chat", "send", "x"]`. Empty for the
+    /// schema itself, an import, or a request option.
+    pub unit: Vec<String>,
     /// Where, in the schema's source; `None` when unknown or for an option.
     pub span: Option<(usize, usize)>,
+}
+
+/// What uses a feature, as [`FeatureUse::owner`] and [`FeatureUse::unit`]:
+/// the phrase for a message and the path of names, built together as the
+/// walk goes down, so neither is read off the other.
+#[derive(Debug, Clone)]
+struct Owner {
+    text: String,
+    unit: Vec<String>,
+}
+
+impl Owner {
+    /// A declaration in the schema: `struct 'User'`, in the unit `User`.
+    fn declared(kind: &str, name: &str) -> Self {
+        Owner {
+            text: format!("{kind} '{name}'"),
+            unit: vec![name.to_string()],
+        }
+    }
+
+    /// Something in the schema that's no unit: an import, the schema itself.
+    fn schema(text: String) -> Self {
+        Owner {
+            text,
+            unit: Vec::new(),
+        }
+    }
+
+    /// A unit inside this one: `, field 'tags'`, in the unit `tags` of it.
+    fn child(&self, kind: &str, name: &str) -> Self {
+        let mut unit = self.unit.clone();
+        unit.push(name.to_string());
+        Owner {
+            text: format!("{}, {kind} '{name}'", self.text),
+            unit,
+        }
+    }
+
+    /// A part of this unit that's no unit of its own (a validator is a
+    /// reference, `return` a position): the phrase says it, the path doesn't.
+    fn note(&self, suffix: &str) -> Self {
+        Owner {
+            text: format!("{}, {suffix}", self.text),
+            unit: self.unit.clone(),
+        }
+    }
 }
 
 /// Every use of every feature in `schemas` under `options`, in schema order.
@@ -402,11 +452,12 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
     let mut formatted = false;
 
     for (namespace, units) in schemas {
-        let mut push = |feature, owner: String, span: Option<(usize, usize)>| {
+        let mut push = |feature, owner: Owner, span: Option<(usize, usize)>| {
             uses.push(FeatureUse {
                 feature,
                 namespace: namespace.clone(),
-                owner,
+                owner: owner.text,
+                unit: owner.unit,
                 span: known(span),
             });
         };
@@ -414,7 +465,7 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
         if namespace.contains('/') || namespace.contains("::") {
             push(
                 Feature::NestedNamespaces,
-                format!("schema '{namespace}'"),
+                Owner::schema(format!("schema '{namespace}'")),
                 None,
             );
         }
@@ -422,7 +473,11 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
         for unit in units {
             match unit {
                 FrozenUnit::Import(path, _, span) => {
-                    push(Feature::Imports, format!("use {path}"), Some(*span));
+                    push(
+                        Feature::Imports,
+                        Owner::schema(format!("use {path}")),
+                        Some(*span),
+                    );
                 }
                 FrozenUnit::Struct {
                     name,
@@ -431,34 +486,22 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                     span,
                     ..
                 } => {
-                    push(Feature::Structs, format!("struct '{name}'"), Some(*span));
+                    let owner = Owner::declared("struct", name);
+                    push(Feature::Structs, owner.clone(), Some(*span));
                     if has_property(parameters, "max_depth") {
-                        push(
-                            Feature::Bounds,
-                            format!("struct '{name}', `@max_depth`"),
-                            Some(*span),
-                        );
+                        push(Feature::Bounds, owner.note("`@max_depth`"), Some(*span));
                     }
-                    fields_of(
-                        &format!("struct '{name}'"),
-                        fields,
-                        &mut push,
-                        &mut validators,
-                    );
+                    fields_of(&owner, fields, &mut push, &mut validators);
                 }
                 FrozenUnit::Error {
                     name, fields, span, ..
                 } => {
-                    push(Feature::Errors, format!("error '{name}'"), *span);
-                    fields_of(
-                        &format!("error '{name}'"),
-                        fields,
-                        &mut push,
-                        &mut validators,
-                    );
+                    let owner = Owner::declared("error", name);
+                    push(Feature::Errors, owner.clone(), *span);
+                    fields_of(&owner, fields, &mut push, &mut validators);
                 }
                 FrozenUnit::Enum { name, span, .. } => {
-                    push(Feature::Enums, format!("enum '{name}'"), Some(*span));
+                    push(Feature::Enums, Owner::declared("enum", name), Some(*span));
                 }
                 FrozenUnit::TypeAlias {
                     name,
@@ -467,13 +510,13 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                     span,
                     ..
                 } => {
-                    let owner = format!("type alias '{name}'");
+                    let owner = Owner::declared("type alias", name);
                     push(Feature::TypeAliases, owner.clone(), Some(*span));
                     types_of(&owner, target, false, Some(*span), &mut push);
                     validators |= validator_refs(&owner, parameters, &mut push);
                 }
                 FrozenUnit::Constant { name, ty, span, .. } => {
-                    let owner = format!("const '{name}'");
+                    let owner = Owner::declared("const", name);
                     push(Feature::Constants, owner.clone(), Some(*span));
                     types_of(&owner, ty, false, Some(*span), &mut push);
                 }
@@ -484,7 +527,7 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                     span,
                     ..
                 } => {
-                    let owner = format!("protocol '{name}'");
+                    let owner = Owner::declared("protocol", name);
                     push(Feature::Protocols, owner.clone(), Some(*span));
                     // Core has already applied the package's `wire.framing`.
                     if crate::connections::framing(parameters).name == FRAMING_JSONRPC {
@@ -499,7 +542,9 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                     if framing == crate::facts::FRAMING_DATAGRAM3 {
                         push(Feature::FramingDatagram3, owner.clone(), Some(*span));
                     }
-                    if crate::connections::handshake_name(parameters) == crate::facts::HANDSHAKE_COMLINE2 {
+                    if crate::connections::handshake_name(parameters)
+                        == crate::facts::HANDSHAKE_COMLINE2
+                    {
                         push(Feature::HandshakeComline2, owner.clone(), Some(*span));
                     }
                     if crate::connections::on_connection(schemas, parameters) {
@@ -518,22 +563,16 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
                         else {
                             continue;
                         };
-                        let owner = format!("protocol '{name}', function '{f}'");
+                        let owner = owner.child("function", f);
                         if !throws.is_empty() {
                             push(Feature::Throws, owner.clone(), Some(*span));
                         }
                         for argument in arguments {
-                            let owner = format!("{owner}, argument '{}'", argument.name);
+                            let owner = owner.child("argument", &argument.name);
                             types_of(&owner, &argument.ty, false, Some(argument.span), &mut push);
                         }
                         if let Some(ret) = _return {
-                            types_of(
-                                &format!("{owner}, return"),
-                                ret,
-                                false,
-                                Some(*span),
-                                &mut push,
-                            );
+                            types_of(&owner.note("return"), ret, false, Some(*span), &mut push);
                         }
                     }
                 }
@@ -547,6 +586,7 @@ pub fn used(schemas: &[(String, Vec<FrozenUnit>)], options: &Options) -> Vec<Fea
             feature,
             namespace: String::new(),
             owner: owner.to_string(),
+            unit: Vec::new(),
             span: None,
         });
     };
@@ -592,9 +632,9 @@ fn known(span: Option<(usize, usize)>) -> Option<(usize, usize)> {
 }
 
 fn fields_of(
-    owner: &str,
+    owner: &Owner,
     fields: &[FrozenUnit],
-    push: &mut impl FnMut(Feature, String, Option<(usize, usize)>),
+    push: &mut impl FnMut(Feature, Owner, Option<(usize, usize)>),
     validators: &mut bool,
 ) {
     for field in fields {
@@ -609,7 +649,7 @@ fn fields_of(
         else {
             continue;
         };
-        let owner = format!("{owner}, field '{name}'");
+        let owner = owner.child("field", name);
         if *optional {
             push(Feature::OptionalFields, owner.clone(), Some(*span));
         }
@@ -623,11 +663,11 @@ fn fields_of(
 /// error field's own, non-optional type - the one place a large fixed array
 /// isn't "nested".
 fn types_of(
-    owner: &str,
+    owner: &Owner,
     ty: &TypeRef,
     own_field: bool,
     span: Option<(usize, usize)>,
-    push: &mut impl FnMut(Feature, String, Option<(usize, usize)>),
+    push: &mut impl FnMut(Feature, Owner, Option<(usize, usize)>),
 ) {
     match ty {
         // An array of `char` is a string: bounded, or of an exact length.
@@ -637,7 +677,7 @@ fn types_of(
             max,
         } if **element == TypeRef::Primitive(PrimitiveType::Char) => {
             if length.is_some() || max.is_some() {
-                push(Feature::Bounds, owner.to_string(), span);
+                push(Feature::Bounds, owner.clone(), span);
             }
         }
         TypeRef::Array {
@@ -646,42 +686,42 @@ fn types_of(
             max,
         } => {
             if max.is_some() {
-                push(Feature::Bounds, owner.to_string(), span);
+                push(Feature::Bounds, owner.clone(), span);
             }
             match length {
-                None => push(Feature::Arrays, owner.to_string(), span),
+                None => push(Feature::Arrays, owner.clone(), span),
                 Some(n) => {
-                    push(Feature::FixedArrays, owner.to_string(), span);
+                    push(Feature::FixedArrays, owner.clone(), span);
                     if *n > 32 && !own_field {
-                        push(Feature::LargeFixedArraysNested, owner.to_string(), span);
+                        push(Feature::LargeFixedArraysNested, owner.clone(), span);
                     }
                 }
             }
             types_of(owner, element, false, span, push);
         }
         TypeRef::Union(members) => {
-            push(Feature::Unions, owner.to_string(), span);
+            push(Feature::Unions, owner.clone(), span);
             for member in members {
                 types_of(owner, member, false, span, push);
             }
         }
-        TypeRef::Primitive(PrimitiveType::Char) => push(Feature::Chars, owner.to_string(), span),
+        TypeRef::Primitive(PrimitiveType::Char) => push(Feature::Chars, owner.clone(), span),
         TypeRef::Primitive(_) | TypeRef::Named(_) | TypeRef::Unit => {}
     }
 }
 
 /// Reports each `@validators` call in `parameters`; whether there was one.
 fn validator_refs(
-    owner: &str,
+    owner: &Owner,
     parameters: &[FrozenUnit],
-    push: &mut impl FnMut(Feature, String, Option<(usize, usize)>),
+    push: &mut impl FnMut(Feature, Owner, Option<(usize, usize)>),
 ) -> bool {
     let mut any = false;
     for parameter in parameters {
         if let FrozenUnit::ValidatorRef { name, span, .. } = parameter {
             push(
                 Feature::Validators,
-                format!("{owner}, validator '{name}'"),
+                owner.note(&format!("validator '{name}'")),
                 Some(*span),
             );
             any = true;
@@ -1121,6 +1161,120 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_use_has_the_path_of_the_unit_that_uses_it() {
+        use comline_core::schema::ir::frozen::unit::FrozenArgument;
+
+        let u8_ = TypeRef::Primitive(PrimitiveType::U8);
+        let validated = FrozenUnit::Field {
+            docstring: None,
+            parameters: vec![FrozenUnit::ValidatorRef {
+                name: "len".into(),
+                args: vec![],
+                span: (1, 2),
+                arg_spans: vec![],
+            }],
+            optional: false,
+            name: "v".into(),
+            ty: TypeRef::Primitive(PrimitiveType::U8),
+            default: None,
+            span: (10, 20),
+        };
+        let schemas = vec![
+            (
+                "app".to_string(),
+                vec![
+                    FrozenUnit::Import("other".into(), None, (1, 2)),
+                    FrozenUnit::Struct {
+                        docstring: None,
+                        parameters: vec![FrozenUnit::Property {
+                            name: "max_depth".into(),
+                            value: ConfigValue::Integer(8),
+                        }],
+                        name: "S".into(),
+                        fields: vec![field("tags", array(u8_.clone(), None), false), validated],
+                        span: (0, 100),
+                    },
+                    FrozenUnit::TypeAlias {
+                        docstring: None,
+                        parameters: vec![],
+                        name: "B".into(),
+                        target: array(u8_.clone(), None),
+                        span: (0, 10),
+                    },
+                    FrozenUnit::Protocol {
+                        docstring: String::new(),
+                        parameters: vec![],
+                        name: "Chat".into(),
+                        functions: vec![FrozenUnit::Function {
+                            docstring: String::new(),
+                            name: "send".into(),
+                            arguments: vec![FrozenArgument {
+                                name: "x".into(),
+                                ty: array(u8_.clone(), None),
+                                span: (3, 4),
+                                parameters: vec![],
+                            }],
+                            _return: Some(array(u8_.clone(), None)),
+                            throws: vec![],
+                            parameters: vec![],
+                            span: (5, 6),
+                        }],
+                        span: (0, 100),
+                    },
+                ],
+            ),
+            ("a/b".to_string(), vec![]),
+        ];
+        let uses = used(&schemas, &Options::default());
+        let unit = |feature: Feature, owner: &str| -> Vec<&str> {
+            let found: Vec<_> = uses
+                .iter()
+                .filter(|u| u.feature == feature && u.owner == owner)
+                .collect();
+            assert_eq!(found.len(), 1, "{feature:?} {owner}: {uses:#?}");
+            found[0].unit.iter().map(String::as_str).collect()
+        };
+
+        assert_eq!(
+            unit(Feature::Arrays, "struct 'S', field 'tags'"),
+            ["S", "tags"]
+        );
+        assert_eq!(
+            unit(
+                Feature::Arrays,
+                "protocol 'Chat', function 'send', argument 'x'"
+            ),
+            ["Chat", "send", "x"]
+        );
+        assert_eq!(
+            unit(Feature::Arrays, "protocol 'Chat', function 'send', return"),
+            ["Chat", "send"]
+        );
+        assert_eq!(
+            unit(
+                Feature::Validators,
+                "struct 'S', field 'v', validator 'len'"
+            ),
+            ["S", "v"]
+        );
+        assert_eq!(unit(Feature::Arrays, "type alias 'B'"), ["B"]);
+        assert_eq!(unit(Feature::Bounds, "struct 'S', `@max_depth`"), ["S"]);
+        assert_eq!(unit(Feature::Structs, "struct 'S'"), ["S"]);
+        assert_eq!(unit(Feature::Protocols, "protocol 'Chat'"), ["Chat"]);
+        assert!(unit(Feature::Imports, "use other").is_empty());
+        assert!(unit(Feature::NestedNamespaces, "schema 'a/b'").is_empty());
+
+        // A request option is in no schema, so in no unit.
+        let options = Options {
+            mode: Some(Mode::Lib),
+            ..Options::default()
+        };
+        let option: Vec<_> = used(&[], &options);
+        assert_eq!(option.len(), 1, "{option:?}");
+        assert!(option[0].namespace.is_empty() && option[0].unit.is_empty());
+    }
+
     fn ids(uses: &[FeatureUse]) -> Vec<&'static str> {
         let mut ids: Vec<_> = uses.iter().map(|u| u.feature.id()).collect();
         ids.dedup();
@@ -1286,12 +1440,14 @@ mod tests {
                 feature: Feature::Unions,
                 namespace: "api".into(),
                 owner: "struct 'A', field 'x'".into(),
+                unit: vec!["A".into(), "x".into()],
                 span: None,
             },
             FeatureUse {
                 feature: Feature::Unions,
                 namespace: "api".into(),
                 owner: "type alias 'B'".into(),
+                unit: vec!["B".into()],
                 span: None,
             },
         ];
@@ -1314,6 +1470,7 @@ mod tests {
             feature: Feature::Connections,
             namespace: String::new(),
             owner: "protocol 'Chat'".into(),
+            unit: vec!["Chat".into()],
             span: None,
         }];
         let at = |v| LangVersion::parse(v).unwrap();
