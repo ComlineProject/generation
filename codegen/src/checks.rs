@@ -280,7 +280,7 @@ fn ignored_features(request: &GenerateRequest, resolved: &Resolved) -> Vec<Diagn
             }
 
             let diagnostic = Diagnostic::new(IGNORED_FEATURE, message);
-            match unit_of(first) {
+            match unit_path(first) {
                 Some(unit) => diagnostic.with_unit(unit),
                 None => diagnostic,
             }
@@ -288,33 +288,23 @@ fn ignored_features(request: &GenerateRequest, resolved: &Resolved) -> Vec<Diagn
         .collect()
 }
 
-/// The unit a [`features::FeatureUse`] is in, by path: the schema's namespace,
-/// then the declaration's name, then the member's (`app::User::tags`,
-/// `app::Chat::send`), read off the quoted names in its `owner` phrase
-/// (`struct 'User', field 'tags'`, `protocol 'Chat', function 'send',
-/// argument 'to'`). A use with no declaration, such as an import or a nested
-/// schema, is the schema itself. A request option isn't in a unit at all.
-///
-/// A name past the member, an argument or a validator, isn't part of the path:
-/// the path ends where the units a tool can find do.
-fn unit_of(feature_use: &features::FeatureUse) -> Option<String> {
+/// The unit a [`features::FeatureUse`] is in, by path: the schema's
+/// namespace, then the names of [`features::FeatureUse::unit`]
+/// (`app::User::tags`, `app::Chat::send::x`). A use with no unit, such as an
+/// import or a nested schema, is the schema itself; a request option has no
+/// namespace and is in no unit at all.
+fn unit_path(feature_use: &features::FeatureUse) -> Option<String> {
     if feature_use.namespace.is_empty() {
         return None;
     }
 
-    let owner = feature_use.owner.as_str();
-    let names: Vec<&str> = match owner.starts_with("schema '") {
-        true => Vec::new(),
-        false => owner.split('\'').skip(1).step_by(2).take(2).collect(),
-    };
-
-    let mut unit = feature_use.namespace.clone();
-    for name in names {
-        unit.push_str("::");
-        unit.push_str(name);
+    let mut path = feature_use.namespace.clone();
+    for name in &feature_use.unit {
+        path.push_str("::");
+        path.push_str(name);
     }
 
-    Some(unit)
+    Some(path)
 }
 
 #[cfg(test)]
@@ -630,31 +620,25 @@ mod tests {
     }
 
     #[test]
-    fn a_feature_use_is_in_the_unit_its_owner_phrase_names() {
-        let in_schema = |namespace: &str, owner: &str| features::FeatureUse {
+    fn a_feature_use_is_in_its_namespace_then_its_units_names() {
+        let in_schema = |namespace: &str, unit: &[&str]| features::FeatureUse {
             feature: Feature::Structs,
             namespace: namespace.to_string(),
-            owner: owner.to_string(),
+            owner: String::new(),
+            unit: unit.iter().map(|n| n.to_string()).collect(),
             span: None,
         };
-        let unit = |namespace: &str, owner: &str| unit_of(&in_schema(namespace, owner));
 
-        assert_eq!(unit("app", "struct 'User'").as_deref(), Some("app::User"));
         assert_eq!(
-            unit("app", "struct 'User', field 'tags'").as_deref(),
-            Some("app::User::tags")
+            unit_path(&in_schema("app", &["User"])).as_deref(),
+            Some("app::User")
         );
         assert_eq!(
-            unit("app", "struct 'User', field 'tags', validator 'len'").as_deref(),
-            Some("app::User::tags")
+            unit_path(&in_schema("app", &["Chat", "send", "x"])).as_deref(),
+            Some("app::Chat::send::x")
         );
-        assert_eq!(
-            unit("app", "protocol 'Chat', function 'send', argument 'to'").as_deref(),
-            Some("app::Chat::send")
-        );
-        assert_eq!(unit("app", "use other::thing").as_deref(), Some("app"));
-        assert_eq!(unit("a/b", "schema 'a/b'").as_deref(), Some("a/b"));
-        assert_eq!(unit("", "the generation request (`lib` mode)"), None);
+        assert_eq!(unit_path(&in_schema("a/b", &[])).as_deref(), Some("a/b"));
+        assert_eq!(unit_path(&in_schema("", &[])), None);
     }
 
     #[test]
