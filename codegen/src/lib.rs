@@ -11,6 +11,7 @@ pub mod collisions;
 pub mod config;
 pub mod connections;
 pub mod doc_model;
+pub mod docs;
 pub mod encodings;
 pub mod facts;
 pub mod features;
@@ -71,6 +72,8 @@ pub struct Generator {
     pub generate: GeneratorFn,
     pub support: features::SupportTable,
     pub versions: Versions,
+    /// Its own documentation pages, by topic; empty for none.
+    pub docs: docs::DocsTable,
 }
 
 /// A documentation renderer: a documentation model in, files out
@@ -274,6 +277,7 @@ mod tests {
             ext,
             generate: noop,
             support: &[],
+            docs: &[],
             versions: Versions {
                 floor,
                 changes: &[],
