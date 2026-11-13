@@ -236,6 +236,51 @@ pub fn bare_name_clashes(
     schemas: &[(String, Vec<FrozenUnit>)],
     encodings: &BTreeMap<String, EncodingMapping>,
 ) -> Vec<String> {
+    name_clashes(schemas, encodings)
+        .iter()
+        .map(NameClash::message)
+        .collect()
+}
+
+/// Two protocols one side provides on one connection, with a function of the
+/// same name, where bare method names can't tell them apart.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NameClash {
+    /// The protocol seen first, `namespace::Protocol`.
+    pub first: String,
+    /// The protocol whose function repeats it, `namespace::Protocol`.
+    pub second: String,
+    /// The function both have.
+    pub function: String,
+    /// The side that provides both: `server` or `client`.
+    pub side: &'static str,
+    /// The framing they share, canonical.
+    pub framing: String,
+}
+
+impl NameClash {
+    /// The problem in one sentence, as [`bare_name_clashes`] gives it.
+    pub fn message(&self) -> String {
+        let NameClash {
+            first: other,
+            second: protocol,
+            function,
+            side,
+            framing,
+        } = self;
+        format!(
+            "protocols `{other}` and `{protocol}` both have a function `{function}`, and the {side} \
+             provides both on one `{framing}` connection, where bare method names can't tell them \
+             apart - use `@framing = {{ name = \"{framing}\", method_names = qualified }}` on either"
+        )
+    }
+}
+
+/// [`bare_name_clashes`]' problems, each with the protocols it's between.
+pub fn name_clashes(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    encodings: &BTreeMap<String, EncodingMapping>,
+) -> Vec<NameClash> {
     let mut problems = Vec::new();
     // Each side looks a method up among the protocols it provides.
     for (side, provides) in [
@@ -259,11 +304,13 @@ pub fn bare_name_clashes(
                 _ => None,
             }) {
                 match seen.iter().find(|(f, _)| *f == function) {
-                    Some((_, other)) if *other != protocol => problems.push(format!(
-                        "protocols `{other}` and `{protocol}` both have a function `{function}`, and the {side} \
-                         provides both on one `{framing}` connection, where bare method names can't tell them \
-                         apart - use `@framing = {{ name = \"{framing}\", method_names = qualified }}` on either"
-                    )),
+                    Some((_, other)) if *other != protocol => problems.push(NameClash {
+                        first: other.clone(),
+                        second: protocol.clone(),
+                        function: function.to_string(),
+                        side,
+                        framing: framing.clone(),
+                    }),
                     Some(_) => {}
                     None => seen.push((function, protocol.clone())),
                 }
@@ -312,6 +359,24 @@ pub struct PackageConnection {
 pub fn package_connection(
     schemas: &[(String, Vec<FrozenUnit>)],
 ) -> Result<Option<PackageConnection>, String> {
+    package_connection_of(schemas).map_err(|disagreement| disagreement.reason)
+}
+
+/// Why the protocols on a connection have no one connection to share: the
+/// first protocol that disagrees with the first one on a connection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Disagreement {
+    /// The protocol that disagrees, `namespace::Protocol`.
+    pub protocol: String,
+    /// One sentence, as [`package_connection`] gives it.
+    pub reason: String,
+}
+
+/// [`package_connection`], with the protocol that breaks it named apart from
+/// the sentence.
+pub fn package_connection_of(
+    schemas: &[(String, Vec<FrozenUnit>)],
+) -> Result<Option<PackageConnection>, Disagreement> {
     let on: Vec<_> = protocols(schemas)
         .filter(|(_, _, parameters, _)| on_connection(schemas, parameters))
         .collect();
@@ -327,22 +392,31 @@ pub fn package_connection(
             self::handshake_name(parameters),
         );
         if f != framing_name {
-            return Err(format!(
-                "`{first_ns}::{first}` is on a `{framing_name}` connection and `{namespace}::{name}` on a `{f}` \
-                 one, so there's no one connection to serve them on"
-            ));
+            return Err(Disagreement {
+                protocol: format!("{namespace}::{name}"),
+                reason: format!(
+                    "`{first_ns}::{first}` is on a `{framing_name}` connection and `{namespace}::{name}` on a `{f}` \
+                     one, so there's no one connection to serve them on"
+                ),
+            });
         }
         if h != handshake_name {
-            return Err(format!(
-                "`{first_ns}::{first}` runs the `{handshake_name}` handshake and `{namespace}::{name}` the `{h}` \
-                 one, so there's no one connection to serve them on"
-            ));
+            return Err(Disagreement {
+                protocol: format!("{namespace}::{name}"),
+                reason: format!(
+                    "`{first_ns}::{first}` runs the `{handshake_name}` handshake and `{namespace}::{name}` the `{h}` \
+                     one, so there's no one connection to serve them on"
+                ),
+            });
         }
         if self::handshake_value(parameters) != handshake_value {
-            return Err(format!(
-                "`{first_ns}::{first}` and `{namespace}::{name}` give the `{handshake_name}` handshake different \
-                 parameters, so there's no one connection to serve them on"
-            ));
+            return Err(Disagreement {
+                protocol: format!("{namespace}::{name}"),
+                reason: format!(
+                    "`{first_ns}::{first}` and `{namespace}::{name}` give the `{handshake_name}` handshake different \
+                     parameters, so there's no one connection to serve them on"
+                ),
+            });
         }
     }
     let side = |sides: [Provider; 2]| {

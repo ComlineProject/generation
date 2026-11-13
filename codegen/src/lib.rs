@@ -7,6 +7,7 @@
 
 pub mod bounds;
 pub mod builder;
+pub mod checks;
 pub mod collisions;
 pub mod config;
 pub mod connections;
