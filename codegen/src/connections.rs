@@ -193,11 +193,14 @@ pub fn why_lockstep(name: &str) -> Option<Lockstep> {
     }
 }
 
-/// A framing's name for a message: the catalog's title would be best, but core
-/// doesn't re-export it, so it's the canonical name in backticks (`jsonrpc`,
-/// `datagram@2`, `com.acme.lines@1`), any spelling.
+/// A framing's name for a message, any spelling: an official one's title in
+/// the catalog (`JSON-RPC`, `datagram@2`), else its canonical name in
+/// backticks (`com.acme.lines@1`).
 pub fn framing_title(name: &str) -> String {
-    format!("`{}`", crate::encodings::canonical(name))
+    match official::title(EncodingKind::Framing, name) {
+        Some(title) => title.to_string(),
+        None => format!("`{}`", crate::encodings::canonical(name)),
+    }
 }
 
 /// The method a framing that names its calls calls `function` of `protocol` (declared in the
@@ -902,9 +905,10 @@ mod tests {
     }
 
     #[test]
-    fn a_framing_is_named_by_its_canonical_name_in_backticks() {
-        assert_eq!(framing_title("jsonrpc@1"), "`jsonrpc`");
-        assert_eq!(framing_title("datagram@3"), "`datagram@3`");
+    fn a_framing_is_named_by_its_title_or_its_name_in_backticks() {
+        assert_eq!(framing_title("jsonrpc@1"), "JSON-RPC");
+        assert_eq!(framing_title("json-rpc"), "JSON-RPC");
+        assert_eq!(framing_title("datagram@3"), "datagram@3");
         assert_eq!(framing_title("com.acme.lines@1"), "`com.acme.lines@1`");
     }
 
