@@ -145,18 +145,15 @@ fn async_unused(request: &GenerateRequest) -> Option<Diagnostic> {
 }
 
 /// The framings the package's protocols are on, canonical (`jsonrpc`,
-/// `datagram@2`, `com.acme.lines@1`), once each.
+/// `datagram@2`, `com.acme.lines@1`), once each. A dependency's protocols
+/// aren't the package's: they aren't on its connection to begin with.
 fn framings_in_use(request: &GenerateRequest) -> BTreeSet<String> {
-    let mut framings = BTreeSet::new();
-    for (_, units) in &request.schemas {
-        for unit in units {
-            if let FrozenUnit::Protocol { parameters, .. } = unit {
-                framings.insert(connections::framing_name(parameters));
-            }
-        }
-    }
-
-    framings
+    connections::protocols(&request.schemas)
+        .filter(|(namespace, name, _, _)| {
+            connections::reached(&request.dependencies, namespace, name)
+        })
+        .map(|(_, _, parameters, _)| connections::framing_name(parameters))
+        .collect()
 }
 
 /// A framing for a message about protocols that aren't on a connection: its
@@ -190,7 +187,7 @@ fn package_connection(
     request: &GenerateRequest,
     connections_doc: Option<&str>,
 ) -> Option<Diagnostic> {
-    match connections::package_connection_of(&request.schemas) {
+    match connections::package_connection_among(&request.schemas, &request.dependencies) {
         Err(disagreement) => Some(
             Diagnostic::new(
                 NO_PACKAGE_CONNECTION,
@@ -376,6 +373,7 @@ mod tests {
             async_api: false,
             encodings: BTreeMap::new(),
             facts: None,
+            dependencies: vec![],
         }
     }
 
@@ -511,6 +509,30 @@ mod tests {
                 .contains("`datagram@2` connection and `app::B` on a `jsonrpc` one"),
             "{found:?}"
         );
+    }
+
+    #[test]
+    fn a_dependencys_protocols_are_not_the_packages_to_note() {
+        // They disagree with the package's, and aren't on its connection.
+        let mut request = request(vec![
+            ("app".into(), vec![protocol("A", vec![], &[])]),
+            ("localdeps/greeting".into(), vec![protocol("B", vec![handshake("none")], &[])]),
+        ]);
+        request.dependencies = vec!["localdeps".into()];
+        assert_eq!(generation(&request, None, None), vec![]);
+        request.dependencies.clear();
+        assert_eq!(generation(&request, None, None).len(), 1);
+
+        // A package with none of its own has nothing to say about a
+        // dependency's lockstep ones.
+        let mut request = request;
+        request.schemas = vec![(
+            "localdeps/greeting".into(),
+            vec![protocol("B", vec![framing("jsonrpc")], &[])],
+        )];
+        assert_eq!(generation(&request, None, None).len(), 1);
+        request.dependencies = vec!["localdeps".into()];
+        assert_eq!(generation(&request, None, None), vec![]);
     }
 
     #[test]

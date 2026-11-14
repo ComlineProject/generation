@@ -117,6 +117,7 @@ fn request_for(
         facts: comline_codegen::facts::needed(schemas, &comline_codegen::encodings::official_for(lang)).then(|| {
             comline_conformance::facts_for(schemas, options.wire_format.as_deref().unwrap_or(DEFAULT_FORMAT))
         }),
+        dependencies: vec![],
     }
 }
 

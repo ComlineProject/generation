@@ -37,6 +37,9 @@ pub struct Fixture {
     pub async_api: bool,
     /// The package's `wire.format`; `None` is the built-in default.
     pub wire_format: Option<&'static str>,
+    /// The names the package gives its dependencies, whose schemas are among
+    /// `schemas`, prefixed with them.
+    pub dependencies: Vec<&'static str>,
 }
 
 impl Fixture {
@@ -50,6 +53,7 @@ impl Fixture {
             validate_on_decode: ValidateOnDecode::Off,
             async_api: false,
             wire_format: None,
+            dependencies: vec![],
         }
     }
 
@@ -64,6 +68,7 @@ impl Fixture {
             validate_on_decode: ValidateOnDecode::Off,
             async_api: false,
             wire_format: None,
+            dependencies: vec![],
         }
     }
 
@@ -84,6 +89,11 @@ impl Fixture {
 
     fn with_async(mut self) -> Self {
         self.async_api = true;
+        self
+    }
+
+    fn with_dependencies(mut self, dependencies: &[&'static str]) -> Self {
+        self.dependencies = dependencies.to_vec();
         self
     }
 
@@ -897,6 +907,68 @@ pub fn facts_for(schemas: &[(String, Vec<FrozenUnit>)], wire_format: &str) -> co
         version: "0.1.0".to_string(),
         protocols,
         encodings,
+    }
+}
+
+/// A package that uses only a dependency's types, where the dependency also
+/// declares a protocol under the defaults (`datagram@3`, `comline@2`), as core
+/// writes them into it. The package has no protocol of its own, so nothing
+/// needs its facts and it has no connection: the dependency's protocol is a
+/// type to generate, not something to address, check or serve. (Not in
+/// [`corpus`] until the generators leave a dependency's protocol off the
+/// connection; `tests/dependency_protocols.rs` holds what's checkable of it.)
+pub fn dependency_protocol() -> Fixture {
+    let dependency = dependency_greeting(vec![
+        structure("Greeting", vec![field("text", "string", false)]),
+        defaulted_protocol("Foo"),
+    ]);
+    Fixture::package(
+        "dependency_protocol",
+        vec![
+            dependency,
+            (
+                "api".to_string(),
+                vec![
+                    import("localdeps::greeting::Greeting", None),
+                    structure("Message", vec![field("greeting", "Greeting", false)]),
+                ],
+            ),
+        ],
+    )
+    .with_dependencies(&["localdeps"])
+}
+
+/// [`dependency_protocol`], with a protocol of the package's own on the
+/// defaults too: the one the package's connection and facts are about.
+pub fn dependency_and_own_protocols() -> Fixture {
+    let mut fixture = dependency_protocol();
+    fixture.name = "dependency_and_own_protocols";
+    fixture.schemas[1].1.push(defaulted_protocol("Chat"));
+    fixture
+}
+
+/// The dependency `localdeps`'s one schema, `greeting`.
+fn dependency_greeting(units: Vec<FrozenUnit>) -> (String, Vec<FrozenUnit>) {
+    ("localdeps/greeting".to_string(), units)
+}
+
+/// A protocol with the framing and handshake core writes by default.
+fn defaulted_protocol(name: &str) -> FrozenUnit {
+    FrozenUnit::Protocol {
+        docstring: String::new(),
+        parameters: vec![
+            FrozenUnit::Property {
+                name: "framing".to_string(),
+                value: ConfigValue::Str("datagram@3".to_string()),
+            },
+            FrozenUnit::Property {
+                name: "handshake".to_string(),
+                value: ConfigValue::Str("comline@2".to_string()),
+            },
+        ],
+        name: name.to_string(),
+        functions: vec![function("greet", vec![arg("n", PrimitiveType::U32)], Some("u32"), vec![])],
+        span: (0, 0),
     }
 }
 

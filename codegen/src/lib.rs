@@ -380,6 +380,7 @@ mod tests {
             async_api: false,
             encodings: Default::default(),
             facts: None,
+            dependencies: vec![],
         };
         assert!(req("1.81").at_least("1.81.0"));
         assert!(req("1.90.0").at_least("1.81.0"));
