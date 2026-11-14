@@ -208,7 +208,8 @@
             "format_json",
             "format_msgpack",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -296,7 +297,8 @@
             "connections",
             "connections_async",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -308,7 +310,8 @@
             "framing_datagram3",
             "handshake_comline2",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -329,7 +332,8 @@
           "proven_by": [
             "handshake_comline2",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -388,7 +392,8 @@
             "validators",
             "validators_on_decode",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -426,7 +431,8 @@
             "format_json",
             "format_msgpack",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -452,7 +458,8 @@
             "bounds",
             "chars",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -579,7 +586,8 @@
             "connections_jsonrpc",
             "format_json",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -667,7 +675,8 @@
             "connections",
             "connections_async",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -679,7 +688,8 @@
             "framing_datagram3",
             "handshake_comline2",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -700,7 +710,8 @@
           "proven_by": [
             "handshake_comline2",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -759,7 +770,8 @@
             "validators",
             "validators_on_decode",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -797,7 +809,8 @@
             "connections_jsonrpc",
             "format_json",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
@@ -824,7 +837,8 @@
             "bounds",
             "chars",
             "dependency_protocol",
-            "dependency_and_own_protocols"
+            "dependency_and_own_protocols",
+            "nested_protocol"
           ],
           "since": null,
           "state": "supported",
