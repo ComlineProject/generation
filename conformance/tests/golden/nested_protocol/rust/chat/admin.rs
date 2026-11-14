@@ -125,7 +125,7 @@ impl<'p, P: Peer> AdminSender<'p, P> {
     }
 
     pub fn greet(&mut self, n: u32) -> Result<u32, CallError<AdminGreetError>> {
-        crate::connection::check_call(&mut *self.0, Self::PROTOCOL, 0, "chat/admin::Admin", "greet")?;
+        crate::connection::check_call(&mut *self.0, Self::PROTOCOL, 0, "chat::admin::Admin", "greet")?;
         let (reply, fmt) = self.0.call(Self::PROTOCOL, Call::new(0, "greet"), &AdminGreetParams { n })?;
         match reply {
             Envelope::Ok(payload) => fmt.decode(payload).map_err(CallError::Runtime),

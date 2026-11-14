@@ -24,7 +24,7 @@ export const CONNECTION_IR_HASH = 0xa6f61afefe65d74an;
  * This end's `comline@2` Hello: version 0.1.0 of package `0123456789abcdef0123456789abcdef`, as its history
  * records it. Its protocols, by wire number:
  *
- * - 0 `chat/admin::Admin`, line 0.1.0: `greet` 0
+ * - 0 `chat::admin::Admin`, line 0.1.0: `greet` 0
  */
 export const HELLO = new Uint8Array([
     0x43, 0x4f, 0x02, 0x01, 0x00, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd,
@@ -49,7 +49,7 @@ export function handshake(): Comline2Handshake {
 }
 
 /** The package's protocols on the connection, by wire number. */
-const PROTOCOLS = new Map<number, string>([[0, "chat/admin::Admin"]]);
+const PROTOCOLS = new Map<number, string>([[0, "chat::admin::Admin"]]);
 
 /** What the connection's `comline@2` handshake agreed, if `accept` / `connect` opened it. */
 export function negotiated(conn: Peer): Negotiated | undefined {

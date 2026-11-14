@@ -10,7 +10,7 @@ pub const CONNECTION_IR_HASH: u64 = 0xa6f61afefe65d74a;
 /// This end's `comline@2` Hello: version 0.1.0 of package `0123456789abcdef0123456789abcdef`, as its
 /// history records it. Its protocols, by wire number:
 ///
-/// - 0 `chat/admin::Admin`, line 0.1.0: `greet` 0
+/// - 0 `chat::admin::Admin`, line 0.1.0: `greet` 0
 pub const HELLO: &[u8] = &[
     0x43, 0x4f, 0x02, 0x01, 0x00, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd,
     0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x00, 0x01, 0x00,
@@ -41,7 +41,7 @@ pub fn handshake() -> comline_runtime::handshake::comline2::Comline2Handshake {
 }
 
 /// The package's protocols on the connection, by wire number.
-const PROTOCOLS: &[(u16, &str)] = &[(0, "chat/admin::Admin")];
+const PROTOCOLS: &[(u16, &str)] = &[(0, "chat::admin::Admin")];
 
 fn protocol_path(number: u16) -> &'static str {
     PROTOCOLS.iter().find(|(n, _)| *n == number).map_or("?", |(_, path)| path)
