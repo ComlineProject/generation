@@ -95,11 +95,30 @@ pub fn generation(
 /// is what each framing the package can see states, by canonical name, as the
 /// generation request's `encodings` carries them. One per function and side,
 /// as [`connections::bare_name_clashes`] counts them, with the same wording.
+///
+/// A package's dependencies aren't known here, so only `std`'s protocols are
+/// left out; see [`method_name_clashes_in`].
 pub fn method_name_clashes(
     schemas: &[(String, Vec<FrozenUnit>)],
     framings: &BTreeMap<String, EncodingMapping>,
 ) -> Vec<Diagnostic> {
-    connections::name_clashes(schemas, framings)
+    method_name_clashes_among(schemas, &[], framings)
+}
+
+/// [`method_name_clashes`] for the request: only the protocols its package
+/// reaches ([`connections::reached`]) take part, so a dependency's protocol
+/// that shares a function name with the package's own is no clash.
+pub fn method_name_clashes_in(request: &GenerateRequest) -> Vec<Diagnostic> {
+    method_name_clashes_among(&request.schemas, &request.dependencies, &request.encodings)
+}
+
+/// [`method_name_clashes`] for a package with these `dependencies`.
+pub fn method_name_clashes_among(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    dependencies: &[String],
+    framings: &BTreeMap<String, EncodingMapping>,
+) -> Vec<Diagnostic> {
+    connections::name_clashes_among(schemas, dependencies, framings)
         .into_iter()
         .map(|clash| Diagnostic::new(METHOD_NAME_CLASH, clash.message()).with_unit(clash.second))
         .collect()
@@ -700,5 +719,58 @@ mod tests {
             protocol("Admin", vec![framing("jsonrpc")], &["send"]),
         ]);
         assert!(method_name_clashes(&lockstep, &BTreeMap::new()).is_empty());
+    }
+
+    /// What the request's dependencies decide: a dependency's `jsonrpc`
+    /// protocol sharing a function name with the package's own is no clash,
+    /// two of the package's own are.
+    #[test]
+    fn a_dependencys_method_names_are_not_clashes_in_the_request() {
+        let jsonrpc = || vec![framing("jsonrpc")];
+        let client = || vec![provider("Client"), framing("jsonrpc")];
+        let schemas = vec![
+            (
+                "app".to_string(),
+                vec![
+                    protocol("Chat", jsonrpc(), &["send"]),
+                    protocol("Events", client(), &["notify"]),
+                ],
+            ),
+            (
+                "localdeps/greeting".to_string(),
+                vec![protocol("Greeter", jsonrpc(), &["send"])],
+            ),
+        ];
+
+        // Without knowing the dependency, `Greeter` is a protocol like any.
+        let mut request = request(schemas);
+        let found = method_name_clashes(&request.schemas, &request.encodings);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].unit.as_deref(), Some("localdeps/greeting::Greeter"));
+        assert_eq!(method_name_clashes_in(&request), found);
+        assert!(connections::check_in(&request).is_err());
+
+        // Told, it's the dependency's, and reached by nothing.
+        request.dependencies = vec!["localdeps".into()];
+        assert!(method_name_clashes_in(&request).is_empty());
+        assert!(
+            method_name_clashes_among(&request.schemas, &request.dependencies, &request.encodings)
+                .is_empty()
+        );
+        assert!(connections::name_clashes_in(&request).is_empty());
+        assert!(connections::bare_name_clashes_in(&request).is_empty());
+        assert!(connections::check_in(&request).is_ok());
+
+        // Two of the package's own still clash, the dependency or not.
+        request.schemas[0]
+            .1
+            .insert(1, protocol("Admin", jsonrpc(), &["send"]));
+        let found = method_name_clashes_in(&request);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].code, METHOD_NAME_CLASH);
+        assert_eq!(found[0].unit.as_deref(), Some("app::Admin"));
+        assert_eq!(connections::name_clashes_in(&request).len(), 1);
+        assert_eq!(connections::bare_name_clashes_in(&request).len(), 1);
+        assert!(connections::check_in(&request).is_err());
     }
 }

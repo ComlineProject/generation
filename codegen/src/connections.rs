@@ -42,7 +42,7 @@
 //! ([`reached`]), so the package connection leaves them out: they're
 //! generated as types, but never addressed, checked or served on it.
 
-use crate::protocol::EncodingMapping;
+use crate::protocol::{EncodingMapping, GenerateRequest};
 use std::collections::BTreeMap;
 
 use comline_core::encodings::{official, EncodingKind};
@@ -266,11 +266,30 @@ pub fn method_name(namespace: &str, protocol: &str, function: &str, names: Metho
 /// Refuses protocols on one connection whose bare method names one side
 /// couldn't tell apart: two protocols the same side provides, both with a
 /// function of the same name, on a framing that names its calls.
+///
+/// A package's dependencies aren't known here, so only `std`'s protocols are
+/// left out; see [`check_in`].
 pub fn check(
     schemas: &[(String, Vec<FrozenUnit>)],
     encodings: &BTreeMap<String, EncodingMapping>,
 ) -> Result<()> {
-    let problems = bare_name_clashes(schemas, encodings);
+    check_among(schemas, &[], encodings)
+}
+
+/// [`check`] for the request: only the protocols its package
+/// [`reached`] take part, so a dependency's protocol that shares a function
+/// name with the package's own doesn't refuse it.
+pub fn check_in(req: &GenerateRequest) -> Result<()> {
+    check_among(&req.schemas, &req.dependencies, &req.encodings)
+}
+
+/// [`check`] for a package with these `dependencies`.
+pub fn check_among(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    dependencies: &[String],
+    encodings: &BTreeMap<String, EncodingMapping>,
+) -> Result<()> {
+    let problems = bare_name_clashes_among(schemas, dependencies, encodings);
     if !problems.is_empty() {
         bail!("{}", problems.join("\n"));
     }
@@ -282,7 +301,21 @@ pub fn bare_name_clashes(
     schemas: &[(String, Vec<FrozenUnit>)],
     encodings: &BTreeMap<String, EncodingMapping>,
 ) -> Vec<String> {
-    name_clashes(schemas, encodings)
+    bare_name_clashes_among(schemas, &[], encodings)
+}
+
+/// [`bare_name_clashes`] for the request, as [`check_in`] counts them.
+pub fn bare_name_clashes_in(req: &GenerateRequest) -> Vec<String> {
+    bare_name_clashes_among(&req.schemas, &req.dependencies, &req.encodings)
+}
+
+/// [`bare_name_clashes`] for a package with these `dependencies`.
+pub fn bare_name_clashes_among(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    dependencies: &[String],
+    encodings: &BTreeMap<String, EncodingMapping>,
+) -> Vec<String> {
+    name_clashes_among(schemas, dependencies, encodings)
         .iter()
         .map(NameClash::message)
         .collect()
@@ -327,6 +360,23 @@ pub fn name_clashes(
     schemas: &[(String, Vec<FrozenUnit>)],
     encodings: &BTreeMap<String, EncodingMapping>,
 ) -> Vec<NameClash> {
+    name_clashes_among(schemas, &[], encodings)
+}
+
+/// [`name_clashes`] for the request, as [`check_in`] counts them.
+pub fn name_clashes_in(req: &GenerateRequest) -> Vec<NameClash> {
+    name_clashes_among(&req.schemas, &req.dependencies, &req.encodings)
+}
+
+/// [`name_clashes`] for a package with these `dependencies`: a protocol it
+/// doesn't [`reach`](reached) is on none of its connections, so it clashes
+/// with nothing, and its client-provided `jsonrpc` protocol doesn't put the
+/// package's own on a connection.
+pub fn name_clashes_among(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    dependencies: &[String],
+    encodings: &BTreeMap<String, EncodingMapping>,
+) -> Vec<NameClash> {
     let mut problems = Vec::new();
     // Each side looks a method up among the protocols it provides.
     for (side, provides) in [
@@ -339,8 +389,9 @@ pub fn name_clashes(
             let bare = crate::encodings::names_calls(encodings, &framing)
                 && MethodNames::of_protocol(parameters) == MethodNames::Bare;
             if !bare
+                || !reached(dependencies, namespace, name)
                 || !provides.contains(&Provider::of(parameters))
-                || !on_connection(schemas, parameters)
+                || !on_connection_among(schemas, dependencies, parameters)
             {
                 continue;
             }
@@ -982,6 +1033,67 @@ mod tests {
         ];
         assert!(on_connection(&schemas, &own));
         assert!(!on_connection_among(&schemas, &dependencies, &own));
+    }
+
+    /// A dependency's `jsonrpc` protocol with a function the package's own has
+    /// isn't a clash: it's on none of the package's connections. Two of the
+    /// package's own still are.
+    #[test]
+    fn a_dependencys_function_names_are_not_bare_name_clashes() {
+        let dependencies = vec!["localdeps".to_string()];
+        let jsonrpc = || vec![framing("jsonrpc")];
+        let client = || vec![provider("Client"), framing("jsonrpc")];
+        let own = |units| ("api".to_string(), units);
+        let theirs = |units| ("localdeps/greeting".to_string(), units);
+        let none = BTreeMap::new();
+
+        // The package's `Chat` and its client's `Events` share a connection,
+        // as does the dependency's `Greeter` when it's counted: it's a clash.
+        let schemas = vec![
+            own(vec![
+                with_functions("Chat", jsonrpc(), &["send"]),
+                with_functions("Events", client(), &["notify"]),
+            ]),
+            theirs(vec![with_functions("Greeter", jsonrpc(), &["send"])]),
+        ];
+        let counted = name_clashes(&schemas, &none);
+        assert_eq!(counted.len(), 1, "{counted:?}");
+        assert_eq!(counted[0].second, "localdeps/greeting::Greeter");
+        assert!(check(&schemas, &none).is_err());
+        // Reached ones only: it's no clash.
+        assert!(name_clashes_among(&schemas, &dependencies, &none).is_empty());
+        assert!(bare_name_clashes_among(&schemas, &dependencies, &none).is_empty());
+        assert!(check_among(&schemas, &dependencies, &none).is_ok());
+
+        // A dependency's client-provided protocol is the only thing that puts
+        // the package's own on a connection: without it they're lockstep.
+        let schemas = vec![
+            own(vec![
+                with_functions("Chat", jsonrpc(), &["send"]),
+                with_functions("Admin", jsonrpc(), &["send"]),
+            ]),
+            theirs(vec![with_functions("Events", client(), &["notify"])]),
+        ];
+        assert_eq!(name_clashes(&schemas, &none).len(), 1);
+        assert!(name_clashes_among(&schemas, &dependencies, &none).is_empty());
+
+        // Two of the package's own still clash, with a dependency's alongside.
+        let schemas = vec![
+            own(vec![
+                with_functions("Chat", jsonrpc(), &["send"]),
+                with_functions("Admin", jsonrpc(), &["send"]),
+                with_functions("Events", client(), &["notify"]),
+            ]),
+            theirs(vec![with_functions("Greeter", jsonrpc(), &["send"])]),
+        ];
+        let found = name_clashes_among(&schemas, &dependencies, &none);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(
+            (found[0].first.as_str(), found[0].second.as_str()),
+            ("api::Chat", "api::Admin")
+        );
+        assert_eq!(found[0].side, "server");
+        assert!(check_among(&schemas, &dependencies, &none).is_err());
     }
 
     #[test]
