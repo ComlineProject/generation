@@ -185,8 +185,12 @@ fn client_provided_on(
 /// gives them) with a module beneath it. This is how core splits a version's
 /// compiled schemas (`comline_core::compat::dependency_names`, which also
 /// counts `std` as one): a dependency's schemas are prefixed with its name.
+///
+/// The namespace is in either spelling (`localdeps/a` or `localdeps::a`,
+/// [`crate::facts::same_namespace`]).
 pub fn is_dependency(dependencies: &[String], namespace: &str) -> bool {
-    if crate::stdlib::is_std_namespace(namespace) {
+    let namespace = crate::facts::canonical_namespace(namespace);
+    if crate::stdlib::is_std_namespace(&namespace) {
         return true;
     }
     namespace

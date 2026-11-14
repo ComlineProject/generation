@@ -141,6 +141,9 @@ pub fn corpus() -> Vec<Fixture> {
         // connection (generation#143).
         dependency_protocol(),
         dependency_and_own_protocols(),
+        // A protocol in a nested schema, whose facts name its namespace the
+        // way core does (the nested-namespace facts fix).
+        nested_protocol(),
     ]
 }
 
@@ -859,7 +862,9 @@ fn handshake_comline2() -> Fixture {
 /// The facts a package's history would give `schemas` (`comline_core::compat`):
 /// what `comline generation` supplies for a package that needs them. Here the
 /// numbers run backwards from the declaration order, so a golden shows them
-/// apart from positions; the hashes are fixed stand-ins.
+/// apart from positions; the hashes are fixed stand-ins. The namespaces are
+/// spelled as core's are, `::`-joined (`chat::admin`), where the schemas'
+/// are `/`-joined (`chat/admin`) as the CLI builds them from the paths.
 pub fn facts_for(schemas: &[(String, Vec<FrozenUnit>)], wire_format: &str) -> comline_codegen::facts::PackageFacts {
     use comline_codegen::facts::{EncodingFacts, FunctionFacts, PackageFacts, ProtocolFacts};
     let mut protocols = vec![];
@@ -886,9 +891,10 @@ pub fn facts_for(schemas: &[(String, Vec<FrozenUnit>)], wire_format: &str) -> co
                 })
                 .collect();
             let count = names.len() as u16;
+            let namespace = namespace.replace('/', "::");
             protocols.push(ProtocolFacts {
                 path: format!("{namespace}::{name}"),
-                namespace: namespace.clone(),
+                namespace,
                 name: name.clone(),
                 line: "0.1.0".to_string(),
                 number,
@@ -949,6 +955,24 @@ pub fn dependency_and_own_protocols() -> Fixture {
     fixture.name = "dependency_and_own_protocols";
     fixture.schemas[1].1.push(defaulted_protocol("Chat"));
     fixture
+}
+
+/// A package with no dependencies whose protocol is in a schema under a
+/// folder (`src/chat/admin.ids`, namespace `chat/admin`), on the defaults
+/// (`datagram@3`, `comline@2`). Its facts spell the namespace `chat::admin`,
+/// as core's do, so finding them takes comparing the two spellings.
+/// (`tests/nested_protocols.rs` checks what every generator builds from.)
+pub fn nested_protocol() -> Fixture {
+    Fixture::package(
+        "nested_protocol",
+        vec![(
+            "chat/admin".to_string(),
+            vec![
+                structure("Notice", vec![field("text", "string", false)]),
+                defaulted_protocol("Admin"),
+            ],
+        )],
+    )
 }
 
 /// The dependency `localdeps`'s one schema, `greeting`.

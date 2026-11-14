@@ -119,9 +119,31 @@ fn needed_among(
     })
 }
 
+/// The segments of a namespace, whichever way it is spelled: a request's
+/// schemas are `/`-joined (`chat/admin`, as the CLI builds them from the
+/// schema's path), and the facts' namespaces are `::`-joined (`chat::admin`,
+/// as core's frozen `Namespace` unit joins them). A namespace of one segment
+/// is spelled the same either way.
+pub fn namespace_segments(namespace: &str) -> impl Iterator<Item = &str> {
+    namespace.split("::").flat_map(|part| part.split('/'))
+}
+
+/// A namespace in the request's spelling, `/`-joined.
+pub fn canonical_namespace(namespace: &str) -> String {
+    namespace_segments(namespace).collect::<Vec<_>>().join("/")
+}
+
+/// Whether two namespaces are the same one, whichever way each is spelled
+/// ([`namespace_segments`]). Every comparison of a request's namespace with a
+/// facts' goes through this.
+pub fn same_namespace(a: &str, b: &str) -> bool {
+    namespace_segments(a).eq(namespace_segments(b))
+}
+
 /// The facts of protocol `namespace::name`, if the request has them.
+/// `namespace` is in either spelling ([`same_namespace`]).
 pub fn protocol<'a>(req_facts: Option<&'a PackageFacts>, namespace: &str, name: &str) -> Option<&'a ProtocolFacts> {
-    req_facts?.protocols.iter().find(|p| p.namespace == namespace && p.name == name)
+    req_facts?.protocols.iter().find(|p| same_namespace(&p.namespace, namespace) && p.name == name)
 }
 
 /// How one protocol's calls are addressed on a connection.
@@ -148,14 +170,12 @@ pub struct Addressing {
 /// - A call carries the function's wire number under a framing that calls
 ///   by number, else its position.
 ///
-/// Refuses a protocol that needs numbers the request doesn't have. It can't
-/// tell a dependency's protocol from the package's own, which has the
-/// numbers of its own package and isn't the package's to address:
-/// [`addressing_in`] can.
+/// Refuses a protocol that needs numbers the request doesn't have. It
+/// doesn't ask whether the package reaches the protocol, though a dependency's
+/// has the numbers of its own package and isn't the package's to address:
+/// [`addressing_in`] does.
 pub fn addressing(
-    req_facts: Option<&PackageFacts>,
-    schemas: &[(String, Vec<FrozenUnit>)],
-    encodings: &BTreeMap<String, EncodingMapping>,
+    req: &GenerateRequest,
     namespace: &str,
     name: &str,
     parameters: &[FrozenUnit],
@@ -168,11 +188,12 @@ pub fn addressing(
             _ => None,
         })
         .collect();
-    let by_id = calls_by_id(encodings, &connections::framing_name(parameters));
-    if !needed_by(encodings, parameters) {
-        return positional(schemas, namespace, name, names.len(), by_id);
+    let by_id = calls_by_id(&req.encodings, &connections::framing_name(parameters));
+    if !needed_by(&req.encodings, parameters) {
+        return positional(&req.schemas, namespace, name, names.len(), by_id);
     }
-    let facts = protocol(req_facts, namespace, name).ok_or_else(|| missing(req_facts, namespace, name, parameters))?;
+    let facts = protocol(req.facts.as_ref(), namespace, name)
+        .ok_or_else(|| missing(req.facts.as_ref(), &req.dependencies, namespace, name, parameters))?;
     let numbers: Vec<u16> = names
         .iter()
         .map(|f| {
@@ -216,31 +237,52 @@ pub fn addressing_in(
     functions: &[FrozenUnit],
 ) -> Result<Addressing> {
     if connections::reached(&req.dependencies, namespace, name) {
-        return addressing(req.facts.as_ref(), &req.schemas, &req.encodings, namespace, name, parameters, functions);
+        return addressing(req, namespace, name, parameters, functions);
     }
     let functions = functions.iter().filter(|f| matches!(f, FrozenUnit::Function { .. })).count();
     let by_id = calls_by_id(&req.encodings, &connections::framing_name(parameters));
     positional(&req.schemas, namespace, name, functions, by_id)
 }
 
-fn missing(req_facts: Option<&PackageFacts>, namespace: &str, name: &str, parameters: &[FrozenUnit]) -> eyre::Report {
+fn missing(
+    req_facts: Option<&PackageFacts>,
+    dependencies: &[String],
+    namespace: &str,
+    name: &str,
+    parameters: &[FrozenUnit],
+) -> eyre::Report {
     let why = format!(
         "protocol `{namespace}::{name}` uses `{}` with `{}`, which address it by the wire numbers its package's \
          history assigns",
         connections::framing_name(parameters),
         connections::handshake_name(parameters)
     );
-    match req_facts {
-        None => eyre!(
+    let Some(facts) = req_facts else {
+        return eyre!(
             "{why}, and the request carries no facts: `comline generation` supplies them from the package's build \
              history (run `comline build` first)"
-        ),
-        Some(_) => eyre!(
-            "{why}, and the package's facts have none for it: a new protocol has none until `comline build` records \
-             it, and a dependency's protocol has its own package's numbers, so it can't be on a connection until \
-             core#277"
-        ),
+        );
+    };
+    if connections::is_dependency(dependencies, namespace) {
+        return eyre!(
+            "{why}, and the package's facts have none for it: `{namespace}` is a dependency's schema, and a \
+             dependency's protocol has its own package's numbers, so it can't be on a connection until core#277"
+        );
     }
+    let held = match facts.protocols.as_slice() {
+        [] => "no protocols".to_string(),
+        protocols => protocols.iter().map(|p| p.path.as_str()).collect::<Vec<_>>().join(", "),
+    };
+    // The same name in another namespace is the likely mismatch.
+    let elsewhere = facts.protocols.iter().find(|p| p.name == name).map(|p| {
+        format!(" (it has `{}`, in namespace `{}`, which isn't `{namespace}`)", p.name, p.namespace)
+    });
+    eyre!(
+        "{why}, and the package's facts hold no protocol `{name}` in namespace `{namespace}`{}: a new protocol \
+         has none until `comline build` records it, so run `comline build`, then `comline generation` again. The \
+         facts hold: {held}",
+        elsewhere.unwrap_or_default()
+    )
 }
 
 /// What a generator checks before rendering a request that needs facts:
@@ -259,9 +301,7 @@ pub fn check(req: &GenerateRequest) -> Result<()> {
         if !connections::reached(&req.dependencies, namespace, name) || !needed_by(&req.encodings, parameters) {
             continue;
         }
-        if let Err(e) =
-            addressing(req.facts.as_ref(), &req.schemas, &req.encodings, namespace, name, parameters, functions)
-        {
+        if let Err(e) = addressing(req, namespace, name, parameters, functions) {
             problems.push(e.to_string());
             continue;
         }
@@ -420,7 +460,7 @@ pub fn hello(req: &GenerateRequest, connection: &PackageConnection) -> Result<(V
             continue;
         }
         let p = protocol(Some(facts), namespace, name)
-            .ok_or_else(|| missing(Some(facts), namespace, name, parameters))?;
+            .ok_or_else(|| missing(Some(facts), &req.dependencies, namespace, name, parameters))?;
         let addressing = addressing_in(req, namespace, name, parameters, functions)?;
         let names = functions.iter().filter_map(|f| match f {
             FrozenUnit::Function { name, .. } => Some(name.clone()),
@@ -621,12 +661,17 @@ mod tests {
         let mut req = request(&["Chat"]);
         req.facts = Some(facts_of(&["Chat"]));
         let (namespace, name, parameters, functions) = foo(&req);
-        // Without the dependency's name, `Foo` looks like the package's own,
-        // with no numbers in its facts.
-        let error = addressing(req.facts.as_ref(), &req.schemas, &req.encodings, namespace, name, parameters, functions)
-            .unwrap_err()
-            .to_string();
+        // `addressing` doesn't ask whether it's reached, so it's refused for
+        // having no numbers in the package's facts, and says why.
+        let error = addressing(&req, namespace, name, parameters, functions).unwrap_err().to_string();
         assert!(error.contains("`localdeps/greeting::Foo`") && error.contains("core#277"), "{error}");
+        assert!(!error.contains("comline build"), "{error}");
+        // Without the dependency's name, `Foo` looks like the package's own.
+        let mut undeclared = request(&["Chat"]);
+        undeclared.facts = req.facts.clone();
+        undeclared.dependencies.clear();
+        let error = addressing(&undeclared, namespace, name, parameters, functions).unwrap_err().to_string();
+        assert!(!error.contains("core#277") && error.contains("comline build"), "{error}");
         // With it, it has the position it would have without facts, and no
         // checks to run.
         let at = addressing_in(&req, namespace, name, parameters, functions).unwrap();
@@ -636,6 +681,117 @@ mod tests {
             connections::protocols(&req.schemas).find(|(_, name, _, _)| *name == "Chat").unwrap();
         let at = addressing_in(&req, namespace, name, parameters, functions).unwrap();
         assert_eq!(at, Addressing { protocol: 7, calls: vec![3], checks: Some(vec![3]), by_id: true });
+    }
+
+    /// A package `own` protocols in `chat/admin`, a nested schema, and facts
+    /// as core produces them: `::`-joined, where the request is `/`-joined.
+    fn nested_request(own: &[&str]) -> GenerateRequest {
+        let mut req = request(own);
+        req.schemas[0].0 = "chat/admin".into();
+        let mut facts = facts_of(own);
+        for p in &mut facts.protocols {
+            p.namespace = "chat::admin".into();
+            p.path = format!("chat::admin::{}", p.name);
+        }
+        req.facts = Some(facts);
+        req
+    }
+
+    #[test]
+    fn namespaces_are_the_same_in_either_spelling() {
+        assert!(same_namespace("chat/admin", "chat::admin"));
+        assert!(same_namespace("chat::admin", "chat/admin"));
+        assert!(same_namespace("chat/admin", "chat/admin"));
+        assert!(same_namespace("chat::admin", "chat::admin"));
+        assert!(same_namespace("chat", "chat"));
+        assert!(same_namespace("a/b::c", "a::b/c"));
+        assert!(!same_namespace("chat/admin", "chat"));
+        assert!(!same_namespace("chat/admin", "chat::user"));
+        assert!(!same_namespace("chat", "chat::admin"));
+        // Neither is a prefix match, nor a substring one.
+        assert!(!same_namespace("chat/admin", "chat/administrator"));
+        assert!(!same_namespace("chat:admin", "chat::admin"));
+        assert_eq!(canonical_namespace("chat::admin::v2"), "chat/admin/v2");
+        assert_eq!(canonical_namespace("chat/admin"), "chat/admin");
+    }
+
+    #[test]
+    fn facts_of_a_nested_namespace_are_found_in_either_spelling() {
+        // Facts `::`-joined, request `/`-joined: what core and the CLI give.
+        let req = nested_request(&["Chat"]);
+        let facts = req.facts.as_ref();
+        assert_eq!(protocol(facts, "chat/admin", "Chat").map(|p| p.number), Some(7));
+        assert_eq!(protocol(facts, "chat::admin", "Chat").map(|p| p.number), Some(7));
+        assert!(protocol(facts, "chat", "Chat").is_none());
+        assert!(protocol(facts, "chat/admin", "Other").is_none());
+        // And the other way: facts `/`-joined, request `::`-joined.
+        let mut slashed = req.facts.clone().unwrap();
+        slashed.protocols[0].namespace = "chat/admin".into();
+        assert_eq!(protocol(Some(&slashed), "chat::admin", "Chat").map(|p| p.number), Some(7));
+        assert_eq!(protocol(Some(&slashed), "chat/admin", "Chat").map(|p| p.number), Some(7));
+    }
+
+    #[test]
+    fn a_nested_protocol_is_addressed_by_its_facts() {
+        let req = nested_request(&["Chat"]);
+        check(&req).unwrap();
+        let (namespace, name, parameters, functions) =
+            connections::protocols(&req.schemas).find(|(_, name, _, _)| *name == "Chat").unwrap();
+        assert_eq!(namespace, "chat/admin");
+        let at = addressing_in(&req, namespace, name, parameters, functions).unwrap();
+        assert_eq!(at, Addressing { protocol: 7, calls: vec![3], checks: Some(vec![3]), by_id: true });
+        let connection = comline2_connection(&req).unwrap().unwrap();
+        let (_, protocols) = hello(&req, &connection).unwrap();
+        let hello: Vec<_> = protocols.iter().map(|p| (p.namespace.as_str(), p.name.as_str(), p.number)).collect();
+        assert_eq!(hello, [("chat/admin", "Chat", 7)]);
+
+        // The same with the facts `/`-joined and the request `::`-joined.
+        let mut req = nested_request(&["Chat"]);
+        req.schemas[0].0 = "chat::admin".into();
+        req.facts.as_mut().unwrap().protocols[0].namespace = "chat/admin".into();
+        check(&req).unwrap();
+    }
+
+    #[test]
+    fn a_nested_namespace_is_a_dependencys_in_either_spelling() {
+        let dependencies = vec!["localdeps".to_string()];
+        assert!(connections::is_dependency(&dependencies, "localdeps/a/b"));
+        assert!(connections::is_dependency(&dependencies, "localdeps::a::b"));
+        assert!(connections::is_dependency(&[], "std::http"));
+        assert!(!connections::is_dependency(&dependencies, "chat::admin"));
+        assert!(!connections::is_dependency(&dependencies, "localdeps"));
+        assert!(!connections::is_dependency(&dependencies, "localdeps2::a"));
+    }
+
+    #[test]
+    fn a_protocol_the_facts_lack_says_what_was_looked_for_and_what_they_hold() {
+        // Facts for `chat::admin::Chat`, and a request for `chat/user`'s.
+        let mut req = nested_request(&["Chat"]);
+        req.schemas[0].0 = "chat/user".into();
+        let error = check(&req).unwrap_err().to_string();
+        assert!(error.contains("`chat/user::Chat`"), "{error}");
+        assert!(error.contains("no protocol `Chat` in namespace `chat/user`"), "{error}");
+        assert!(error.contains("`Chat`, in namespace `chat::admin`"), "{error}");
+        assert!(error.contains("comline build") && error.contains("chat::admin::Chat"), "{error}");
+        // It's the package's own, so there's nothing to wait for in core.
+        assert!(!error.contains("core#277") && !error.contains("dependency"), "{error}");
+
+        // Facts of no protocols at all.
+        req.facts.as_mut().unwrap().protocols.clear();
+        let error = check(&req).unwrap_err().to_string();
+        assert!(error.contains("The facts hold: no protocols"), "{error}");
+
+        // A dependency's has its own words.
+        let mut req = request(&["Chat"]);
+        req.facts = Some(facts_of(&["Chat"]));
+        let (namespace, name, parameters, _) = foo(&req);
+        let error = missing(req.facts.as_ref(), &req.dependencies, namespace, name, parameters).to_string();
+        assert!(error.contains("a dependency's schema") && error.contains("core#277"), "{error}");
+        assert!(!error.contains("comline build"), "{error}");
+
+        // No facts at all is its own message.
+        let error = missing(None, &req.dependencies, "api", "Chat", parameters).to_string();
+        assert!(error.contains("carries no facts"), "{error}");
     }
 
     #[test]
