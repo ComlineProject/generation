@@ -5,10 +5,8 @@
 //!
 //! What every generator shares is checked here, on the request each gets:
 //! `facts::check`, which they all run first, and the package connection and
-//! addressing they build from. The fixtures aren't in the corpus yet: a
-//! generator that hasn't moved to `package_connection_among` and
-//! `addressing_in` still puts the dependency's protocol on `Services`, and a
-//! golden would pin that.
+//! addressing they build from. The fixtures are in the corpus too, so each
+//! generator's own output for them is held by the goldens.
 
 use std::collections::BTreeMap;
 

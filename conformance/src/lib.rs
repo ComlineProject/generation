@@ -137,6 +137,10 @@ pub fn corpus() -> Vec<Fixture> {
         format_msgpack(),
         bounds(),
         chars(),
+        // A dependency's protocols: generated as types, not on the package's
+        // connection (generation#143).
+        dependency_protocol(),
+        dependency_and_own_protocols(),
     ]
 }
 
@@ -914,9 +918,9 @@ pub fn facts_for(schemas: &[(String, Vec<FrozenUnit>)], wire_format: &str) -> co
 /// declares a protocol under the defaults (`datagram@3`, `comline@2`), as core
 /// writes them into it. The package has no protocol of its own, so nothing
 /// needs its facts and it has no connection: the dependency's protocol is a
-/// type to generate, not something to address, check or serve. (Not in
-/// [`corpus`] until the generators leave a dependency's protocol off the
-/// connection; `tests/dependency_protocols.rs` holds what's checkable of it.)
+/// type to generate, not something to address, check or serve.
+/// (`tests/dependency_protocols.rs` checks the facts, connection and Hello
+/// every generator builds from, beside the goldens.)
 pub fn dependency_protocol() -> Fixture {
     let dependency = dependency_greeting(vec![
         structure("Greeting", vec![field("text", "string", false)]),
