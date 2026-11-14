@@ -206,7 +206,9 @@
             "connections_async",
             "connections_jsonrpc",
             "format_json",
-            "format_msgpack"
+            "format_msgpack",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -292,7 +294,9 @@
             "framing_datagram3",
             "handshake_comline2",
             "connections",
-            "connections_async"
+            "connections_async",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -302,7 +306,9 @@
           "note": null,
           "proven_by": [
             "framing_datagram3",
-            "handshake_comline2"
+            "handshake_comline2",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -321,7 +327,9 @@
         "handshake-comline2": {
           "note": null,
           "proven_by": [
-            "handshake_comline2"
+            "handshake_comline2",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -345,7 +353,9 @@
             "nested_namespace",
             "external_std",
             "validators",
-            "validators_on_decode"
+            "validators_on_decode",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -376,7 +386,9 @@
             "nested_namespace",
             "external_std",
             "validators",
-            "validators_on_decode"
+            "validators_on_decode",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -412,7 +424,9 @@
             "connections_async",
             "connections_jsonrpc",
             "format_json",
-            "format_msgpack"
+            "format_msgpack",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -436,7 +450,9 @@
             "format_json",
             "format_msgpack",
             "bounds",
-            "chars"
+            "chars",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -561,7 +577,9 @@
             "connections",
             "connections_async",
             "connections_jsonrpc",
-            "format_json"
+            "format_json",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -647,7 +665,9 @@
             "framing_datagram3",
             "handshake_comline2",
             "connections",
-            "connections_async"
+            "connections_async",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -657,7 +677,9 @@
           "note": null,
           "proven_by": [
             "framing_datagram3",
-            "handshake_comline2"
+            "handshake_comline2",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -676,7 +698,9 @@
         "handshake-comline2": {
           "note": null,
           "proven_by": [
-            "handshake_comline2"
+            "handshake_comline2",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -700,7 +724,9 @@
             "nested_namespace",
             "external_std",
             "validators",
-            "validators_on_decode"
+            "validators_on_decode",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -731,7 +757,9 @@
             "nested_namespace",
             "external_std",
             "validators",
-            "validators_on_decode"
+            "validators_on_decode",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -767,7 +795,9 @@
             "connections",
             "connections_async",
             "connections_jsonrpc",
-            "format_json"
+            "format_json",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",
@@ -792,7 +822,9 @@
             "large_fixed_arrays_nested",
             "format_json",
             "bounds",
-            "chars"
+            "chars",
+            "dependency_protocol",
+            "dependency_and_own_protocols"
           ],
           "since": null,
           "state": "supported",

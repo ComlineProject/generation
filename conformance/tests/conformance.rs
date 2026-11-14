@@ -87,18 +87,21 @@ fn golden_dir(fixture: &str, lang: &str, version: &str) -> PathBuf {
 }
 
 fn request(fx: &Fixture, lang: &str, version: &str) -> GenerateRequest {
-    request_for(&fx.schemas, &options(fx), lang, version)
+    request_for(&fx.schemas, &fx.dependencies, &options(fx), lang, version)
 }
 
 /// A request for `schemas` under `options` at `version` - a fixture's own,
-/// or the same with a feature stripped out.
+/// or the same with a feature stripped out. `dependencies` are the names the
+/// package gives its dependencies, whose schemas are among `schemas`.
 fn request_for(
     schemas: &[(String, Vec<FrozenUnit>)],
+    dependencies: &[&str],
     options: &Options,
     lang: &str,
     version: &str,
 ) -> GenerateRequest {
-    GenerateRequest {
+    let wire_format = options.wire_format.clone().unwrap_or_else(|| DEFAULT_FORMAT.to_string());
+    let mut request = GenerateRequest {
         mode: options.mode.expect("a fixture states its mode"),
         schemas: schemas.to_vec(),
         package: PackageMeta {
@@ -108,17 +111,25 @@ fn request_for(
         // One of the generator's own boundaries: what a target declaring it
         // gets, and every version up to the next boundary gets the same.
         target: TargetLanguage { language: lang.to_string(), version: version.to_string() },
-        wire_format: options.wire_format.clone().unwrap_or_else(|| DEFAULT_FORMAT.to_string()),
+        wire_format: wire_format.clone(),
         external_std: options.external_std,
         validate_on_decode: options.validate_on_decode,
         async_api: options.async_api,
         encodings: comline_codegen::encodings::official_for(lang),
-        // Only a package that needs them gets facts, as from `comline generation`.
-        facts: comline_codegen::facts::needed(schemas, &comline_codegen::encodings::official_for(lang)).then(|| {
-            comline_conformance::facts_for(schemas, options.wire_format.as_deref().unwrap_or(DEFAULT_FORMAT))
-        }),
-        dependencies: vec![],
+        facts: None,
+        dependencies: dependencies.iter().map(|d| d.to_string()).collect(),
+    };
+    // Only a package that needs them gets facts, as from `comline generation`:
+    // the package's own, a dependency's protocols having their own package's.
+    if comline_codegen::facts::needed_in(&request) {
+        let own: Vec<_> = schemas
+            .iter()
+            .filter(|(namespace, _)| !connections::is_dependency(&request.dependencies, namespace))
+            .cloned()
+            .collect();
+        request.facts = Some(comline_conformance::facts_for(&own, &wire_format));
     }
+    request
 }
 
 /// Every file under `dir`, as paths relative to it — so a golden that no
@@ -391,7 +402,7 @@ fn support_is_proven() {
                                     proven.push(fx.name.to_string());
                                     if let Some((schemas, stripped)) = features::strip(feature, &fx.schemas, &options(fx)) {
                                         let hashes = ir_hashes(&fx.schemas, &schemas);
-                                        match generate(lang, &request_for(&schemas, &stripped, lang, version)) {
+                                        match generate(lang, &request_for(&schemas, &fx.dependencies, &stripped, lang, version)) {
                                             Ok(without) => differs |= !same_files(&with, &without, &hashes),
                                             Err(_) => differs = true,
                                         }
@@ -424,7 +435,7 @@ fn support_is_proven() {
                                 break;
                             };
                             let with = generate(lang, &request(fx, lang, version));
-                            let without = generate(lang, &request_for(&schemas, &stripped, lang, version));
+                            let without = generate(lang, &request_for(&schemas, &fx.dependencies, &stripped, lang, version));
                             // The IR hash names the schema itself, so it differs
                             // with the feature taken out - rightly: a peer that
                             // does check must not handshake as the same schema.
