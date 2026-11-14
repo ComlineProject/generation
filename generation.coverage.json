@@ -1,7 +1,7 @@
 {
-  "commit": "3f6bca12f1d7113e8c6c2ce5b87414179a1600fb",
+  "commit": "f6fa1d6fb7d30306019cdde61d6a508c9646377d",
   "format": 1,
-  "run": "https://github.com/ComlineProject/generation/actions/runs/43432749458",
+  "run": "https://github.com/ComlineProject/generation/actions/runs/43604567064",
   "tool": "cargo-llvm-cov 0.9.1",
   "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
   "totals": {
