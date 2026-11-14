@@ -99,7 +99,7 @@ export class AdminSender {
     }
 
     async greet(params: AdminGreetParams): Promise<number> {
-        checkCall(this.peer, AdminSender.PROTOCOL, 0, "chat/admin::Admin", "greet");
+        checkCall(this.peer, AdminSender.PROTOCOL, 0, "chat::admin::Admin", "greet");
         const env = await this.peer.call(AdminSender.PROTOCOL, { id: 0, name: "greet" }, params, { layout: AdminGreetParamsLayout });
         if ("ok" in env) return this.peer.codec.decode<number>(env.ok, "u32");
         if ("fault" in env) throw RuntimeError.provider();
