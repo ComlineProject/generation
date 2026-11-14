@@ -30,7 +30,7 @@ One order.
 |---|---|
 | `customer` | [`Customer`](types.md#customer) |
 | `payments` | [`Payment`](types.md#payment)`[]` |
-| `method` | [`HttpMethod`](https://comlineproject.github.io/docs/reference/schema/std/http/#httpmethod) |
+| `method` | [`HttpMethod`](https://comlineproject.github.io/docs/reference/package/schema/std/http/#httpmethod) |
 | `lines` | union(`u32` `string`) |
 | `greeting` | [`Greeting`](deps/localdeps/greeting.md#greeting) (optional) |
 

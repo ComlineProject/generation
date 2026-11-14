@@ -6,5 +6,5 @@ nav:
   - Dependencies:
     - "localdeps":
       - "greeting": deps/localdeps/greeting.md
-    - "std": "https://comlineproject.github.io/docs/reference/schema/std/"
+    - "std": "https://comlineproject.github.io/docs/reference/package/schema/std/"
   - Changelog: changelog.md

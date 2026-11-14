@@ -12,7 +12,7 @@ fn options() -> RenderOptions {
     RenderOptions {
         links: BTreeMap::from([(
             "std".to_string(),
-            "https://comlineproject.github.io/docs/reference/schema/std/".to_string(),
+            "https://comlineproject.github.io/docs/reference/package/schema/std/".to_string(),
         )]),
         ..Default::default()
     }
@@ -76,7 +76,7 @@ fn dependency_types_link_to_their_docs() {
     let api = get("api.md");
     // `std` without a `[doc] links` entry: its hosted docs.
     assert!(
-        api.contains("[`HttpMethod`](https://comlineproject.github.io/docs/reference/schema/std/http/#httpmethod)"),
+        api.contains("[`HttpMethod`](https://comlineproject.github.io/docs/reference/package/schema/std/http/#httpmethod)"),
         "{api}"
     );
     // An unlinked dependency: its page here, never an own module's.
@@ -88,7 +88,7 @@ fn dependency_types_link_to_their_docs() {
     assert!(get("deps/localdeps/greeting.md").starts_with("# `localdeps::greeting`"));
     assert!(!files.iter().any(|f| f.path.starts_with("deps/std")));
     let nav = get("nav.yml");
-    assert!(nav.contains("  - Dependencies:\n    - \"localdeps\":\n      - \"greeting\": deps/localdeps/greeting.md\n    - \"std\": \"https://comlineproject.github.io/docs/reference/schema/std/\"\n"), "{nav}");
+    assert!(nav.contains("  - Dependencies:\n    - \"localdeps\":\n      - \"greeting\": deps/localdeps/greeting.md\n    - \"std\": \"https://comlineproject.github.io/docs/reference/package/schema/std/\"\n"), "{nav}");
 
     // A link for it publishes it elsewhere instead.
     let links = BTreeMap::from([(
