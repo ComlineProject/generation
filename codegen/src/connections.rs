@@ -36,6 +36,11 @@
 //! they agree. A protocol that needs the package's facts (`datagram@3`,
 //! which calls by wire number, or `comline@2`) carries its wire number
 //! instead: see [`crate::facts::addressing`].
+//!
+//! **Only the package's own protocols.** A dependency's protocols have their
+//! own package's numbers, and nothing yet lets the package reach one
+//! ([`reached`]), so the package connection leaves them out: they're
+//! generated as types, but never addressed, checked or served on it.
 
 use crate::protocol::EncodingMapping;
 use std::collections::BTreeMap;
@@ -134,6 +139,17 @@ pub fn handshake_value(parameters: &[FrozenUnit]) -> HandshakeValue {
 /// both ways and name the protocol, or they go both ways without naming it
 /// and some protocol on the framing is client-provided (see the module).
 pub fn on_connection(schemas: &[(String, Vec<FrozenUnit>)], parameters: &[FrozenUnit]) -> bool {
+    on_connection_among(schemas, &[], parameters)
+}
+
+/// [`on_connection`] for a package with these `dependencies`: a protocol it
+/// doesn't [`reach`](reached) doesn't make the others share a connection by
+/// being client-provided.
+pub fn on_connection_among(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    dependencies: &[String],
+    parameters: &[FrozenUnit],
+) -> bool {
     if Provider::of(parameters) != Provider::Server {
         return true;
     }
@@ -146,16 +162,46 @@ pub fn on_connection(schemas: &[(String, Vec<FrozenUnit>)], parameters: &[Frozen
     if profile.both_directions() != Some(true) {
         return false;
     }
-    profile.names_protocol() == Some(true) || client_provided_on(schemas, &name)
+    profile.names_protocol() == Some(true) || client_provided_on(schemas, dependencies, &name)
 }
 
-/// Whether any protocol in `schemas` on the framing `name` is client-provided,
-/// which puts all of them on a connection when the framing's frames don't name
-/// the protocol.
-fn client_provided_on(schemas: &[(String, Vec<FrozenUnit>)], name: &str) -> bool {
-    protocols(schemas).any(|(_, _, parameters, _)| {
-        framing_name(parameters) == name && Provider::of(parameters) != Provider::Server
+/// Whether any protocol the package reaches, in `schemas`, on the framing
+/// `name` is client-provided, which puts all of them on a connection when the
+/// framing's frames don't name the protocol.
+fn client_provided_on(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    dependencies: &[String],
+    name: &str,
+) -> bool {
+    protocols(schemas).any(|(namespace, protocol, parameters, _)| {
+        reached(dependencies, namespace, protocol)
+            && framing_name(parameters) == name
+            && Provider::of(parameters) != Provider::Server
     })
+}
+
+/// Whether the schema `namespace` is a dependency's rather than the
+/// package's own: `std`, or one of the `dependencies` (the names the package
+/// gives them) with a module beneath it. This is how core splits a version's
+/// compiled schemas (`comline_core::compat::dependency_names`, which also
+/// counts `std` as one): a dependency's schemas are prefixed with its name.
+pub fn is_dependency(dependencies: &[String], namespace: &str) -> bool {
+    if crate::stdlib::is_std_namespace(namespace) {
+        return true;
+    }
+    namespace
+        .split_once('/')
+        .is_some_and(|(first, _)| dependencies.iter().any(|d| d == first))
+}
+
+/// Whether the package reaches the protocol `namespace::name`, so that it's
+/// the package's to put on its connection. One of its own is; a dependency's
+/// isn't until a `use` can reach it, and none can yet (core#277: reach is
+/// recorded in the facts, and the dependency's numbers with it). Until then
+/// a dependency's protocol is generated as a type, and is never addressed,
+/// checked, or put on the package's connection.
+pub fn reached(dependencies: &[String], namespace: &str, _name: &str) -> bool {
+    !is_dependency(dependencies, namespace)
 }
 
 /// Why a framing keeps a protocol that isn't client-provided off a
@@ -377,8 +423,22 @@ pub struct Disagreement {
 pub fn package_connection_of(
     schemas: &[(String, Vec<FrozenUnit>)],
 ) -> Result<Option<PackageConnection>, Disagreement> {
+    package_connection_among(schemas, &[])
+}
+
+/// [`package_connection_of`] for a package with these `dependencies` (the
+/// request's): only the protocols it [`reached`] are on its connection, so a
+/// dependency's, which its own package numbers and the handshake has no
+/// place for, don't share it and can't disagree with it.
+pub fn package_connection_among(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    dependencies: &[String],
+) -> Result<Option<PackageConnection>, Disagreement> {
     let on: Vec<_> = protocols(schemas)
-        .filter(|(_, _, parameters, _)| on_connection(schemas, parameters))
+        .filter(|(namespace, name, parameters, _)| {
+            reached(dependencies, namespace, name)
+                && on_connection_among(schemas, dependencies, parameters)
+        })
         .collect();
     let Some((first_ns, first, first_parameters, _)) = on.first() else {
         return Ok(None);
@@ -864,6 +924,64 @@ mod tests {
         )];
         let err = package_connection(&schemas).unwrap_err();
         assert!(err.contains("different parameters"), "{err}");
+    }
+
+    /// A dependency's schemas are the ones prefixed with its name, and `std`'s;
+    /// its protocols aren't reached, the package's own are.
+    #[test]
+    fn a_dependencys_protocols_are_not_reached() {
+        let dependencies = vec!["localdeps".to_string()];
+        assert!(is_dependency(&dependencies, "localdeps/greeting"));
+        assert!(is_dependency(&dependencies, "localdeps/a/b"));
+        assert!(is_dependency(&[], "std/http"));
+        // Not by a name that only starts the same, nor by a schema that has
+        // the dependency's name and no module beneath it.
+        assert!(!is_dependency(&dependencies, "localdeps2/greeting"));
+        assert!(!is_dependency(&dependencies, "localdeps"));
+        assert!(!is_dependency(&dependencies, "api/localdeps"));
+        // Without being told, only `std` is one.
+        assert!(!is_dependency(&[], "localdeps/greeting"));
+        assert!(reached(&dependencies, "api", "Chat"));
+        assert!(!reached(&dependencies, "localdeps/greeting", "Foo"));
+    }
+
+    /// A dependency's protocol on a framing of its own, or with other
+    /// parameters, doesn't stop the package having a connection, or put a
+    /// client-provided protocol's neighbours on one.
+    #[test]
+    fn a_dependencys_protocol_is_not_on_the_package_connection() {
+        let schemas = vec![
+            ("api".to_string(), vec![protocol("Chat", vec![framing("datagram@3")])]),
+            (
+                "localdeps/greeting".to_string(),
+                vec![
+                    protocol("Foo", vec![framing("datagram@2")]),
+                    protocol("Bar", vec![framing("jsonrpc@1"), provider("Client")]),
+                ],
+            ),
+        ];
+        let dependencies = vec!["localdeps".to_string()];
+        // Counted, the framings disagree.
+        let err = package_connection(&schemas).unwrap_err();
+        assert!(err.contains("`localdeps/greeting::Foo`"), "{err}");
+        // Left out, `Chat` is on its own connection.
+        let connection = package_connection_among(&schemas, &dependencies).unwrap().unwrap();
+        assert_eq!(connection.framing, "datagram@3");
+        let served: Vec<_> = connection.server.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(served, ["Chat"]);
+        assert!(connection.client.is_empty());
+        // A dependency's client-provided protocol on `jsonrpc@1` doesn't put
+        // the package's own on a connection.
+        let own = vec![framing("jsonrpc@1")];
+        let schemas = vec![
+            ("api".to_string(), vec![protocol("Own", own.clone())]),
+            (
+                "localdeps/greeting".to_string(),
+                vec![protocol("Bar", vec![framing("jsonrpc@1"), provider("Client")])],
+            ),
+        ];
+        assert!(on_connection(&schemas, &own));
+        assert!(!on_connection_among(&schemas, &dependencies, &own));
     }
 
     #[test]

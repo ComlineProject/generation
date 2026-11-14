@@ -240,10 +240,19 @@ pub struct GenerateRequest {
     /// The package version's facts (`comline_core::compat`): wire numbers,
     /// lines, shape and parameter hashes, the package id. Only for a
     /// package with a protocol that needs them (`datagram@3`, which calls
-    /// by wire number, or `comline@2`: [`crate::facts::needed`]), and `None`
+    /// by wire number, or `comline@2`: [`crate::facts::needed_in`]), and `None`
     /// otherwise, which leaves the request as it was before.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub facts: Option<crate::facts::PackageFacts>,
+    /// The names the package gives its dependencies (`std` is always one).
+    /// Their schemas are in [`schemas`](Self::schemas), prefixed with the
+    /// name, and generated as the package's own are; but their protocols
+    /// aren't the package's to put on its connection (see
+    /// [`crate::connections::reached`]), so none is addressed, checked or
+    /// put on it. Empty for a package without dependencies, and from a
+    /// sender that predates the field, which leaves only `std` out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dependencies: Vec<String>,
 }
 
 impl GenerateRequest {
@@ -679,6 +688,7 @@ mod tests {
                 },
             )]),
             facts: None,
+            dependencies: vec!["localdeps".into()],
         }
     }
 
@@ -938,6 +948,7 @@ mod tests {
             GenerateRequest {
                 encodings: BTreeMap::new(),
                 facts: None,
+                dependencies: vec![],
                 ..r
             }
         );

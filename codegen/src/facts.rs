@@ -97,9 +97,26 @@ pub fn needed_by(encodings: &BTreeMap<String, EncodingMapping>, parameters: &[Fr
 
 /// Whether any protocol in `schemas` needs facts ([`needed_by`]). Nothing
 /// else does, so a package that chooses neither gets a request, and output,
-/// exactly as before.
+/// exactly as before. A package's dependencies aren't known here, so only
+/// `std`'s protocols are left out; see [`needed_in`].
 pub fn needed(schemas: &[(String, Vec<FrozenUnit>)], encodings: &BTreeMap<String, EncodingMapping>) -> bool {
-    connections::protocols(schemas).any(|(_, _, parameters, _)| needed_by(encodings, parameters))
+    needed_among(schemas, &[], encodings)
+}
+
+/// [`needed`] for the request: its dependencies' protocols aren't the
+/// package's to number, so they don't need its facts.
+pub fn needed_in(req: &GenerateRequest) -> bool {
+    needed_among(&req.schemas, &req.dependencies, &req.encodings)
+}
+
+fn needed_among(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    dependencies: &[String],
+    encodings: &BTreeMap<String, EncodingMapping>,
+) -> bool {
+    connections::protocols(schemas).any(|(namespace, name, parameters, _)| {
+        connections::reached(dependencies, namespace, name) && needed_by(encodings, parameters)
+    })
 }
 
 /// The facts of protocol `namespace::name`, if the request has them.
@@ -131,7 +148,10 @@ pub struct Addressing {
 /// - A call carries the function's wire number under a framing that calls
 ///   by number, else its position.
 ///
-/// Refuses a protocol that needs numbers the request doesn't have.
+/// Refuses a protocol that needs numbers the request doesn't have. It can't
+/// tell a dependency's protocol from the package's own, which has the
+/// numbers of its own package and isn't the package's to address:
+/// [`addressing_in`] can.
 pub fn addressing(
     req_facts: Option<&PackageFacts>,
     schemas: &[(String, Vec<FrozenUnit>)],
@@ -150,10 +170,7 @@ pub fn addressing(
         .collect();
     let by_id = calls_by_id(encodings, &connections::framing_name(parameters));
     if !needed_by(encodings, parameters) {
-        let protocol = connections::protocol_number(schemas, namespace, name).ok_or_else(|| {
-            eyre!("protocol `{name}` has no number: more than 65536 protocols in the package")
-        })?;
-        return Ok(Addressing { protocol, calls: (0..names.len() as u16).collect(), checks: None, by_id });
+        return positional(schemas, namespace, name, names.len(), by_id);
     }
     let facts = protocol(req_facts, namespace, name).ok_or_else(|| missing(req_facts, namespace, name, parameters))?;
     let numbers: Vec<u16> = names
@@ -172,6 +189,40 @@ pub fn addressing(
     Ok(Addressing { protocol: facts.number, calls, checks, by_id })
 }
 
+/// Where a protocol with no numbers of its own is addressed: by position,
+/// as before facts.
+fn positional(
+    schemas: &[(String, Vec<FrozenUnit>)],
+    namespace: &str,
+    name: &str,
+    functions: usize,
+    by_id: bool,
+) -> Result<Addressing> {
+    let protocol = connections::protocol_number(schemas, namespace, name)
+        .ok_or_else(|| eyre!("protocol `{name}` has no number: more than 65536 protocols in the package"))?;
+    Ok(Addressing { protocol, calls: (0..functions as u16).collect(), checks: None, by_id })
+}
+
+/// [`addressing`] for a protocol of the request's package. One the package
+/// doesn't reach ([`connections::reached`]) isn't on its connection, so
+/// nothing addresses it: it gets the positions it would without facts, which
+/// the generated type carries and no connection uses, and the facts aren't
+/// asked for its numbers.
+pub fn addressing_in(
+    req: &GenerateRequest,
+    namespace: &str,
+    name: &str,
+    parameters: &[FrozenUnit],
+    functions: &[FrozenUnit],
+) -> Result<Addressing> {
+    if connections::reached(&req.dependencies, namespace, name) {
+        return addressing(req.facts.as_ref(), &req.schemas, &req.encodings, namespace, name, parameters, functions);
+    }
+    let functions = functions.iter().filter(|f| matches!(f, FrozenUnit::Function { .. })).count();
+    let by_id = calls_by_id(&req.encodings, &connections::framing_name(parameters));
+    positional(&req.schemas, namespace, name, functions, by_id)
+}
+
 fn missing(req_facts: Option<&PackageFacts>, namespace: &str, name: &str, parameters: &[FrozenUnit]) -> eyre::Report {
     let why = format!(
         "protocol `{namespace}::{name}` uses `{}` with `{}`, which address it by the wire numbers its package's \
@@ -185,8 +236,9 @@ fn missing(req_facts: Option<&PackageFacts>, namespace: &str, name: &str, parame
              history (run `comline build` first)"
         ),
         Some(_) => eyre!(
-            "{why}, and the package's facts have none for it: a dependency's protocol has its own package's \
-             numbers, and a new protocol has none until `comline build` records it"
+            "{why}, and the package's facts have none for it: a new protocol has none until `comline build` records \
+             it, and a dependency's protocol has its own package's numbers, so it can't be on a connection until \
+             core#277"
         ),
     }
 }
@@ -195,13 +247,16 @@ fn missing(req_facts: Option<&PackageFacts>, namespace: &str, name: &str, parame
 /// every protocol that needs numbers has them; `comline@2` has a package id,
 /// a version and one package connection carrying every protocol that runs
 /// it, with one set of parameters; and no protocol off a connection runs it.
+/// Only the protocols the package reaches ([`connections::reached`]) are
+/// checked: a dependency's isn't on its connection, so it has no numbers to
+/// find and no handshake to run.
 pub fn check(req: &GenerateRequest) -> Result<()> {
-    if !needed(&req.schemas, &req.encodings) {
+    if !needed_in(req) {
         return Ok(());
     }
     let mut problems = vec![];
     for (namespace, name, parameters, functions) in connections::protocols(&req.schemas) {
-        if !needed_by(&req.encodings, parameters) {
+        if !connections::reached(&req.dependencies, namespace, name) || !needed_by(&req.encodings, parameters) {
             continue;
         }
         if let Err(e) =
@@ -210,7 +265,7 @@ pub fn check(req: &GenerateRequest) -> Result<()> {
             problems.push(e.to_string());
             continue;
         }
-        let on = connections::on_connection(&req.schemas, parameters);
+        let on = connections::on_connection_among(&req.schemas, &req.dependencies, parameters);
         if connections::handshake_name(parameters) == HANDSHAKE_COMLINE2 && !on {
             problems.push(format!(
                 "protocol `{namespace}::{name}` runs `comline@2` off a connection (`{}`), which isn't supported: \
@@ -232,14 +287,15 @@ pub fn check(req: &GenerateRequest) -> Result<()> {
 /// protocol runs `comline@2` but the protocols on a connection don't share
 /// one.
 pub fn comline2_connection(req: &GenerateRequest) -> Result<Option<PackageConnection>> {
-    let runs = connections::protocols(&req.schemas).any(|(_, _, parameters, _)| {
-        connections::handshake_name(parameters) == HANDSHAKE_COMLINE2
-            && connections::on_connection(&req.schemas, parameters)
+    let runs = connections::protocols(&req.schemas).any(|(namespace, name, parameters, _)| {
+        connections::reached(&req.dependencies, namespace, name)
+            && connections::handshake_name(parameters) == HANDSHAKE_COMLINE2
+            && connections::on_connection_among(&req.schemas, &req.dependencies, parameters)
     });
     if !runs {
         return Ok(None);
     }
-    match connections::package_connection(&req.schemas) {
+    match connections::package_connection_among(&req.schemas, &req.dependencies).map_err(|d| d.reason) {
         Ok(Some(c)) if c.handshake == HANDSHAKE_COMLINE2 => Ok(Some(c)),
         Ok(_) => Ok(None),
         Err(why) => bail!("`comline@2` runs one handshake per connection, and {why}"),
@@ -275,9 +331,10 @@ impl Comline2Params {
 /// connection guarantees they're the same).
 pub fn comline2_params(req: &GenerateRequest) -> Comline2Params {
     let value = connections::protocols(&req.schemas)
-        .find(|(_, _, parameters, _)| {
-            connections::handshake_name(parameters) == HANDSHAKE_COMLINE2
-                && connections::on_connection(&req.schemas, parameters)
+        .find(|(namespace, name, parameters, _)| {
+            connections::reached(&req.dependencies, namespace, name)
+                && connections::handshake_name(parameters) == HANDSHAKE_COMLINE2
+                && connections::on_connection_among(&req.schemas, &req.dependencies, parameters)
         })
         .map(|(_, _, parameters, _)| HandshakeValue::of_protocol(parameters))
         .unwrap_or_else(|| HandshakeValue::named(HANDSHAKE_COMLINE2));
@@ -298,8 +355,9 @@ pub struct HelloProtocol {
 /// (docs `reference/wire/handshakes`): what a generator embeds. With the
 /// protocols it covers, ascending by number.
 ///
-/// It covers the protocols on the package connection that the package
-/// itself declares, and the encodings that connection uses: the package's
+/// It covers the protocols on the package connection, which are the ones the
+/// package reaches and so, until core#277, the ones it declares itself, and
+/// the encodings that connection uses: the package's
 /// format (JSON on a framing that writes it), the connection's framing, and
 /// `comline@2` itself.
 pub fn hello(req: &GenerateRequest, connection: &PackageConnection) -> Result<(Vec<u8>, Vec<HelloProtocol>)> {
@@ -354,14 +412,16 @@ pub fn hello(req: &GenerateRequest, connection: &PackageConnection) -> Result<(V
 
     let mut protocols = vec![];
     for (namespace, name, parameters, functions) in connections::protocols(&req.schemas) {
-        if !connections::on_connection(&req.schemas, parameters) {
+        // A dependency's protocol isn't on the connection, so not this
+        // package's to declare.
+        if !connections::reached(&req.dependencies, namespace, name)
+            || !connections::on_connection_among(&req.schemas, &req.dependencies, parameters)
+        {
             continue;
         }
-        let Some(p) = protocol(Some(facts), namespace, name) else {
-            // A dependency's protocol: not this package's to declare.
-            continue;
-        };
-        let addressing = addressing(Some(facts), &req.schemas, &req.encodings, namespace, name, parameters, functions)?;
+        let p = protocol(Some(facts), namespace, name)
+            .ok_or_else(|| missing(Some(facts), namespace, name, parameters))?;
+        let addressing = addressing_in(req, namespace, name, parameters, functions)?;
         let names = functions.iter().filter_map(|f| match f {
             FrozenUnit::Function { name, .. } => Some(name.clone()),
             _ => None,
@@ -449,6 +509,150 @@ fn varint(mut value: u32, out: &mut Vec<u8>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::TargetLanguage;
+    use crate::validation::ValidateOnDecode;
+    use crate::{Mode, PackageMeta};
+    use comline_core::schema::ir::frozen::unit::ConfigValue;
+
+    /// A protocol with one function, on `datagram@3` with `comline@2`: what
+    /// core writes into a package's protocols by default.
+    fn protocol_unit(name: &str) -> FrozenUnit {
+        let property = |name: &str, value: &str| FrozenUnit::Property {
+            name: name.into(),
+            value: ConfigValue::Str(value.into()),
+        };
+        FrozenUnit::Protocol {
+            docstring: String::new(),
+            parameters: vec![property("framing", FRAMING_DATAGRAM3), property("handshake", HANDSHAKE_COMLINE2)],
+            name: name.into(),
+            functions: vec![FrozenUnit::Function {
+                docstring: String::new(),
+                name: "ping".into(),
+                arguments: vec![],
+                _return: None,
+                throws: vec![],
+                parameters: vec![],
+                span: (0, 0),
+            }],
+            span: (0, 0),
+        }
+    }
+
+    /// A package `own` protocols in `api`, with a dependency `localdeps`
+    /// declaring `Foo` in `localdeps/greeting`; no facts.
+    fn request(own: &[&str]) -> GenerateRequest {
+        GenerateRequest {
+            mode: Mode::Code,
+            schemas: vec![
+                ("api".into(), own.iter().map(|name| protocol_unit(name)).collect()),
+                ("localdeps/greeting".into(), vec![protocol_unit("Foo")]),
+            ],
+            package: PackageMeta { name: "demo".into(), version: "1.0.0".into() },
+            target: TargetLanguage { language: "toy".into(), version: "1.0.0".into() },
+            wire_format: "packed@1".into(),
+            external_std: false,
+            validate_on_decode: ValidateOnDecode::default(),
+            async_api: false,
+            encodings: BTreeMap::new(),
+            facts: None,
+            dependencies: vec!["localdeps".into()],
+        }
+    }
+
+    /// `own`'s protocols numbered as a package's history would, with the
+    /// one encoding each of format, framing and handshake `hello` looks for.
+    fn facts_of(own: &[&str]) -> PackageFacts {
+        let encoding = |kind: &str, name: &str| EncodingFacts {
+            kind: kind.into(),
+            name: name.into(),
+            params: BTreeMap::new(),
+            param_hash: "ab".repeat(32),
+        };
+        PackageFacts {
+            id: Some("0123456789abcdef0123456789abcdef".into()),
+            version: "1.0.0".into(),
+            protocols: own
+                .iter()
+                .enumerate()
+                .map(|(i, name)| ProtocolFacts {
+                    path: format!("api::{name}"),
+                    namespace: "api".into(),
+                    name: name.to_string(),
+                    line: "1.0.0".into(),
+                    number: 7 + i as u16,
+                    shape_hash: "5a".repeat(32),
+                    functions: vec![FunctionFacts { name: "ping".into(), since: "1.0.0".into(), number: 3 }],
+                })
+                .collect(),
+            encodings: vec![
+                encoding("format", "packed@1"),
+                encoding("framing", FRAMING_DATAGRAM3),
+                encoding("handshake", HANDSHAKE_COMLINE2),
+            ],
+        }
+    }
+
+    fn foo(req: &GenerateRequest) -> (&str, &str, &[FrozenUnit], &[FrozenUnit]) {
+        connections::protocols(&req.schemas).find(|(_, name, _, _)| *name == "Foo").unwrap()
+    }
+
+    #[test]
+    fn a_dependencys_protocol_needs_no_facts_of_the_package() {
+        let req = request(&[]);
+        // Found by the old `needed`, which can't tell it from the package's.
+        assert!(needed(&req.schemas, &req.encodings));
+        assert!(!needed_in(&req));
+        check(&req).unwrap();
+    }
+
+    #[test]
+    fn an_own_protocol_still_needs_its_facts() {
+        let mut req = request(&["Chat"]);
+        assert!(needed_in(&req));
+        let error = check(&req).unwrap_err().to_string();
+        assert!(error.contains("`api::Chat`") && !error.contains("Foo"), "{error}");
+        // With the facts, the dependency's protocol is left alone.
+        req.facts = Some(facts_of(&["Chat"]));
+        check(&req).unwrap();
+    }
+
+    #[test]
+    fn a_dependencys_protocol_is_not_addressed() {
+        let mut req = request(&["Chat"]);
+        req.facts = Some(facts_of(&["Chat"]));
+        let (namespace, name, parameters, functions) = foo(&req);
+        // Without the dependency's name, `Foo` looks like the package's own,
+        // with no numbers in its facts.
+        let error = addressing(req.facts.as_ref(), &req.schemas, &req.encodings, namespace, name, parameters, functions)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("`localdeps/greeting::Foo`") && error.contains("core#277"), "{error}");
+        // With it, it has the position it would have without facts, and no
+        // checks to run.
+        let at = addressing_in(&req, namespace, name, parameters, functions).unwrap();
+        assert_eq!(at, Addressing { protocol: 1, calls: vec![0], checks: None, by_id: true });
+        // The package's own keeps its wire numbers.
+        let (namespace, name, parameters, functions) =
+            connections::protocols(&req.schemas).find(|(_, name, _, _)| *name == "Chat").unwrap();
+        let at = addressing_in(&req, namespace, name, parameters, functions).unwrap();
+        assert_eq!(at, Addressing { protocol: 7, calls: vec![3], checks: Some(vec![3]), by_id: true });
+    }
+
+    #[test]
+    fn the_package_connection_carries_the_packages_protocols_only() {
+        let mut req = request(&[]);
+        assert_eq!(comline2_connection(&req).unwrap(), None);
+        assert_eq!(connections::package_connection_among(&req.schemas, &req.dependencies).unwrap(), None);
+
+        req = request(&["Chat"]);
+        req.facts = Some(facts_of(&["Chat"]));
+        let connection = comline2_connection(&req).unwrap().unwrap();
+        let provided: Vec<_> = connection.server.iter().map(|p| (p.namespace.as_str(), p.name.as_str())).collect();
+        assert_eq!(provided, [("api", "Chat")]);
+        let (_, protocols) = hello(&req, &connection).unwrap();
+        let hello: Vec<_> = protocols.iter().map(|p| (p.name.as_str(), p.number)).collect();
+        assert_eq!(hello, [("Chat", 7)]);
+    }
 
     #[test]
     fn versions_and_hashes_parse() {
