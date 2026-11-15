@@ -159,6 +159,7 @@
             "cross_schema",
             "validators",
             "validators_on_decode",
+            "lockstep",
             "bounds"
           ],
           "since": null,
@@ -205,6 +206,7 @@
             "connections",
             "connections_async",
             "connections_jsonrpc",
+            "connections_default",
             "format_json",
             "format_msgpack",
             "dependency_protocol",
@@ -241,6 +243,7 @@
           "proven_by": [
             "protocol",
             "error_shapes",
+            "lockstep",
             "format_json",
             "format_msgpack"
           ],
@@ -294,8 +297,10 @@
             "handshake_none",
             "framing_datagram3",
             "handshake_comline2",
+            "lockstep",
             "connections",
             "connections_async",
+            "connections_default",
             "dependency_protocol",
             "dependency_and_own_protocols",
             "nested_protocol"
@@ -309,6 +314,7 @@
           "proven_by": [
             "framing_datagram3",
             "handshake_comline2",
+            "connections_default",
             "dependency_protocol",
             "dependency_and_own_protocols",
             "nested_protocol"
@@ -331,6 +337,7 @@
           "note": null,
           "proven_by": [
             "handshake_comline2",
+            "connections_default",
             "dependency_protocol",
             "dependency_and_own_protocols",
             "nested_protocol"
@@ -425,9 +432,11 @@
             "handshake_none",
             "framing_datagram3",
             "handshake_comline2",
+            "lockstep",
             "connections",
             "connections_async",
             "connections_jsonrpc",
+            "connections_default",
             "format_json",
             "format_msgpack",
             "dependency_protocol",
@@ -453,6 +462,7 @@
             "external_std",
             "validators",
             "validators_on_decode",
+            "lockstep",
             "format_json",
             "format_msgpack",
             "bounds",
@@ -470,6 +480,7 @@
           "proven_by": [
             "protocol",
             "error_shapes",
+            "lockstep",
             "format_json",
             "format_msgpack"
           ],
@@ -538,6 +549,7 @@
             "validators",
             "validators_on_decode",
             "large_fixed_arrays_nested",
+            "lockstep",
             "bounds"
           ],
           "since": null,
@@ -584,6 +596,7 @@
             "connections",
             "connections_async",
             "connections_jsonrpc",
+            "connections_default",
             "format_json",
             "dependency_protocol",
             "dependency_and_own_protocols",
@@ -619,6 +632,7 @@
           "proven_by": [
             "protocol",
             "error_shapes",
+            "lockstep",
             "format_json"
           ],
           "since": null,
@@ -672,8 +686,10 @@
             "handshake_none",
             "framing_datagram3",
             "handshake_comline2",
+            "lockstep",
             "connections",
             "connections_async",
+            "connections_default",
             "dependency_protocol",
             "dependency_and_own_protocols",
             "nested_protocol"
@@ -687,6 +703,7 @@
           "proven_by": [
             "framing_datagram3",
             "handshake_comline2",
+            "connections_default",
             "dependency_protocol",
             "dependency_and_own_protocols",
             "nested_protocol"
@@ -709,6 +726,7 @@
           "note": null,
           "proven_by": [
             "handshake_comline2",
+            "connections_default",
             "dependency_protocol",
             "dependency_and_own_protocols",
             "nested_protocol"
@@ -804,9 +822,11 @@
             "handshake_none",
             "framing_datagram3",
             "handshake_comline2",
+            "lockstep",
             "connections",
             "connections_async",
             "connections_jsonrpc",
+            "connections_default",
             "format_json",
             "dependency_protocol",
             "dependency_and_own_protocols",
@@ -833,6 +853,7 @@
             "validators_on_decode",
             "unions",
             "large_fixed_arrays_nested",
+            "lockstep",
             "format_json",
             "bounds",
             "chars",
@@ -849,6 +870,7 @@
           "proven_by": [
             "protocol",
             "error_shapes",
+            "lockstep",
             "format_json"
           ],
           "since": null,
