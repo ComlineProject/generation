@@ -19,7 +19,7 @@ import {
 
 /** Canonical digest of the frozen IR this file was generated from — the
 *  two ends of a connection must agree on it. */
-export const IR_HASH = 0xe873c4ab8258988bn;
+export const IR_HASH = 0x7ea94b595fcf4393n;
 
 /** The package's wire format (`wire.format`): what this file's helpers
 *  encode with, and what the peer has to speak too. */

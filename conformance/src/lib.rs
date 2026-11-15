@@ -1057,7 +1057,7 @@ fn lockstep() -> Fixture {
             structure("Message", vec![field("body", "string", false)]),
             error(0, "RecipientNotFound"),
             FrozenUnit::Protocol {
-                docstring: "Mail API for sending and receiving messages".to_string(),
+                docstring: "Lockstep".to_string(),
                 parameters: vec![FrozenUnit::Property {
                     name: "framing".to_string(),
                     value: ConfigValue::Str("datagram".to_string()),

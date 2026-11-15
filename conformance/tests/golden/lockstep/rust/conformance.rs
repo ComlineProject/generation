@@ -10,7 +10,7 @@ use comline_runtime::transport::Transport;
 
 /// Canonical digest of the frozen IR this file was generated from — the
 /// two ends of a connection must agree on it, and the handshake checks.
-pub const IR_HASH: u64 = 0xe873c4ab8258988b;
+pub const IR_HASH: u64 = 0x7ea94b595fcf4393;
 
 /// The package's wire format (`wire.format`): what this file's helpers
 /// encode with, and what the peer has to speak too.
