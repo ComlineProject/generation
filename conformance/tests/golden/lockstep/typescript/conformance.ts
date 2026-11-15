@@ -19,7 +19,7 @@ import {
 
 /** Canonical digest of the frozen IR this file was generated from — the
 *  two ends of a connection must agree on it. */
-export const IR_HASH = 0x3a85e6da1c45a3b9n;
+export const IR_HASH = 0xe873c4ab8258988bn;
 
 /** The package's wire format (`wire.format`): what this file's helpers
 *  encode with, and what the peer has to speak too. */
@@ -27,95 +27,69 @@ export const Format: Codec = new PackedCodec();
 
 export interface Message {
     body: string;
-    seq: bigint;
 }
 
-export const MessageLayout: Layout = { struct: [["body", "string"], ["seq", "u64"]] };
+export const MessageLayout: Layout = { struct: [["body", "string"]] };
 
-export interface Rejected {
+export interface RecipientNotFound {
 }
 
-export const RejectedLayout: Layout = { struct: [] };
+export const RecipientNotFoundLayout: Layout = { struct: [] };
 
-export class RejectedError extends Error {
+export class RecipientNotFoundError extends Error {
     static readonly ordinal = 0;
-    readonly data: Rejected;
-    constructor(data: Rejected) {
-        super("Rejected");
+    readonly data: RecipientNotFound;
+    constructor(data: RecipientNotFound) {
+        super("RecipientNotFound");
         this.data = data;
-        this.name = "RejectedError";
+        this.name = "RecipientNotFoundError";
     }
 }
 
-export interface ChatSendParams {
-    text: string;
+export interface MailSendMessageParams {
+    message: Message;
 }
 
 /** @internal */
-export const ChatSendParamsLayout: Layout = { struct: [["text", "string"]] };
+export const MailSendMessageParamsLayout: Layout = { struct: [["message", () => MessageLayout]] };
 
-export interface ChatHistoryParams {
-    limit: number;
+export interface Mail {
+    /** @throws {RecipientNotFoundError} */
+    send_message(params: MailSendMessageParams): Promise<string>;
+    fetch_inbox(): Promise<Message[]>;
 }
 
 /** @internal */
-export const ChatHistoryParamsLayout: Layout = { struct: [["limit", "u32"]] };
+export const MAIL_CALLS = ["send_message", "fetch_inbox"] as const;
 
-export interface ChatNoteParams {
-    text: string;
-}
+export class MailDispatcher implements Dispatch {
+    private readonly impl: Mail;
 
-/** @internal */
-export const ChatNoteParamsLayout: Layout = { struct: [["text", "string"]] };
-
-export interface Chat {
-    /** @throws {RejectedError} */
-    send(params: ChatSendParams): Promise<Message>;
-    history(params: ChatHistoryParams): Promise<Message[]>;
-    note(params: ChatNoteParams): Promise<void>;
-}
-
-/** @internal */
-export const CHAT_CALLS = ["send", "history", "note"] as const;
-
-export class ChatDispatcher implements Dispatch {
-    private readonly impl: Chat;
-
-    constructor(impl: Chat) {
+    constructor(impl: Mail) {
         this.impl = impl;
     }
 
     calls(): readonly string[] {
-        return CHAT_CALLS;
+        return MAIL_CALLS;
     }
 
     async dispatch(call: Kind, params: Uint8Array, codec: Codec, reply: Reply): Promise<void> {
-        switch (resolveKind(call, CHAT_CALLS)) {
+        switch (resolveKind(call, MAIL_CALLS)) {
             case 0: {
                 try {
-                    const p = codec.decode<ChatSendParams>(params, ChatSendParamsLayout);
-                    reply.ok(codec.encode((await this.impl.send(p)) ?? null, MessageLayout));
+                    const p = codec.decode<MailSendMessageParams>(params, MailSendMessageParamsLayout);
+                    reply.ok(codec.encode((await this.impl.send_message(p)) ?? null, "string"));
                 } catch (e) {
-                    if (e instanceof RejectedError) { reply.err(RejectedError.ordinal, codec.encode(e.data, RejectedLayout)); return; }
+                    if (e instanceof RecipientNotFoundError) { reply.err(RecipientNotFoundError.ordinal, codec.encode(e.data, RecipientNotFoundLayout)); return; }
                     reply.fault();
                 }
                 return;
             }
             case 1: {
                 try {
-                    const p = codec.decode<ChatHistoryParams>(params, ChatHistoryParamsLayout);
-                    reply.ok(codec.encode((await this.impl.history(p)) ?? null, { array: MessageLayout }));
+                    reply.ok(codec.encode((await this.impl.fetch_inbox()) ?? null, { array: MessageLayout }));
                 } catch {
                     reply.fault();
-                }
-                return;
-            }
-            case 2: {
-                try {
-                    const p = codec.decode<ChatNoteParams>(params, ChatNoteParamsLayout);
-                    await this.impl.note(p);
-                } catch {
-                    /* one-way: nowhere to report this */
                 }
                 return;
             }
@@ -125,42 +99,38 @@ export class ChatDispatcher implements Dispatch {
     }
 }
 
-export class ChatClient {
+export class MailClient {
     private readonly client: Client;
 
     constructor(client: Client) {
         this.client = client;
     }
 
-    static async connect(transport: Transport, codec: Codec = Format, framing: Framing = new DatagramFraming()): Promise<ChatClient> {
-        return new ChatClient(await Client.connect(transport, codec, IR_HASH, framing));
+    static async connect(transport: Transport, codec: Codec = Format, framing: Framing = new DatagramFraming()): Promise<MailClient> {
+        return new MailClient(await Client.connect(transport, codec, IR_HASH, framing));
     }
 
-    async send(params: ChatSendParams): Promise<Message> {
-        const env = await this.client.call({ id: 0, name: "send" }, params, { layout: ChatSendParamsLayout });
-        if ("ok" in env) return this.client.codec.decode<Message>(env.ok, MessageLayout);
+    async send_message(params: MailSendMessageParams): Promise<string> {
+        const env = await this.client.call({ id: 0, name: "send_message" }, params, { layout: MailSendMessageParamsLayout });
+        if ("ok" in env) return this.client.codec.decode<string>(env.ok, "string");
         if ("fault" in env) throw RuntimeError.provider();
         switch (env.err.id) {
-            case RejectedError.ordinal:
-                throw new RejectedError(this.client.codec.decode<Rejected>(env.err.body, RejectedLayout));
+            case RecipientNotFoundError.ordinal:
+                throw new RecipientNotFoundError(this.client.codec.decode<RecipientNotFound>(env.err.body, RecipientNotFoundLayout));
             default:
                 throw RuntimeError.remote(env.err.id);
         }
     }
 
-    async history(params: ChatHistoryParams): Promise<Message[]> {
-        const env = await this.client.call({ id: 1, name: "history" }, params, { layout: ChatHistoryParamsLayout });
+    async fetch_inbox(): Promise<Message[]> {
+        const env = await this.client.call({ id: 1, name: "fetch_inbox" }, null, { layout: "unit" });
         if ("ok" in env) return this.client.codec.decode<Message[]>(env.ok, { array: MessageLayout });
         if ("fault" in env) throw RuntimeError.provider();
         throw RuntimeError.remote(env.err.id);
     }
-
-    async note(params: ChatNoteParams): Promise<void> {
-        await this.client.notify({ id: 2, name: "note" }, params, { layout: ChatNoteParamsLayout });
-    }
 }
 
-export function serveChat(impl: Chat, transport: Transport, codec: Codec = Format, framing: Framing = new DatagramFraming()): Promise<void> {
-    return new Server(new ChatDispatcher(impl), codec, framing).serve(transport, IR_HASH);
+export function serveMail(impl: Mail, transport: Transport, codec: Codec = Format, framing: Framing = new DatagramFraming()): Promise<void> {
+    return new Server(new MailDispatcher(impl), codec, framing).serve(transport, IR_HASH);
 }
 

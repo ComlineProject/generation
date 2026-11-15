@@ -1031,28 +1031,39 @@ fn handshake_none() -> Fixture {
     )
 }
 
-/// A protocol on the lockstep `datagram` framing (no version), which gets a
-/// `<Proto>Dispatcher` and a `<Proto>Client`: a function returning a struct
-/// and throwing, one returning an array, and a one-way one.
+/// The Protocols guide's `Mail`, on the lockstep `datagram` framing (no
+/// version), which gets a `<Proto>Dispatcher` and a `<Proto>Client`: a
+/// function that returns a string and throws, with a call
+/// timeout, and one that returns an array.
 fn lockstep() -> Fixture {
+    let send_message = FrozenUnit::Function {
+        docstring: String::new(),
+        parameters: vec![FrozenUnit::Property { name: "timeout_ms".to_string(), value: ConfigValue::Integer(1000) }],
+        name: "send_message".to_string(),
+        arguments: vec![FrozenArgument {
+            name: "message".to_string(),
+            ty: type_of("Message"),
+            span: (0, 0),
+            parameters: vec![],
+        }],
+        _return: Some(type_of("string")),
+        throws: vec![0],
+        span: (0, 0),
+    };
     Fixture::one(
         "lockstep",
         "conformance",
         vec![
-            structure("Message", vec![field("body", "string", false), field("seq", "u64", false)]),
-            error(0, "Rejected"),
+            structure("Message", vec![field("body", "string", false)]),
+            error(0, "RecipientNotFound"),
             FrozenUnit::Protocol {
-                docstring: "Answers one call at a time".to_string(),
+                docstring: "Mail API for sending and receiving messages".to_string(),
                 parameters: vec![FrozenUnit::Property {
                     name: "framing".to_string(),
                     value: ConfigValue::Str("datagram".to_string()),
                 }],
-                name: "Chat".to_string(),
-                functions: vec![
-                    function("send", vec![arg("text", PrimitiveType::String)], Some("Message"), vec![0]),
-                    function("history", vec![arg("limit", PrimitiveType::U32)], Some("Message[]"), vec![]),
-                    function("note", vec![arg("text", PrimitiveType::String)], None, vec![]),
-                ],
+                name: "Mail".to_string(),
+                functions: vec![send_message, function("fetch_inbox", vec![], Some("Message[]"), vec![])],
                 span: (0, 0),
             },
         ],

@@ -10,7 +10,7 @@ use comline_runtime::transport::Transport;
 
 /// Canonical digest of the frozen IR this file was generated from — the
 /// two ends of a connection must agree on it, and the handshake checks.
-pub const IR_HASH: u64 = 0x3a85e6da1c45a3b9;
+pub const IR_HASH: u64 = 0xe873c4ab8258988b;
 
 /// The package's wire format (`wire.format`): what this file's helpers
 /// encode with, and what the peer has to speak too.
@@ -19,95 +19,79 @@ pub type Format = comline_runtime::format::Packed;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub body: String,
-    pub seq: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Rejected {
+pub struct RecipientNotFound {
 }
 
-impl core::fmt::Display for Rejected {
+impl core::fmt::Display for RecipientNotFound {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("Rejected occurred")
+        f.write_str("RecipientNotFound occurred")
     }
 }
 
-impl core::error::Error for Rejected {}
+impl core::error::Error for RecipientNotFound {}
 
 #[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatSendParams<'a> {
-    #[serde(borrow)]
-    pub text: &'a str,
-}
-
-#[doc(hidden)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatHistoryParams {
-    pub limit: u32,
-}
-
-#[doc(hidden)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChatNoteParams<'a> {
-    #[serde(borrow)]
-    pub text: &'a str,
+pub struct MailSendMessageParams {
+    pub message: Message,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ChatSendError {
-    Rejected(Rejected),
+pub enum MailSendMessageError {
+    RecipientNotFound(RecipientNotFound),
 }
 
-impl core::fmt::Display for ChatSendError {
+impl core::fmt::Display for MailSendMessageError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            ChatSendError::Rejected(e) => e.fmt(f),
+            MailSendMessageError::RecipientNotFound(e) => e.fmt(f),
         }
     }
 }
 
-impl core::error::Error for ChatSendError {}
+impl core::error::Error for MailSendMessageError {}
 
-pub type ChatHistoryError = ::core::convert::Infallible;
+pub type MailFetchInboxError = ::core::convert::Infallible;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ChatError {
-    Rejected(Rejected),
+pub enum MailError {
+    RecipientNotFound(RecipientNotFound),
 }
 
-impl core::fmt::Display for ChatError {
+impl core::fmt::Display for MailError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            ChatError::Rejected(e) => e.fmt(f),
+            MailError::RecipientNotFound(e) => e.fmt(f),
         }
     }
 }
 
-impl core::error::Error for ChatError {}
+impl core::error::Error for MailError {}
 
-impl From<ChatSendError> for ChatError {
-    fn from(e: ChatSendError) -> Self {
+impl From<MailSendMessageError> for MailError {
+    fn from(e: MailSendMessageError) -> Self {
         match e {
-            ChatSendError::Rejected(x) => ChatError::Rejected(x),
+            MailSendMessageError::RecipientNotFound(x) => MailError::RecipientNotFound(x),
         }
     }
 }
 
-pub trait Chat {
-    fn send(&self, text: &str) -> Result<Message, Fault<ChatSendError>>;
-    fn history(&self, limit: u32) -> Result<Vec<Message>, Fault<ChatHistoryError>>;
-    fn note(&self, text: &str);
+pub trait Mail {
+    fn send_message(&self, message: Message) -> Result<String, Fault<MailSendMessageError>>;
+    fn fetch_inbox(&self) -> Result<Vec<Message>, Fault<MailFetchInboxError>>;
 }
 
 #[doc(hidden)]
-pub const CHAT_CALLS: &[&str] = &["send", "history", "note"];
+pub const MAIL_CALLS: &[&str] = &["send_message", "fetch_inbox"];
 
-pub struct ChatDispatcher<S>(pub S);
+pub struct MailDispatcher<S>(pub S);
 
-impl<S: Chat> Dispatch for ChatDispatcher<S> {
+impl<S: Mail> Dispatch for MailDispatcher<S> {
     fn calls(&self) -> &'static [&'static str] {
-        CHAT_CALLS
+        MAIL_CALLS
     }
 
     fn dispatch<W: WireFormat>(
@@ -117,22 +101,22 @@ impl<S: Chat> Dispatch for ChatDispatcher<S> {
         fmt: &W,
         reply: &mut Reply,
     ) -> Result<(), RuntimeError> {
-        match call.resolve(CHAT_CALLS).ok_or(RuntimeError::UnknownCall)? {
+        match call.resolve(MAIL_CALLS).ok_or(RuntimeError::UnknownCall)? {
             0 => {
-                let p: ChatSendParams = match fmt.decode(params) {
+                let p: MailSendMessageParams = match fmt.decode(params) {
                     Ok(p) => p,
                     Err(_) => {
                         reply.fault();
                         return Ok(());
                     }
                 };
-                match self.0.send(p.text) {
+                match self.0.send_message(p.message) {
                     Ok(value) => {
                         let mut body = Vec::new();
                         fmt.encode(&value, &mut body)?;
                         reply.ok(&body);
                     }
-                    Err(Fault::App(ChatSendError::Rejected(e))) => {
+                    Err(Fault::App(MailSendMessageError::RecipientNotFound(e))) => {
                         let mut body = Vec::new();
                         fmt.encode(&e, &mut body)?;
                         reply.err(0u16, &body);
@@ -142,14 +126,14 @@ impl<S: Chat> Dispatch for ChatDispatcher<S> {
                 Ok(())
             }
             1 => {
-                let p: ChatHistoryParams = match fmt.decode(params) {
-                    Ok(p) => p,
+                let _: () = match fmt.decode(params) {
+                    Ok(unit) => unit,
                     Err(_) => {
                         reply.fault();
                         return Ok(());
                     }
                 };
-                match self.0.history(p.limit) {
+                match self.0.fetch_inbox() {
                     Ok(value) => {
                         let mut body = Vec::new();
                         fmt.encode(&value, &mut body)?;
@@ -160,20 +144,12 @@ impl<S: Chat> Dispatch for ChatDispatcher<S> {
                 }
                 Ok(())
             }
-            2 => {
-                let p: ChatNoteParams = match fmt.decode(params) {
-                    Ok(p) => p,
-                    Err(_) => return Ok(()),
-                };
-                self.0.note(p.text);
-                Ok(())
-            }
             _ => Err(RuntimeError::UnknownCall),
         }
     }
 }
 
-impl<S: Chat> ChatDispatcher<S> {
+impl<S: Mail> MailDispatcher<S> {
     /// Serve this protocol over `transport`, running the connection
     /// handshake (`IR_HASH` + `format`'s and the framing's names) against
     /// the peer first.
@@ -189,9 +165,9 @@ impl<S: Chat> ChatDispatcher<S> {
     }
 }
 
-pub struct ChatClient<T, W>(pub Client<T, W>);
+pub struct MailClient<T, W>(pub Client<T, W>);
 
-impl<T: Transport, W: WireFormat> ChatClient<T, W> {
+impl<T: Transport, W: WireFormat> MailClient<T, W> {
     pub fn new(client: Client<T, W>) -> Self {
         Self(client)
     }
@@ -202,34 +178,30 @@ impl<T: Transport, W: WireFormat> ChatClient<T, W> {
         Ok(Self(Client::connect(transport, format, IR_HASH)?))
     }
 
-    pub fn send(&mut self, text: &str) -> Result<Message, CallError<ChatSendError>> {
-        let (reply, fmt) = self.0.call(Call::new(0, "send"), &ChatSendParams { text })?;
+    pub fn send_message(&mut self, message: Message) -> Result<String, CallError<MailSendMessageError>> {
+        let (reply, fmt) = self.0.call_with_timeout(Call::new(0, "send_message"), &MailSendMessageParams { message }, core::time::Duration::from_millis(1000))?;
         match reply {
             Envelope::Ok(payload) => fmt.decode(payload).map_err(CallError::Runtime),
             Envelope::Err { id: 0u16, body } => {
-                let e: Rejected = fmt.decode(body)?;
-                Err(CallError::App(ChatSendError::Rejected(e)))
+                let e: RecipientNotFound = fmt.decode(body)?;
+                Err(CallError::App(MailSendMessageError::RecipientNotFound(e)))
             }
             Envelope::Err { id, .. } => Err(CallError::Runtime(RuntimeError::Remote { id })),
             Envelope::Fault => Err(CallError::Runtime(RuntimeError::Provider)),
         }
     }
 
-    pub fn history(&mut self, limit: u32) -> Result<Vec<Message>, CallError<ChatHistoryError>> {
-        let (reply, fmt) = self.0.call(Call::new(1, "history"), &ChatHistoryParams { limit })?;
+    pub fn fetch_inbox(&mut self) -> Result<Vec<Message>, CallError<MailFetchInboxError>> {
+        let (reply, fmt) = self.0.call(Call::new(1, "fetch_inbox"), &())?;
         match reply {
             Envelope::Ok(payload) => fmt.decode(payload).map_err(CallError::Runtime),
             Envelope::Err { id, .. } => Err(CallError::Runtime(RuntimeError::Remote { id })),
             Envelope::Fault => Err(CallError::Runtime(RuntimeError::Provider)),
         }
     }
-
-    pub fn note(&mut self, text: &str) -> Result<(), RuntimeError> {
-        self.0.notify(Call::new(2, "note"), &ChatNoteParams { text })
-    }
 }
 
-impl<T: Transport> ChatClient<T, Format> {
+impl<T: Transport> MailClient<T, Format> {
     /// Bind + run the connection handshake against the provider.
     /// Encodes with `Format`.
     pub fn connect(transport: T) -> Result<Self, RuntimeError> {
