@@ -130,9 +130,11 @@ pub fn corpus() -> Vec<Fixture> {
         handshake_none(),
         framing_datagram3(),
         handshake_comline2(),
+        lockstep(),
         connections(),
         connections_async(),
         connections_jsonrpc(),
+        connections_default(),
         format_json(),
         format_msgpack(),
         bounds(),
@@ -1029,6 +1031,45 @@ fn handshake_none() -> Fixture {
     )
 }
 
+/// The Protocols guide's `Mail`, on the lockstep `datagram` framing (no
+/// version), which gets a `<Proto>Dispatcher` and a `<Proto>Client`: a
+/// function that returns a string and throws, with a call
+/// timeout, and one that returns an array.
+fn lockstep() -> Fixture {
+    let send_message = FrozenUnit::Function {
+        docstring: String::new(),
+        parameters: vec![FrozenUnit::Property { name: "timeout_ms".to_string(), value: ConfigValue::Integer(1000) }],
+        name: "send_message".to_string(),
+        arguments: vec![FrozenArgument {
+            name: "message".to_string(),
+            ty: type_of("Message"),
+            span: (0, 0),
+            parameters: vec![],
+        }],
+        _return: Some(type_of("string")),
+        throws: vec![0],
+        span: (0, 0),
+    };
+    Fixture::one(
+        "lockstep",
+        "conformance",
+        vec![
+            structure("Message", vec![field("body", "string", false)]),
+            error(0, "RecipientNotFound"),
+            FrozenUnit::Protocol {
+                docstring: "Lockstep".to_string(),
+                parameters: vec![FrozenUnit::Property {
+                    name: "framing".to_string(),
+                    value: ConfigValue::Str("datagram".to_string()),
+                }],
+                name: "Mail".to_string(),
+                functions: vec![send_message, function("fetch_inbox", vec![], Some("Message[]"), vec![])],
+                span: (0, 0),
+            },
+        ],
+    )
+}
+
 /// Two protocols on one connection: `Chat`, which the accepting side
 /// provides over `datagram@2`, and `Events`, which the dialling side does.
 /// `connections`, with `async`: the same protocols, generated for an async
@@ -1089,6 +1130,48 @@ fn connections() -> Fixture {
                     },
                     datagram2(),
                 ],
+                name: "Events".to_string(),
+                functions: vec![
+                    function("shown", vec![arg("n", PrimitiveType::U32)], Some("bool"), vec![]),
+                    function("ping", vec![], None, vec![]),
+                ],
+                span: (0, 0),
+            },
+        ],
+    )
+}
+
+/// [`connections`] under the defaults core writes into a protocol, `datagram@3`
+/// and `comline@2`: the server's `Services`, the client's `ClientServices`, and
+/// the handshake between them.
+fn connections_default() -> Fixture {
+    let defaults = || {
+        vec![
+            FrozenUnit::Property { name: "framing".to_string(), value: ConfigValue::Str("datagram@3".to_string()) },
+            FrozenUnit::Property { name: "handshake".to_string(), value: ConfigValue::Str("comline@2".to_string()) },
+        ]
+    };
+    Fixture::one(
+        "connections_default",
+        "conformance",
+        vec![
+            FrozenUnit::Protocol {
+                docstring: "What the server provides".to_string(),
+                parameters: defaults(),
+                name: "Chat".to_string(),
+                functions: vec![function("send", vec![arg("n", PrimitiveType::U32)], Some("u32"), vec![])],
+                span: (0, 0),
+            },
+            FrozenUnit::Protocol {
+                docstring: "What the client provides".to_string(),
+                parameters: [
+                    vec![FrozenUnit::Property {
+                        name: "provider".to_string(),
+                        value: ConfigValue::Name("Client".to_string()),
+                    }],
+                    defaults(),
+                ]
+                .concat(),
                 name: "Events".to_string(),
                 functions: vec![
                     function("shown", vec![arg("n", PrimitiveType::U32)], Some("bool"), vec![]),
