@@ -4,7 +4,6 @@
 import {
     RuntimeError,
     resolveKind,
-    PackedCodec,
     type Codec,
     type Connection,
     type Dispatch,
@@ -18,29 +17,25 @@ import {
 *  two ends of a connection must agree on it. */
 export const IR_HASH = 0xb7e7d5c80c4d8287n;
 
-/** Digest of every schema in the package — what a connection's handshake
-*  checks, so both ends agree on each protocol's number. */
-export const CONNECTION_IR_HASH = 0xb7e7d5c80c4d8287n;
-
-/** The package's wire format (`wire.format`): what this file's helpers
-*  encode with, and what the peer has to speak too. */
-export const Format: Codec = new PackedCodec();
-
 export interface GatewayPingParams {
     n: number;
 }
 
+/** @internal */
 export const GatewayPingParamsLayout: Layout = { struct: [["n", "u32"]] };
 
 export interface Gateway {
     ping(peer: Peer, params: GatewayPingParams): Promise<number>;
 }
 
+/** @internal */
 export const GATEWAY_CALLS = ["ping"] as const;
 
 /**
  * **Unverified:** gives up schema agreement and encoding agreement.
  * Reason given: the gateway predates Comline
+ *
+ * @internal
  */
 export class GatewayDispatcher implements Dispatch {
     /** This protocol's number on a connection. */
@@ -78,7 +73,7 @@ export class GatewayDispatcher implements Dispatch {
         }
     }
 
-    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH, framing, new NoHandshake())`, or let the package's `serve` / `connect` do it. */
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH, framing, new NoHandshake())` (`Format` and `CONNECTION_IR_HASH` are in `./wire.js`), or let the package's `serve` / `connect` do it. */
     provideOn(conn: Connection): void {
         conn.provide(GatewayDispatcher.PROTOCOL, this);
     }

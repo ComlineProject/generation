@@ -12,13 +12,8 @@ use comline_runtime::transport::Transport;
 /// two ends of a connection must agree on it, and the handshake checks.
 pub const IR_HASH: u64 = 0x6fc29e1014b9b9c8;
 
-/// Digest of every schema in the package — what a connection's handshake
-/// checks, so both ends agree on each protocol's number.
-pub const CONNECTION_IR_HASH: u64 = 0x6fc29e1014b9b9c8;
-
-/// The package's wire format (`wire.format`): what this file's helpers
-/// encode with, and what the peer has to speak too.
-pub type Format = comline_runtime::format::Packed;
+#[doc(hidden)]
+pub use crate::connection::{CONNECTION_IR_HASH, Format};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TooLong {
@@ -45,6 +40,7 @@ impl core::fmt::Display for Denied {
 
 impl core::error::Error for Denied {}
 
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MultiSendParams<'a> {
     #[serde(borrow)]
@@ -98,8 +94,10 @@ pub trait Multi {
     fn send(&self, peer: &mut impl Peer, body: &str) -> Result<u64, Fault<MultiSendError>>;
 }
 
+#[doc(hidden)]
 pub const MULTI_CALLS: &[&str] = &["send"];
 
+#[doc(hidden)]
 pub struct MultiDispatcher<S>(pub S);
 
 impl<S: Multi> Dispatch for MultiDispatcher<S> {
@@ -163,6 +161,7 @@ impl<S: Multi> Dispatch for MultiDispatcher<S> {
 
 impl<S: Multi> MultiDispatcher<S> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
@@ -183,6 +182,7 @@ pub struct MultiSender<'p, P: Peer>(pub &'p mut P);
 
 impl<'p, P: Peer> MultiSender<'p, P> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     pub fn new(peer: &'p mut P) -> Self {
@@ -216,8 +216,10 @@ pub trait Quiet {
     fn hush(&self, peer: &mut impl Peer);
 }
 
+#[doc(hidden)]
 pub const QUIET_CALLS: &[&str] = &["ping", "hush"];
 
+#[doc(hidden)]
 pub struct QuietDispatcher<S>(pub S);
 
 impl<S: Quiet> Dispatch for QuietDispatcher<S> {
@@ -280,6 +282,7 @@ impl<S: Quiet> Dispatch for QuietDispatcher<S> {
 
 impl<S: Quiet> QuietDispatcher<S> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 1;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
@@ -300,6 +303,7 @@ pub struct QuietSender<'p, P: Peer>(pub &'p mut P);
 
 impl<'p, P: Peer> QuietSender<'p, P> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 1;
 
     pub fn new(peer: &'p mut P) -> Self {

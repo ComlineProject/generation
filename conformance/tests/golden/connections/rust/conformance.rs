@@ -12,14 +12,10 @@ use comline_runtime::transport::Transport;
 /// two ends of a connection must agree on it, and the handshake checks.
 pub const IR_HASH: u64 = 0xb97e34b203ec1425;
 
-/// Digest of every schema in the package — what a connection's handshake
-/// checks, so both ends agree on each protocol's number.
-pub const CONNECTION_IR_HASH: u64 = 0xb97e34b203ec1425;
+#[doc(hidden)]
+pub use crate::connection::{CONNECTION_IR_HASH, Format};
 
-/// The package's wire format (`wire.format`): what this file's helpers
-/// encode with, and what the peer has to speak too.
-pub type Format = comline_runtime::format::Packed;
-
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatSendParams {
     pub n: u32,
@@ -33,8 +29,10 @@ pub trait Chat {
     fn send(&self, peer: &mut impl Peer, n: u32) -> Result<u32, Fault<ChatSendError>>;
 }
 
+#[doc(hidden)]
 pub const CHAT_CALLS: &[&str] = &["send"];
 
+#[doc(hidden)]
 pub struct ChatDispatcher<S>(pub S);
 
 impl<S: Chat> Dispatch for ChatDispatcher<S> {
@@ -89,6 +87,7 @@ impl<S: Chat> Dispatch for ChatDispatcher<S> {
 
 impl<S: Chat> ChatDispatcher<S> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
@@ -109,6 +108,7 @@ pub struct ChatSender<'p, P: Peer>(pub &'p mut P);
 
 impl<'p, P: Peer> ChatSender<'p, P> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     pub fn new(peer: &'p mut P) -> Self {
@@ -125,6 +125,7 @@ impl<'p, P: Peer> ChatSender<'p, P> {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventsShownParams {
     pub n: u32,
@@ -139,8 +140,10 @@ pub trait Events {
     fn ping(&self, peer: &mut impl Peer);
 }
 
+#[doc(hidden)]
 pub const EVENTS_CALLS: &[&str] = &["shown", "ping"];
 
+#[doc(hidden)]
 pub struct EventsDispatcher<S>(pub S);
 
 impl<S: Events> Dispatch for EventsDispatcher<S> {
@@ -203,6 +206,7 @@ impl<S: Events> Dispatch for EventsDispatcher<S> {
 
 impl<S: Events> EventsDispatcher<S> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 1;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
@@ -223,6 +227,7 @@ pub struct EventsSender<'p, P: Peer>(pub &'p mut P);
 
 impl<'p, P: Peer> EventsSender<'p, P> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 1;
 
     pub fn new(peer: &'p mut P) -> Self {

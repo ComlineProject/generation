@@ -7,11 +7,14 @@ use comline_runtime::contract::{
 };
 use comline_runtime::serve::Server;
 use comline_runtime::transport::Transport;
+use comline_runtime::format::Json;
+use comline_runtime::framing::JsonRpcFraming;
 
 /// Canonical digest of the frozen IR this file was generated from — the
 /// two ends of a connection must agree on it, and the handshake checks.
 pub const IR_HASH: u64 = 0x1a95418a1177cd91;
 
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RpcPingParams {
     pub n: u32,
@@ -25,6 +28,7 @@ pub trait Rpc {
     fn ping(&self, n: u32) -> Result<u32, Fault<RpcPingError>>;
 }
 
+#[doc(hidden)]
 pub const RPC_CALLS: &[&str] = &["ping"];
 
 pub struct RpcDispatcher<S>(pub S);
@@ -72,28 +76,28 @@ impl<S: Rpc> RpcDispatcher<S> {
     /// the peer first.
     /// Encodes with `Json`.
     pub fn serve<T: Transport>(self, transport: &mut T) -> Result<(), RuntimeError> {
-        self.serve_with_format(transport, comline_runtime::format::Json::default())
+        self.serve_with_format(transport, Json::default())
     }
 
     /// [`serve`](Self::serve), encoding with `format` instead.
     pub fn serve_with_format<T: Transport, W: WireFormat>(self, transport: &mut T, format: W)
     -> Result<(), RuntimeError> {
-        let framing = comline_runtime::framing::JsonRpcFraming;
+        let framing = JsonRpcFraming;
         Server::with_framing(self, format, framing).serve(transport, IR_HASH)
     }
 }
 
-pub struct RpcClient<T, W>(pub Client<T, W, comline_runtime::framing::JsonRpcFraming>);
+pub struct RpcClient<T, W>(pub Client<T, W, JsonRpcFraming>);
 
 impl<T: Transport, W: WireFormat> RpcClient<T, W> {
-    pub fn new(client: Client<T, W, comline_runtime::framing::JsonRpcFraming>) -> Self {
+    pub fn new(client: Client<T, W, JsonRpcFraming>) -> Self {
         Self(client)
     }
 
     /// Bind + run the connection handshake against the provider.
     /// [`connect`](Self::connect), encoding with `format`.
     pub fn connect_with_format(transport: T, format: W) -> Result<Self, RuntimeError> {
-        let framing = comline_runtime::framing::JsonRpcFraming;
+        let framing = JsonRpcFraming;
         Ok(Self(Client::connect_with_framing(transport, format, framing, IR_HASH)?))
     }
 
@@ -107,11 +111,11 @@ impl<T: Transport, W: WireFormat> RpcClient<T, W> {
     }
 }
 
-impl<T: Transport> RpcClient<T, comline_runtime::format::Json> {
+impl<T: Transport> RpcClient<T, Json> {
     /// Bind + run the connection handshake against the provider.
     /// Encodes with `Json`.
     pub fn connect(transport: T) -> Result<Self, RuntimeError> {
-        Self::connect_with_format(transport, comline_runtime::format::Json::default())
+        Self::connect_with_format(transport, Json::default())
     }
 }
 

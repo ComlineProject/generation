@@ -25,12 +25,14 @@ export interface RpcPingParams {
     n: number;
 }
 
+/** @internal */
 export const RpcPingParamsLayout: Layout = { struct: [["n", "u32"]] };
 
 export interface Rpc {
     ping(params: RpcPingParams): Promise<number>;
 }
 
+/** @internal */
 export const RPC_CALLS = ["ping"] as const;
 
 export class RpcDispatcher implements Dispatch {
