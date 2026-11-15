@@ -12,19 +12,15 @@ use comline_runtime::transport::Transport;
 /// two ends of a connection must agree on it, and the handshake checks.
 pub const IR_HASH: u64 = 0xa6f61afefe65d74a;
 
-/// Digest of every schema in the package — what a connection's handshake
-/// checks, so both ends agree on each protocol's number.
-pub const CONNECTION_IR_HASH: u64 = 0xa6f61afefe65d74a;
-
-/// The package's wire format (`wire.format`): what this file's helpers
-/// encode with, and what the peer has to speak too.
-pub type Format = comline_runtime::format::Packed;
+#[doc(hidden)]
+pub use crate::connection::{CONNECTION_IR_HASH, Format};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Notice {
     pub text: String,
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdminGreetParams {
     pub n: u32,
@@ -38,8 +34,10 @@ pub trait Admin {
     fn greet(&self, peer: &mut impl Peer, n: u32) -> Result<u32, Fault<AdminGreetError>>;
 }
 
+#[doc(hidden)]
 pub const ADMIN_CALLS: &[&str] = &["greet"];
 
+#[doc(hidden)]
 pub struct AdminDispatcher<S>(pub S);
 
 impl<S: Admin> Dispatch for AdminDispatcher<S> {
@@ -98,6 +96,7 @@ impl<S: Admin> Dispatch for AdminDispatcher<S> {
 
 impl<S: Admin> AdminDispatcher<S> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
@@ -118,6 +117,7 @@ pub struct AdminSender<'p, P: Peer>(pub &'p mut P);
 
 impl<'p, P: Peer> AdminSender<'p, P> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     pub fn new(peer: &'p mut P) -> Self {

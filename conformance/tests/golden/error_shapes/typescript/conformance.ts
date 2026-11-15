@@ -4,7 +4,6 @@
 import {
     RuntimeError,
     resolveKind,
-    PackedCodec,
     type Codec,
     type Connection,
     type Dispatch,
@@ -17,14 +16,6 @@ import {
 /** Canonical digest of the frozen IR this file was generated from — the
 *  two ends of a connection must agree on it. */
 export const IR_HASH = 0x6fc29e1014b9b9c8n;
-
-/** Digest of every schema in the package — what a connection's handshake
-*  checks, so both ends agree on each protocol's number. */
-export const CONNECTION_IR_HASH = 0x6fc29e1014b9b9c8n;
-
-/** The package's wire format (`wire.format`): what this file's helpers
-*  encode with, and what the peer has to speak too. */
-export const Format: Codec = new PackedCodec();
 
 export interface TooLong {
     limit: number;
@@ -61,6 +52,7 @@ export interface MultiSendParams {
     body: string;
 }
 
+/** @internal */
 export const MultiSendParamsLayout: Layout = { struct: [["body", "string"]] };
 
 export interface Multi {
@@ -68,8 +60,10 @@ export interface Multi {
     send(peer: Peer, params: MultiSendParams): Promise<bigint>;
 }
 
+/** @internal */
 export const MULTI_CALLS = ["send"] as const;
 
+/** @internal */
 export class MultiDispatcher implements Dispatch {
     /** This protocol's number on a connection. */
     static readonly PROTOCOL = 0;
@@ -108,7 +102,7 @@ export class MultiDispatcher implements Dispatch {
         }
     }
 
-    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it. */
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)` (`Format` and `CONNECTION_IR_HASH` are in `./wire.js`), or let the package's `serve` / `connect` do it. */
     provideOn(conn: Connection): void {
         conn.provide(MultiDispatcher.PROTOCOL, this);
     }
@@ -145,8 +139,10 @@ export interface Quiet {
     hush(peer: Peer): Promise<void>;
 }
 
+/** @internal */
 export const QUIET_CALLS = ["ping", "hush"] as const;
 
+/** @internal */
 export class QuietDispatcher implements Dispatch {
     /** This protocol's number on a connection. */
     static readonly PROTOCOL = 1;
@@ -190,7 +186,7 @@ export class QuietDispatcher implements Dispatch {
         }
     }
 
-    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it. */
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)` (`Format` and `CONNECTION_IR_HASH` are in `./wire.js`), or let the package's `serve` / `connect` do it. */
     provideOn(conn: Connection): void {
         conn.provide(QuietDispatcher.PROTOCOL, this);
     }

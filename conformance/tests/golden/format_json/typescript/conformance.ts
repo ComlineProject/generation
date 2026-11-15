@@ -4,7 +4,6 @@
 import {
     RuntimeError,
     resolveKind,
-    JsonCodec,
     type Codec,
     type Connection,
     type Dispatch,
@@ -17,14 +16,6 @@ import {
 /** Canonical digest of the frozen IR this file was generated from — the
 *  two ends of a connection must agree on it. */
 export const IR_HASH = 0x8ee00745c73a32b2n;
-
-/** Digest of every schema in the package — what a connection's handshake
-*  checks, so both ends agree on each protocol's number. */
-export const CONNECTION_IR_HASH = 0x8ee00745c73a32b2n;
-
-/** The package's wire format (`wire.format`): what this file's helpers
-*  encode with, and what the peer has to speak too. */
-export const Format: Codec = new JsonCodec();
 
 export interface Record {
     id: number;
@@ -52,12 +43,14 @@ export interface ServiceLookupParams {
     id: number;
 }
 
+/** @internal */
 export const ServiceLookupParamsLayout: Layout = { struct: [["id", "s32"]] };
 
 export interface ServiceNotifyParams {
     code: number;
 }
 
+/** @internal */
 export const ServiceNotifyParamsLayout: Layout = { struct: [["code", "u16"]] };
 
 export interface Service {
@@ -67,8 +60,10 @@ export interface Service {
     notify(peer: Peer, params: ServiceNotifyParams): Promise<void>;
 }
 
+/** @internal */
 export const SERVICE_CALLS = ["lookup", "count", "notify"] as const;
 
+/** @internal */
 export class ServiceDispatcher implements Dispatch {
     /** This protocol's number on a connection. */
     static readonly PROTOCOL = 0;
@@ -123,7 +118,7 @@ export class ServiceDispatcher implements Dispatch {
         }
     }
 
-    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it. */
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)` (`Format` and `CONNECTION_IR_HASH` are in `./wire.js`), or let the package's `serve` / `connect` do it. */
     provideOn(conn: Connection): void {
         conn.provide(ServiceDispatcher.PROTOCOL, this);
     }

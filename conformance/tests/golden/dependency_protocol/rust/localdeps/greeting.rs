@@ -25,6 +25,7 @@ pub struct Greeting {
     pub text: String,
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FooGreetParams {
     pub n: u32,
@@ -38,6 +39,7 @@ pub trait Foo {
     fn greet(&self, peer: &mut impl Peer, n: u32) -> Result<u32, Fault<FooGreetError>>;
 }
 
+#[doc(hidden)]
 pub const FOO_CALLS: &[&str] = &["greet"];
 
 pub struct FooDispatcher<S>(pub S);
@@ -98,6 +100,7 @@ impl<S: Foo> Dispatch for FooDispatcher<S> {
 
 impl<S: Foo> FooDispatcher<S> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
@@ -118,6 +121,7 @@ pub struct FooSender<'p, P: Peer>(pub &'p mut P);
 
 impl<'p, P: Peer> FooSender<'p, P> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     pub fn new(peer: &'p mut P) -> Self {

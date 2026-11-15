@@ -4,7 +4,6 @@
 import {
     RuntimeError,
     resolveKind,
-    PackedCodec,
     type Codec,
     type Connection,
     type Dispatch,
@@ -17,14 +16,6 @@ import {
 /** Canonical digest of the frozen IR this file was generated from — the
 *  two ends of a connection must agree on it. */
 export const IR_HASH = 0xeab4408b940579fbn;
-
-/** Digest of every schema in the package — what a connection's handshake
-*  checks, so both ends agree on each protocol's number. */
-export const CONNECTION_IR_HASH = 0xf9d255a977b3b030n;
-
-/** The package's wire format (`wire.format`): what this file's helpers
-*  encode with, and what the peer has to speak too. */
-export const Format: Codec = new PackedCodec();
 
 export const MIN_HANDLE = 2;
 
@@ -52,14 +43,17 @@ export interface SocialRenameParams {
     to: Handle;
 }
 
+/** @internal */
 export const SocialRenameParamsLayout: Layout = { struct: [["to", () => HandleLayout]] };
 
 export interface Social {
     rename(peer: Peer, params: SocialRenameParams): Promise<Handle>;
 }
 
+/** @internal */
 export const SOCIAL_CALLS = ["rename"] as const;
 
+/** @internal */
 export class SocialDispatcher implements Dispatch {
     /** This protocol's number on a connection. */
     static readonly PROTOCOL = 0;
@@ -96,7 +90,7 @@ export class SocialDispatcher implements Dispatch {
         }
     }
 
-    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it. */
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)` (`Format` and `CONNECTION_IR_HASH` are in `./wire.js`), or let the package's `serve` / `connect` do it. */
     provideOn(conn: Connection): void {
         conn.provide(SocialDispatcher.PROTOCOL, this);
     }

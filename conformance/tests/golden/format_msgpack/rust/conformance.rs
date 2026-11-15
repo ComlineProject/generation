@@ -12,13 +12,8 @@ use comline_runtime::transport::Transport;
 /// two ends of a connection must agree on it, and the handshake checks.
 pub const IR_HASH: u64 = 0x8ee00745c73a32b2;
 
-/// Digest of every schema in the package — what a connection's handshake
-/// checks, so both ends agree on each protocol's number.
-pub const CONNECTION_IR_HASH: u64 = 0x8ee00745c73a32b2;
-
-/// The package's wire format (`wire.format`): what this file's helpers
-/// encode with, and what the peer has to speak too.
-pub type Format = comline_runtime::format::MsgPack;
+#[doc(hidden)]
+pub use crate::connection::{CONNECTION_IR_HASH, Format};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Record {
@@ -38,11 +33,13 @@ impl core::fmt::Display for NotFound {
 
 impl core::error::Error for NotFound {}
 
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceLookupParams {
     pub id: i32,
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceNotifyParams {
     pub code: u16,
@@ -94,8 +91,10 @@ pub trait Service {
     fn notify(&self, peer: &mut impl Peer, code: u16);
 }
 
+#[doc(hidden)]
 pub const SERVICE_CALLS: &[&str] = &["lookup", "count", "notify"];
 
+#[doc(hidden)]
 pub struct ServiceDispatcher<S>(pub S);
 
 impl<S: Service> Dispatch for ServiceDispatcher<S> {
@@ -181,6 +180,7 @@ impl<S: Service> Dispatch for ServiceDispatcher<S> {
 
 impl<S: Service> ServiceDispatcher<S> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
@@ -201,6 +201,7 @@ pub struct ServiceSender<'p, P: Peer>(pub &'p mut P);
 
 impl<'p, P: Peer> ServiceSender<'p, P> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     pub fn new(peer: &'p mut P) -> Self {

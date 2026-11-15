@@ -12,14 +12,10 @@ use comline_runtime::contract::{ConnectionFraming, ProtocolNumber};
 /// two ends of a connection must agree on it, and the handshake checks.
 pub const IR_HASH: u64 = 0xb97e34b203ec1425;
 
-/// Digest of every schema in the package — what a connection's handshake
-/// checks, so both ends agree on each protocol's number.
-pub const CONNECTION_IR_HASH: u64 = 0xb97e34b203ec1425;
+#[doc(hidden)]
+pub use crate::connection::{CONNECTION_IR_HASH, Format};
 
-/// The package's wire format (`wire.format`): what this file's helpers
-/// encode with, and what the peer has to speak too.
-pub type Format = comline_runtime::format::Packed;
-
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatSendParams {
     pub n: u32,
@@ -33,8 +29,10 @@ pub trait Chat: Send + Sync + 'static {
     fn send(&self, peer: &impl AsyncPeer, n: u32) -> impl ::core::future::Future<Output = Result<u32, Fault<ChatSendError>>> + Send;
 }
 
+#[doc(hidden)]
 pub const CHAT_CALLS: &[&str] = &["send"];
 
+#[doc(hidden)]
 pub struct ChatAsyncDispatcher<S>(pub S);
 
 impl<S: Chat> AsyncDispatch for ChatAsyncDispatcher<S> {
@@ -71,6 +69,7 @@ impl<S: Chat> AsyncDispatch for ChatAsyncDispatcher<S> {
 
 impl<S: Chat> ChatAsyncDispatcher<S> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
@@ -91,6 +90,7 @@ pub struct ChatAsyncSender<'p, P: AsyncPeer>(pub &'p P);
 
 impl<'p, P: AsyncPeer> ChatAsyncSender<'p, P> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     pub fn new(peer: &'p P) -> Self {
@@ -108,6 +108,7 @@ impl<'p, P: AsyncPeer> ChatAsyncSender<'p, P> {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventsShownParams {
     pub n: u32,
@@ -122,8 +123,10 @@ pub trait Events: Send + Sync + 'static {
     fn ping(&self, peer: &impl AsyncPeer) -> impl ::core::future::Future<Output = ()> + Send;
 }
 
+#[doc(hidden)]
 pub const EVENTS_CALLS: &[&str] = &["shown", "ping"];
 
+#[doc(hidden)]
 pub struct EventsAsyncDispatcher<S>(pub S);
 
 impl<S: Events> AsyncDispatch for EventsAsyncDispatcher<S> {
@@ -168,6 +171,7 @@ impl<S: Events> AsyncDispatch for EventsAsyncDispatcher<S> {
 
 impl<S: Events> EventsAsyncDispatcher<S> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 1;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
@@ -188,6 +192,7 @@ pub struct EventsAsyncSender<'p, P: AsyncPeer>(pub &'p P);
 
 impl<'p, P: AsyncPeer> EventsAsyncSender<'p, P> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 1;
 
     pub fn new(peer: &'p P) -> Self {

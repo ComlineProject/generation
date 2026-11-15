@@ -12,13 +12,8 @@ use comline_runtime::transport::Transport;
 /// two ends of a connection must agree on it, and the handshake checks.
 pub const IR_HASH: u64 = 0xeab4408b940579fb;
 
-/// Digest of every schema in the package — what a connection's handshake
-/// checks, so both ends agree on each protocol's number.
-pub const CONNECTION_IR_HASH: u64 = 0xf9d255a977b3b030;
-
-/// The package's wire format (`wire.format`): what this file's helpers
-/// encode with, and what the peer has to speak too.
-pub type Format = comline_runtime::format::Packed;
+#[doc(hidden)]
+pub use crate::connection::{CONNECTION_IR_HASH, Format};
 
 pub const MIN_HANDLE: u32 = 2;
 
@@ -165,6 +160,7 @@ impl comline_runtime::validation::Validate for Post {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SocialRenameParams {
     pub to: Handle,
@@ -207,8 +203,10 @@ pub trait Social {
     fn rename(&self, peer: &mut impl Peer, to: Handle) -> Result<Handle, Fault<SocialRenameError>>;
 }
 
+#[doc(hidden)]
 pub const SOCIAL_CALLS: &[&str] = &["rename"];
 
+#[doc(hidden)]
 pub struct SocialDispatcher<S>(pub S);
 
 impl<S: Social> Dispatch for SocialDispatcher<S> {
@@ -263,6 +261,7 @@ impl<S: Social> Dispatch for SocialDispatcher<S> {
 
 impl<S: Social> SocialDispatcher<S> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     /// Provide this protocol on `conn`: the peer's calls to it come here.
@@ -283,6 +282,7 @@ pub struct SocialSender<'p, P: Peer>(pub &'p mut P);
 
 impl<'p, P: Peer> SocialSender<'p, P> {
     /// This protocol's number on a connection.
+    #[doc(hidden)]
     pub const PROTOCOL: ProtocolNumber = 0;
 
     pub fn new(peer: &'p mut P) -> Self {

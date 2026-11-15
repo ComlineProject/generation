@@ -4,7 +4,6 @@
 import {
     RuntimeError,
     resolveKind,
-    PackedCodec,
     type Codec,
     type Connection,
     type Dispatch,
@@ -18,18 +17,11 @@ import {
 *  two ends of a connection must agree on it. */
 export const IR_HASH = 0xbb9f4216f7365478n;
 
-/** Digest of every schema in the package — what a connection's handshake
-*  checks, so both ends agree on each protocol's number. */
-export const CONNECTION_IR_HASH = 0xbb9f4216f7365478n;
-
-/** The package's wire format (`wire.format`): what this file's helpers
-*  encode with, and what the peer has to speak too. */
-export const Format: Codec = new PackedCodec();
-
 export interface CounterAddParams {
     n: number;
 }
 
+/** @internal */
 export const CounterAddParamsLayout: Layout = { struct: [["n", "u32"]] };
 
 export interface Counter {
@@ -37,8 +29,10 @@ export interface Counter {
     reset(peer: Peer): Promise<void>;
 }
 
+/** @internal */
 export const COUNTER_CALLS = ["add", "reset"] as const;
 
+/** @internal */
 export class CounterDispatcher implements Dispatch {
     /** This protocol's number on a connection. */
     static readonly PROTOCOL = 0;
@@ -83,7 +77,7 @@ export class CounterDispatcher implements Dispatch {
         }
     }
 
-    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)`, or let the package's `serve` / `connect` do it. */
+    /** Provide this protocol on `conn`: the peer's calls to it come here. Open `conn` with `Connection.accept(transport, Format, CONNECTION_IR_HASH)` (`Format` and `CONNECTION_IR_HASH` are in `./wire.js`), or let the package's `serve` / `connect` do it. */
     provideOn(conn: Connection): void {
         conn.provide(CounterDispatcher.PROTOCOL, this);
     }
