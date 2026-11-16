@@ -3,9 +3,10 @@
 //! Each [`Fixture`] is a whole *package* — one or more schemas, as
 //! `Vec<FrozenUnit>` built here rather than parsed, so the corpus pins exactly
 //! what IR shape every generator must handle, independent of the parser.
-//! `tests/conformance.rs` runs every generator over every fixture and compares
-//! to the checked-in golden output; run it with `CONFORMANCE_BLESS=1` to
-//! (re)generate the goldens.
+//! The [`harness`] runs a generator over every fixture and compares to its
+//! checked-in golden output. The generators are not here: each is a repository
+//! of its own that depends on this crate and keeps its own goldens (see the
+//! harness's docs), so this crate depends on core and `comline-codegen` only.
 //!
 //! **Why a package and not a schema.** Until this was a package, every fixture
 //! had exactly one namespace, so the corpus could not express a reference that
@@ -13,6 +14,8 @@
 //! Rust generator and then independently in the TypeScript one, both times
 //! under a green suite. A corpus that cannot state the bug cannot guard
 //! against it. See Proposals → How generators are built.
+
+pub mod harness;
 
 use comline_codegen::validation::ValidateOnDecode;
 use comline_codegen::Mode;

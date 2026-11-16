@@ -9,16 +9,12 @@ members = [
 # The per-language generators graduated to their own repos (rollout steps 4–5):
 # `codegen-typescript` → ComlineProject/comline-typescript,
 # `codegen-rust`       → ComlineProject/comline-rust.
+# They depend on this workspace (`comline-codegen`, and `comline-conformance`'s
+# corpus and harness, with the goldens they check kept in their own repos),
+# and this workspace depends on neither.
 # The `lib-gen/{lua,luau,c,python}` stubs still use the old `comline::…` crate
 # path and are unwired — each becomes its own `comline-<lang>` repo when it
 # lands. See design/generation.md.
-
-# `comline-conformance` dev-deps the generator crates from their own repos,
-# which in turn git-dep `comline-codegen` from *this* repo. Point that back at
-# the in-repo crate so the build has one `comline-codegen`, not several.
-# (Same-repo path — CI-safe.)
-[patch."https://github.com/ComlineProject/generation"]
-comline-codegen = { path = "codegen" }
 
 # Local iteration against a sibling `core` checkout — uncomment to build
 # `comline-core` from the working tree instead of the pinned git rev. Re-comment
