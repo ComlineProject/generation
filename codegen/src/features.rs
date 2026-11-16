@@ -8,10 +8,11 @@
 //! - each generator's claims: a `SUPPORT` table of [`Support`] per feature,
 //!   handed to [`crate::Registry::register`].
 //!
-//! The claims are proven, not trusted: `comline-conformance` checks every
-//! one against the corpus (a supported feature generates and matches its
-//! golden; an ignored one generates exactly what it would without it; an
-//! unsupported one is refused). The same detector and tables drive the
+//! The claims are proven, not trusted: `comline-conformance`'s harness, run by
+//! each generator's own suite, checks every one against the corpus (a
+//! supported feature generates and matches its golden; an ignored one
+//! generates exactly what it would without it; an unsupported one is
+//! refused). The same detector and tables drive the
 //! CLI's pre-generation check, `comline targets --features`, the editor's
 //! warnings, and the rendered matrix ([`markdown`], [`json`]).
 

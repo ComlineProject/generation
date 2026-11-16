@@ -401,9 +401,9 @@ mod tests {
 ///
 /// A shared abstraction is only worth having if it reproduces what it
 /// replaces. These assert the exact layouts the committed conformance
-/// goldens hold for the `nested_namespace` fixture — `generation`'s
-/// `conformance/tests/golden/nested_namespace/{rust,typescript}/` — so a
-/// divergence shows up here rather than as golden drift in another repo.
+/// goldens hold for the `nested_namespace` fixture — `comline-rust`'s and
+/// `comline-typescript`'s `codegen/tests/golden/nested_namespace/<lang>/` —
+/// so a divergence shows up here rather than as golden drift in another repo.
 #[cfg(test)]
 mod parity {
     use super::tests_support::*;
