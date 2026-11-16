@@ -149,6 +149,9 @@ pub fn corpus() -> Vec<Fixture> {
         // A protocol in a nested schema, whose facts name its namespace the
         // way core does (the nested-namespace facts fix).
         nested_protocol(),
+        // Two applications in one package, so a side can provide a subset of
+        // its protocols and the Hello lists only that (generation#153).
+        connections_subset(),
     ]
 }
 
@@ -977,6 +980,85 @@ pub fn nested_protocol() -> Fixture {
                 defaulted_protocol("Admin"),
             ],
         )],
+    )
+}
+
+/// Two applications in one package, each with a protocol per side, all on the
+/// defaults (`datagram@3`, `comline@2`): `Chat` and `Events` in `conformance`
+/// are the public application, `Admin` and `Alerts` in `conformance/admin` the
+/// private one. A server can provide `Chat` alone, or `Chat` and `Admin`, and a
+/// client only `Events`, and the Hello each sends then lists just those and
+/// the protocols it calls. With all four provided the Hello is the package's
+/// whole one. (`tests/hello_entries.rs` checks what every generator builds
+/// from; the goldens hold each generator's own output.)
+fn connections_subset() -> Fixture {
+    let protocol = |name: &str, provider: &str, functions: Vec<FrozenUnit>| FrozenUnit::Protocol {
+        docstring: String::new(),
+        parameters: [
+            // `Server` is the default and isn't written.
+            (provider != "Server")
+                .then(|| FrozenUnit::Property {
+                    name: "provider".to_string(),
+                    value: ConfigValue::Name(provider.to_string()),
+                })
+                .into_iter()
+                .collect::<Vec<_>>(),
+            vec![
+                FrozenUnit::Property {
+                    name: "framing".to_string(),
+                    value: ConfigValue::Str("datagram@3".to_string()),
+                },
+                FrozenUnit::Property {
+                    name: "handshake".to_string(),
+                    value: ConfigValue::Str("comline@2".to_string()),
+                },
+            ],
+        ]
+        .concat(),
+        name: name.to_string(),
+        functions,
+        span: (0, 0),
+    };
+    Fixture::package(
+        "connections_subset",
+        vec![
+            (
+                "conformance".to_string(),
+                vec![
+                    protocol(
+                        "Chat",
+                        "Server",
+                        vec![
+                            function("send", vec![arg("n", PrimitiveType::U32)], Some("u32"), vec![]),
+                            function("leave", vec![], None, vec![]),
+                        ],
+                    ),
+                    protocol(
+                        "Events",
+                        "Client",
+                        vec![function("shown", vec![arg("n", PrimitiveType::U32)], Some("bool"), vec![])],
+                    ),
+                ],
+            ),
+            (
+                "conformance/admin".to_string(),
+                vec![
+                    protocol(
+                        "Admin",
+                        "Server",
+                        vec![
+                            function("kick", vec![arg("user", PrimitiveType::U32)], None, vec![]),
+                            function("ban", vec![arg("user", PrimitiveType::U32)], None, vec![]),
+                        ],
+                    ),
+                    protocol(
+                        "Alerts",
+                        "Client",
+                        vec![function("raised", vec![arg("code", PrimitiveType::U32)], None, vec![])],
+                    ),
+                ],
+            ),
+        ],
     )
 }
 

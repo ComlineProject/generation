@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 // Crate Uses
-use crate::connections::{self, PackageConnection};
+use crate::connections::{self, PackageConnection, Provider};
 use crate::protocol::{EncodingMapping, GenerateRequest};
 
 // External Uses
@@ -400,6 +400,9 @@ pub struct HelloProtocol {
 /// the encodings that connection uses: the package's
 /// format (JSON on a framing that writes it), the connection's framing, and
 /// `comline@2` itself.
+///
+/// [`hello_parts`] has the same pieces per protocol, for a Hello of fewer
+/// protocols than the connection's.
 pub fn hello(req: &GenerateRequest, connection: &PackageConnection) -> Result<(Vec<u8>, Vec<HelloProtocol>)> {
     let facts = req.facts.as_ref().ok_or_else(|| {
         eyre!(
@@ -509,6 +512,217 @@ pub fn hello(req: &GenerateRequest, connection: &PackageConnection) -> Result<(V
         }
     }
     Ok((out, protocols.into_iter().map(|p| p.4).collect()))
+}
+
+/// One protocol's entry of a Hello: what the peer is told about it, and what
+/// the generator keeps beside it. The entry carries no direction on the wire;
+/// [`provider`](Self::provider) is for the generated code, which knows
+/// `@provider` and so which side provides the protocol and which calls it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HelloEntry {
+    pub namespace: String,
+    pub name: String,
+    /// Its wire number, unique in the package.
+    pub number: u16,
+    /// The release it last broke at, as the facts spell it.
+    pub line: String,
+    /// [`line`](Self::line) as `(major, minor, patch)`.
+    pub release: (u32, u32, u32),
+    /// The first 16 bytes of its shape hash.
+    pub shape_hash: [u8; 16],
+    /// Each function's name and wire number, in declaration order.
+    pub functions: Vec<(String, u16)>,
+    /// Which side implements it (`@provider`).
+    pub provider: Provider,
+}
+
+impl HelloEntry {
+    /// The function numbers the Hello lists: ascending, once each.
+    pub fn function_numbers(&self) -> Vec<u16> {
+        let mut numbers: Vec<u16> = self.functions.iter().map(|(_, number)| *number).collect();
+        numbers.sort_unstable();
+        numbers.dedup();
+        numbers
+    }
+
+    /// The entry as the Hello's protocol list carries it.
+    pub fn encode(&self, out: &mut Vec<u8>) {
+        varint(self.number as u32, out);
+        put_release(self.release, out);
+        out.extend_from_slice(&self.shape_hash);
+        let functions = self.function_numbers();
+        varint(functions.len() as u32, out);
+        for f in functions {
+            varint(f as u32, out);
+        }
+    }
+}
+
+/// One encoding the connection uses, as the Hello lists it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct HelloEncoding {
+    /// `0` format, `1` framing, `2` handshake.
+    pub kind: u8,
+    /// The first 16 bytes of its parameter hash.
+    pub hash: [u8; 16],
+}
+
+/// What a `comline@2` Hello is built from, per protocol: [`hello`]'s pieces
+/// before they are put together, so generated code can put together the
+/// Hello of the protocols a side provides and calls, instead of the one
+/// Hello of the package's whole connection.
+///
+/// Everything that doesn't depend on which protocols are listed is here once:
+/// the exchange, the package's id and version, and the connection's encodings
+/// (the same whichever protocols a Hello lists). The package connection's
+/// protocols are [`protocols`](Self::protocols), one [`HelloEntry`] each.
+///
+/// **Order.** A Hello is canonical: encodings ascending by kind then hash,
+/// protocols ascending by wire number, each protocol's function numbers
+/// ascending. [`encodings`](Self::encodings) and [`protocols`](Self::protocols)
+/// are in that order already, and [`assemble`](Self::assemble) puts any subset
+/// of the entries in it, whichever order they are given. The order the
+/// protocols are provided or called in doesn't reach the wire.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HelloParts {
+    /// `offer` or `symmetric`: a Hello's exchange flag.
+    pub exchange: String,
+    /// The package's `id`.
+    pub package: [u8; 16],
+    /// The version's release.
+    pub version: (u32, u32, u32),
+    /// The version's pre-release (`dev.2`), empty for a release.
+    pub pre: String,
+    pub encodings: Vec<HelloEncoding>,
+    /// Every protocol on the package connection, ascending by wire number.
+    pub protocols: Vec<HelloEntry>,
+}
+
+impl HelloParts {
+    /// The Hello listing exactly `protocols`: those entries, in canonical
+    /// order, with the package, its version and the connection's encodings.
+    /// An entry given twice is listed once. With every entry
+    /// ([`protocols`](Self::protocols)) it is [`hello`]'s output, byte for
+    /// byte.
+    pub fn assemble<'a>(&self, protocols: impl IntoIterator<Item = &'a HelloEntry>) -> Vec<u8> {
+        let mut listed: Vec<&HelloEntry> = protocols.into_iter().collect();
+        listed.sort_by_key(|p| p.number);
+        listed.dedup_by_key(|p| p.number);
+        let mut out = vec![b'C', b'O', 2, 1, if self.exchange == "symmetric" { 1 } else { 0 }];
+        out.extend_from_slice(&self.package);
+        put_release(self.version, &mut out);
+        varint(self.pre.len() as u32, &mut out);
+        out.extend_from_slice(self.pre.as_bytes());
+        varint(self.encodings.len() as u32, &mut out);
+        for encoding in &self.encodings {
+            out.push(encoding.kind);
+            out.extend_from_slice(&encoding.hash);
+        }
+        varint(listed.len() as u32, &mut out);
+        for protocol in listed {
+            protocol.encode(&mut out);
+        }
+        out
+    }
+
+    /// The Hello of the whole connection: every protocol listed.
+    pub fn assemble_all(&self) -> Vec<u8> {
+        self.assemble(&self.protocols)
+    }
+}
+
+/// What this end's Hello is built from, per protocol ([`HelloParts`]): the
+/// same facts, checks and errors as [`hello`], and the same protocols (those
+/// on the package connection), but kept apart instead of put together.
+///
+/// A generator emits them, and generated `accept` / `connect` assemble the
+/// Hello of the protocols actually provided and called. With every protocol
+/// among them, that Hello is [`hello`]'s, byte for byte.
+pub fn hello_parts(req: &GenerateRequest, connection: &PackageConnection) -> Result<HelloParts> {
+    let facts = req.facts.as_ref().ok_or_else(|| {
+        eyre!(
+            "the package's connection runs `comline@2`, and the request carries no facts: `comline generation` \
+             supplies them from the package's build history (run `comline build` first)"
+        )
+    })?;
+    let id = facts.id.as_deref().ok_or_else(|| {
+        eyre!(
+            "the package's connection runs `comline@2`, which identifies the package by its `id`, and version {} \
+             was built without one: run `comline build`, which writes one into config.idp",
+            facts.version
+        )
+    })?;
+    let package = hash128(id).ok_or_else(|| eyre!("package id `{id}` isn't 32 hex digits"))?;
+    let (package_version, pre) = version(&facts.version)
+        .ok_or_else(|| eyre!("package version `{}` isn't `major.minor.patch[-pre]`", facts.version))?;
+
+    let format = if crate::encodings::writes_json(&req.encodings, &connection.framing) {
+        FORMAT_JSON.to_string()
+    } else {
+        crate::encodings::canonical(&req.wire_format)
+    };
+    let formats = facts.encodings.iter().filter(|e| e.kind == "format").count();
+    let mut encodings = vec![];
+    for e in &facts.encodings {
+        let (kind, wanted) = match e.kind.as_str() {
+            // One format in play is the connection's; of several, the one by name.
+            "format" => (0, formats == 1 || e.name == format),
+            "framing" => (1, e.name == connection.framing),
+            "handshake" => (2, e.name == connection.handshake),
+            _ => continue,
+        };
+        if wanted {
+            let hash = hash128(&e.param_hash).ok_or_else(|| eyre!("encoding `{}`'s hash isn't hex", e.name))?;
+            encodings.push(HelloEncoding { kind, hash });
+        }
+    }
+    encodings.sort();
+    encodings.dedup();
+    for (kind, what) in [(0, "format"), (1, "framing"), (2, "handshake")] {
+        if !encodings.iter().any(|e| e.kind == kind) {
+            bail!("the package's facts record no {what} for its `comline@2` connection: run `comline build`");
+        }
+    }
+
+    let mut protocols = vec![];
+    for (namespace, name, parameters, functions) in connections::protocols(&req.schemas) {
+        // A dependency's protocol isn't on the connection, so not this
+        // package's to declare.
+        if !connections::reached(&req.dependencies, namespace, name)
+            || !connections::on_connection_among(&req.schemas, &req.dependencies, parameters)
+        {
+            continue;
+        }
+        let p = protocol(Some(facts), namespace, name)
+            .ok_or_else(|| missing(Some(facts), &req.dependencies, namespace, name, parameters))?;
+        let addressing = addressing_in(req, namespace, name, parameters, functions)?;
+        let names = functions.iter().filter_map(|f| match f {
+            FrozenUnit::Function { name, .. } => Some(name.clone()),
+            _ => None,
+        });
+        let release = version(&p.line).map(|(r, _)| r).ok_or_else(|| eyre!("line `{}` isn't a release", p.line))?;
+        let shape_hash = hash128(&p.shape_hash).ok_or_else(|| eyre!("shape hash of `{}` isn't hex", p.path))?;
+        protocols.push(HelloEntry {
+            namespace: namespace.to_string(),
+            name: name.to_string(),
+            number: p.number,
+            line: p.line.clone(),
+            release,
+            shape_hash,
+            functions: names.zip(addressing.checks.unwrap_or_default()).collect(),
+            provider: Provider::of(parameters),
+        });
+    }
+    protocols.sort_by_key(|p| p.number);
+
+    Ok(HelloParts {
+        exchange: Comline2Params::of(&connection.handshake_value).exchange,
+        package,
+        version: package_version,
+        pre: pre.to_string(),
+        encodings,
+        protocols,
+    })
 }
 
 /// The first 16 bytes of a hex hash: `comline@2`'s 128-bit hashes.
@@ -808,6 +1022,49 @@ mod tests {
         let (_, protocols) = hello(&req, &connection).unwrap();
         let hello: Vec<_> = protocols.iter().map(|p| (p.name.as_str(), p.number)).collect();
         assert_eq!(hello, [("Chat", 7)]);
+    }
+
+    #[test]
+    fn the_hello_parts_give_the_hello_and_its_errors() {
+        let mut req = request(&["Chat", "Other"]);
+        req.facts = Some(facts_of(&["Chat", "Other"]));
+        let connection = comline2_connection(&req).unwrap().unwrap();
+        let (bytes, _) = hello(&req, &connection).unwrap();
+        let parts = hello_parts(&req, &connection).unwrap();
+        assert_eq!(parts.assemble_all(), bytes);
+        let numbers: Vec<_> = parts.protocols.iter().map(|p| (p.name.as_str(), p.number)).collect();
+        assert_eq!(numbers, [("Chat", 7), ("Other", 8)]);
+        assert_eq!(parts.encodings.iter().map(|e| e.kind).collect::<Vec<_>>(), [0, 1, 2]);
+
+        // The one listing fewer protocols lists exactly those.
+        let other = parts.protocols.iter().filter(|p| p.name == "Other");
+        let subset = parts.assemble(other);
+        assert!(subset.len() < bytes.len());
+        // One protocol: number 8, line 1.0.0, its shape hash, and function 3.
+        let mut entry = vec![1, 8, 1, 0, 0];
+        entry.extend([0x5a; 16]);
+        entry.extend([1, 3]);
+        assert!(subset.ends_with(&entry), "{subset:?}");
+
+        // The same refusals, in the same words.
+        let mut no_id = req.clone();
+        no_id.facts.as_mut().unwrap().id = None;
+        assert_eq!(
+            hello_parts(&no_id, &connection).unwrap_err().to_string(),
+            hello(&no_id, &connection).unwrap_err().to_string()
+        );
+        let mut no_facts = req.clone();
+        no_facts.facts = None;
+        assert_eq!(
+            hello_parts(&no_facts, &connection).unwrap_err().to_string(),
+            hello(&no_facts, &connection).unwrap_err().to_string()
+        );
+        let mut no_framing = req.clone();
+        no_framing.facts.as_mut().unwrap().encodings.retain(|e| e.kind != "framing");
+        assert_eq!(
+            hello_parts(&no_framing, &connection).unwrap_err().to_string(),
+            hello(&no_framing, &connection).unwrap_err().to_string()
+        );
     }
 
     #[test]
